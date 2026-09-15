@@ -1,0 +1,1 @@
+# PhotoGuard FastAPI Core Module

@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.ImageLoader
-import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import coil.request.ImageRequest
@@ -38,16 +37,19 @@ import com.example.data.api.RetrofitClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Singleton Coil ImageLoader manager configured with high-capacity memory cache
- * (35% RAM) and persistent disk caching (25% free disk) bound to canonical URLs.
+ * Singleton Coil ImageLoader manager configured for volatile memory-only media.
  */
 // CRITICAL DO NOT MODIFY: This logic ensures Mobile App Image Loading works perfectly. Any changes here will cause a Regression.
 object CoilImageCacheManager {
     @Volatile
     private var imageLoader: ImageLoader? = null
     val inMemoryBitmapCache = ConcurrentHashMap<String, ImageBitmap>()
+    private val _clearGeneration = MutableStateFlow(0)
+    val clearGeneration: StateFlow<Int> = _clearGeneration
 
     fun getLoader(context: Context): ImageLoader {
         return imageLoader ?: synchronized(this) {
@@ -58,18 +60,19 @@ object CoilImageCacheManager {
                         .strongReferencesEnabled(true)
                         .build()
                 }
-                .diskCache {
-                    DiskCache.Builder()
-                        .directory(context.applicationContext.cacheDir.resolve("media_disk_cache"))
-                        .maxSizeBytes(500L * 1024L * 1024L) // Aggressive 500MB disk cache lock
-                        .build()
-                }
                 .respectCacheHeaders(false) // Lock cache regardless of HTTP cache-control headers
                 .build().also {
                     imageLoader = it
                     coil.Coil.setImageLoader(it)
                 }
         }
+    }
+
+    fun clearSensitiveMedia(context: Context) {
+        inMemoryBitmapCache.clear()
+        imageLoader?.memoryCache?.clear()
+        context.cacheDir.resolve("media_disk_cache").deleteRecursively()
+        _clearGeneration.value += 1
     }
 }
 
@@ -86,6 +89,7 @@ fun SecureNetworkImage(
 ) {
     val context = LocalContext.current
     val canonicalKey = remember(token) { token.trim() }
+    val clearGeneration by CoilImageCacheManager.clearGeneration.collectAsState()
 
     // Instant synchronous memory cache lookup to prevent spinner flickering on back navigation
     val cachedBitmap = remember(canonicalKey) {
@@ -97,7 +101,13 @@ fun SecureNetworkImage(
     var isError by remember(canonicalKey) { mutableStateOf(false) }
     var retryTrigger by remember { mutableStateOf(0) }
 
-    LaunchedEffect(canonicalKey, retryTrigger) {
+    LaunchedEffect(clearGeneration) {
+        imageBitmap = null
+        isLoading = true
+        isError = false
+    }
+
+    LaunchedEffect(canonicalKey, retryTrigger, clearGeneration) {
         if (imageBitmap != null) {
             isLoading = false
             return@LaunchedEffect
@@ -136,9 +146,8 @@ fun SecureNetworkImage(
                     val req = ImageRequest.Builder(context)
                         .data(fullUrl)
                         .memoryCacheKey(canonicalKey)
-                        .diskCacheKey(canonicalKey)
                         .memoryCachePolicy(CachePolicy.ENABLED)
-                        .diskCachePolicy(CachePolicy.ENABLED)
+                        .diskCachePolicy(CachePolicy.DISABLED)
                         .networkCachePolicy(CachePolicy.ENABLED)
                         .allowHardware(false) // Safe software bitmap decoding for Compose Image
                         .listener(object : coil.EventListener {

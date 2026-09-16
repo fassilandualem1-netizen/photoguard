@@ -9,6 +9,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.ui.CoilImageCacheManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.example.data.local.AppDatabase
@@ -62,12 +63,15 @@ object ScreenCaptureHelper {
 class MainActivity : ComponentActivity() {
 
     private var viewModelInstance: MainViewModel? = null
+    private val captureBlocked = mutableStateOf(false)
     
     override fun onStart() {
         super.onStart()
+        captureBlocked.value = false
         try {
             if (android.os.Build.VERSION.SDK_INT >= 34) {
                 ScreenCaptureHelper.register(this) {
+                    captureBlocked.value = true
                     viewModelInstance?.logSecurity("Screenshot Attempt Blocked")
                 }
             }
@@ -82,6 +86,8 @@ class MainActivity : ComponentActivity() {
             if (android.os.Build.VERSION.SDK_INT >= 34) {
                 ScreenCaptureHelper.unregister(this)
             }
+            CoilImageCacheManager.clearSensitiveMedia(this)
+            captureBlocked.value = false
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -163,7 +169,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     
-                    if (!isForeground && !BuildConfig.DEBUG) {
+                    if (!isForeground || captureBlocked.value) {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()

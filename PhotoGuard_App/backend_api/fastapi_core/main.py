@@ -117,6 +117,47 @@ class TelegramAuthPayload(BaseModel):
     auth_date: int
     hash: str
 
+
+@app.post("/api/auth/telegram")
+def telegram_login(payload: TelegramAuthPayload, db: Session = Depends(get_db)):
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    if not bot_token:
+        raise HTTPException(status_code=500, detail="TELEGRAM_BOT_TOKEN is not configured")
+
+    auth_data = payload.dict(exclude_none=True)
+    if not verify_telegram_auth(auth_data, bot_token):
+        log.warning("Invalid Telegram Login Widget payload for ID %s", payload.id)
+        raise HTTPException(status_code=401, detail="Invalid Telegram authentication data")
+
+    telegram_id = str(payload.id)
+    role = "admin" if telegram_id == os.getenv("SUPER_ADMIN_TELEGRAM_ID", "") else "photographer"
+    user = db.query(models.User).filter(models.User.telegram_id == telegram_id).first()
+    if not user:
+        user = models.User(
+            telegram_id=telegram_id,
+            first_name=payload.first_name,
+            username=payload.username,
+            photo_url=payload.photo_url,
+            role=role,
+            tier="starter",
+        )
+        db.add(user)
+    else:
+        user.first_name = payload.first_name
+        user.username = payload.username
+        user.photo_url = payload.photo_url
+        user.role = role
+    db.commit()
+    db.refresh(user)
+    token = create_access_token({"sub": str(user.id), "role": user.role, "telegram_id": telegram_id})
+    return {"success": True, "token": token, "user": {
+        "id": user.id,
+        "first_name": user.first_name,
+        "role": user.role,
+        "tier": user.tier,
+        "photo_url": user.photo_url,
+    }}
+
 def trigger_photographer_notification(album_code: str, num_photos: int, notes: str, photographer_telegram_id: str):
     msg = (
         f"📸 <b>PhotoGuard Client Alert</b>\n\n"

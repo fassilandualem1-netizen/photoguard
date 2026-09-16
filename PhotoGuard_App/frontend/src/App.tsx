@@ -5,6 +5,21 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { apiFetch, API_BASE } from './apiClient';
 
+interface TelegramWidgetUser {
+  id: number;
+  first_name: string;
+  username?: string;
+  photo_url?: string;
+  auth_date: number;
+  hash: string;
+}
+
+declare global {
+  interface Window {
+    onTelegramAuth?: (user: TelegramWidgetUser) => void;
+  }
+}
+
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
@@ -33,9 +48,48 @@ function formatExpiryCountdown(expiresAt: string | null | undefined, now: number
 // -------------------------
 function Login({ onLogin }: { onLogin: (user: any) => void }) {
   const [error, setError] = useState('');
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const widgetRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  
-  const botName = import.meta.env.VITE_TELEGRAM_BOT_NAME || "Photoguard_alert_bot";
+
+  const handleTelegramAuth = async (telegramUser: TelegramWidgetUser) => {
+    setIsAuthenticating(true);
+    setError('');
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/telegram`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(telegramUser),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.token) {
+        throw new Error(data.detail || 'Telegram authentication failed.');
+      }
+      const user = { ...data.user, token: data.token };
+      onLogin(user);
+      navigate(user.role === 'admin' ? '/admin' : '/photographer');
+    } catch (authError: any) {
+      setError(authError.message || 'Telegram authentication failed.');
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  useEffect(() => {
+    window.onTelegramAuth = handleTelegramAuth;
+    const script = document.createElement('script');
+    script.src = 'https://telegram.org/js/telegram-widget.js?22';
+    script.async = true;
+    script.dataset.telegramLogin = 'photoguard_alert_bot';
+    script.dataset.size = 'large';
+    script.dataset.onauth = 'onTelegramAuth(user)';
+    script.dataset.requestAccess = 'write';
+    widgetRef.current?.appendChild(script);
+    return () => {
+      window.onTelegramAuth = undefined;
+      script.remove();
+    };
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -65,10 +119,6 @@ function Login({ onLogin }: { onLogin: (user: any) => void }) {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, [navigate, onLogin]);
-
-  const handleTelegramLogin = () => {
-    window.location.href = `https://t.me/${botName}?start=auth`;
-  };
 
   return (
     <div className="min-h-screen bg-neutral-950 flex flex-col justify-center items-center p-4">
@@ -106,14 +156,8 @@ function Login({ onLogin }: { onLogin: (user: any) => void }) {
 
         {/* Login Action */}
         <div>
-          <button
-            type="button"
-            onClick={handleTelegramLogin}
-            className="w-full flex items-center justify-center gap-3 bg-[#24A1DE] hover:bg-[#1d8dbf] text-white font-medium py-3.5 px-4 rounded-xl transition-all shadow-lg shadow-blue-900/20"
-          >
-            <Send size={20} />
-            <span>Log in with Telegram</span>
-          </button>
+          <div ref={widgetRef} className="flex min-h-11 items-center justify-center" />
+          {isAuthenticating && <p className="text-center text-neutral-400 text-sm mt-3">Verifying Telegram account...</p>}
           <p className="text-center text-neutral-600 text-xs mt-5">Strictly For Authorized Photographers Only</p>
           
           <div className="mt-8 pt-6 border-t border-neutral-800/50">

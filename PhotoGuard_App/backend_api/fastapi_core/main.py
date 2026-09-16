@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional, Any, Dict
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from . import models, storage
 from .logger import log
@@ -67,6 +68,26 @@ async def disable_api_caching(request: Request, call_next):
         if response.status_code in (401, 403):
             metrics.record_security_event("unauthorized_access")
     return response
+
+
+def _expiry_payload(album: models.Album, tier: str) -> dict:
+    if not album.expires_at:
+        return {
+            "expires_at": None,
+            "expires_in": None,
+            "expires_in_days": None,
+            "is_locked": False,
+            "expiry_tier": tier,
+        }
+
+    seconds_remaining = max(0, int((album.expires_at - datetime.datetime.utcnow()).total_seconds()))
+    return {
+        "expires_at": album.expires_at.isoformat(),
+        "expires_in": seconds_remaining,
+        "expires_in_days": round(seconds_remaining / 86400, 4),
+        "is_locked": seconds_remaining == 0,
+        "expiry_tier": tier,
+    }
 
 # CORS setup
 app.add_middleware(
@@ -359,7 +380,8 @@ def list_albums(current_user: models.User = Depends(require_admin_or_photographe
             "code": a.code,
             "photographerId": a.photographer_id,
             "imageCount": image_count,
-            "expires": a.expires_at.strftime("%Y-%m-%d") if a.expires_at else "Never"
+            "expires": a.expires_at.strftime("%Y-%m-%d") if a.expires_at else "Never",
+            **_expiry_payload(a, current_user.tier),
         })
     return result
 
@@ -385,7 +407,40 @@ def create_album(req: AlbumCreateRequest, current_user: models.User = Depends(re
         "code": album.code,
         "photographerId": album.photographer_id,
         "imageCount": 0,
-        "expires": req.expires
+        "expires": req.expires,
+        **_expiry_payload(album, current_user.tier),
+    }
+
+
+@app.get("/api/albums/{album_id}/analytics")
+def get_album_analytics(
+    album_id: int,
+    current_user: models.User = Depends(require_admin_or_photographer),
+    db: Session = Depends(get_db),
+):
+    album = db.query(models.Album).filter(models.Album.id == album_id).first()
+    if not album:
+        raise HTTPException(status_code=404, detail="Album not found")
+    if current_user.role != "admin" and album.photographer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Album belongs to another photographer")
+
+    access_query = db.query(models.ClientAccessLog).filter(
+        models.ClientAccessLog.album_id == album.id
+    )
+    successful_pin_entries = access_query.count()
+    last_access = access_query.order_by(models.ClientAccessLog.accessed_at.desc()).first()
+    photo_count = db.query(func.count(models.Photo.id)).filter(
+        models.Photo.album_id == album.id
+    ).scalar() or 0
+
+    return {
+        "album_id": album.id,
+        "album_name": album.name,
+        "total_views": successful_pin_entries,
+        "successful_pin_entries": successful_pin_entries,
+        "last_accessed_at": last_access.accessed_at.isoformat() if last_access else None,
+        "photo_count": photo_count,
+        **_expiry_payload(album, current_user.tier),
     }
 
 
@@ -428,6 +483,13 @@ def verify_album_code(request: Request, req: VerifyCodeRequest, db: Session = De
     if not album:
         metrics.record_security_event("failed_pin_attempt")
         return {"status": "error", "message": "Invalid access code."}
+
+    db.add(models.ClientAccessLog(
+        album_id=album.id,
+        device_uuid=req.device_uuid or "Unknown",
+        ip_address=request.client.host if request.client else None,
+    ))
+    db.commit()
     
     photographer_name = "PhotoGuard Studio"
     if album.photographer:

@@ -1,12 +1,25 @@
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams } from 'react-router-dom';
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Shield, Users, Image as ImageIcon, Key, LogOut, Plus, Search, CheckCircle2, Lock, Send, UploadCloud } from 'lucide-react';
+import { Activity, Camera, Clock3, Shield, Users, Image as ImageIcon, Key, LogOut, Plus, Search, CheckCircle2, Lock, Send, UploadCloud } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { apiFetch, API_BASE } from './apiClient';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+function formatExpiryCountdown(expiresAt: string | null | undefined, now: number) {
+  if (!expiresAt) return 'No expiry set';
+  const seconds = Math.max(0, Math.floor((new Date(expiresAt).getTime() - now) / 1000));
+  if (seconds === 0) return 'Client access locked';
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+  if (days > 0) return `${days}d ${hours}h remaining`;
+  if (hours > 0) return `${hours}h ${minutes}m remaining`;
+  return `${minutes}m ${remainingSeconds}s remaining`;
 }
 
 
@@ -126,6 +139,8 @@ function PhotographerDashboard({ user, onLogout }: { user: any, onLogout: () => 
   const [uploadingTo, setUploadingTo] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedAlbumCode, setSelectedAlbumCode] = useState<string | null>(null);
+  const [analyticsByAlbum, setAnalyticsByAlbum] = useState<Record<number, any>>({});
+  const [countdownNow, setCountdownNow] = useState(() => Date.now());
 
   const [showUpgrade, setShowUpgrade] = useState(false);
   const handleUpgradeRequest = async (plan: string, method: string) => {
@@ -143,14 +158,29 @@ function PhotographerDashboard({ user, onLogout }: { user: any, onLogout: () => 
   };
 
 
-  const fetchAlbums = () => {
-    apiFetch(`/api/albums`)
-      .then(data => setAlbums(data));
+  const fetchAlbums = async () => {
+    const data = await apiFetch(`/api/albums`);
+    setAlbums(data);
+    const analyticsEntries = await Promise.all(data.map(async (album: any) => {
+      try {
+        const analytics = await apiFetch(`/api/albums/${album.id}/analytics`);
+        return [album.id, analytics] as const;
+      } catch (error) {
+        console.error(`Failed to fetch analytics for album ${album.id}`, error);
+        return null;
+      }
+    }));
+    setAnalyticsByAlbum(Object.fromEntries(analyticsEntries.filter(Boolean) as [number, any][]));
   };
 
   useEffect(() => {
     fetchAlbums();
   }, [user.token]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCountdownNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   
   const handleDownloadSelections = async (code: string) => {
@@ -266,7 +296,11 @@ function PhotographerDashboard({ user, onLogout }: { user: any, onLogout: () => 
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {albums.map(album => (
+          {albums.map(album => {
+            const analytics = analyticsByAlbum[album.id];
+            const countdown = formatExpiryCountdown(album.expires_at, countdownNow);
+            const isLocked = countdown === 'Client access locked';
+            return (
             <div key={album.id} className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden hover:border-neutral-700 transition-colors group cursor-pointer relative flex flex-col">
               <div className="h-40 bg-neutral-800 flex items-center justify-center relative overflow-hidden">
                 <img src={`https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=800&auto=format&fit=crop`} className="w-full h-full object-cover opacity-40" alt="Cover" />
@@ -283,7 +317,30 @@ function PhotographerDashboard({ user, onLogout }: { user: any, onLogout: () => 
                 <h3 className="font-medium text-lg mb-1 truncate">{album.name}</h3>
                 <div className="flex items-center justify-between text-sm text-neutral-400 mt-4 mb-4">
                   <span>{album.imageCount} photos</span>
-                  <span>Exp: {new Date(album.expires).toLocaleDateString()}</span>
+                  <span>Exp: {album.expires === 'Never' ? 'Never' : new Date(album.expires).toLocaleDateString()}</span>
+                </div>
+                <div className={cn(
+                  "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm mb-4",
+                  isLocked ? "border-red-500/30 bg-red-500/10 text-red-300" : "border-amber-500/20 bg-amber-500/10 text-amber-300"
+                )}>
+                  <Clock3 size={15} />
+                  <span className="font-medium">{countdown}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  <div className="rounded-lg bg-neutral-950/70 border border-neutral-800 px-2 py-2">
+                    <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-neutral-500"><Activity size={11} /> Views</div>
+                    <p className="text-white font-semibold mt-1">{analytics?.total_views ?? '--'}</p>
+                  </div>
+                  <div className="rounded-lg bg-neutral-950/70 border border-neutral-800 px-2 py-2">
+                    <div className="text-[10px] uppercase tracking-wide text-neutral-500">PIN unlocks</div>
+                    <p className="text-white font-semibold mt-1">{analytics?.successful_pin_entries ?? '--'}</p>
+                  </div>
+                  <div className="rounded-lg bg-neutral-950/70 border border-neutral-800 px-2 py-2">
+                    <div className="text-[10px] uppercase tracking-wide text-neutral-500">Last access</div>
+                    <p className="text-white font-semibold mt-1 truncate" title={analytics?.last_accessed_at || 'No access'}>
+                      {analytics?.last_accessed_at ? new Date(analytics.last_accessed_at).toLocaleDateString() : '--'}
+                    </p>
+                  </div>
                 </div>
                 
                 {/* Upload Button */}
@@ -302,7 +359,8 @@ function PhotographerDashboard({ user, onLogout }: { user: any, onLogout: () => 
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </main>
     </div>

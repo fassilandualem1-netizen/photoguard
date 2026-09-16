@@ -36,6 +36,7 @@ class Album(Base):
     photographer = relationship("User", back_populates="albums")
     photos = relationship("Photo", back_populates="album", cascade="all, delete")
     submissions = relationship("ClientSubmission", back_populates="album", cascade="all, delete")
+    access_logs = relationship("ClientAccessLog", back_populates="album", cascade="all, delete")
 
 class Photo(Base):
     __tablename__ = 'photos'
@@ -76,3 +77,15 @@ class PaymentReceipt(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     user = relationship("User", back_populates="payments")
+
+
+class ClientAccessLog(Base):
+    __tablename__ = "client_access_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    album_id = Column(Integer, ForeignKey("albums.id"), index=True)
+    device_uuid = Column(String, nullable=True)
+    ip_address = Column(String, nullable=True)
+    accessed_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+
+    album = relationship("Album", back_populates="access_logs")

@@ -360,9 +360,13 @@ def create_album(req: AlbumCreateRequest, current_user: models.User = Depends(ge
     }
 
 
-def _stream_url_for_photo(photo: models.Photo) -> str:
+def _stream_reference_for_photo(photo: models.Photo) -> tuple[str, str]:
     token = stream_token_store.issue(photo.id)
-    return f"/api/photos/stream?token={quote(token, safe='')}"
+    return token, f"/api/photos/stream?token={quote(token, safe='')}"
+
+
+def _stream_url_for_photo(photo: models.Photo) -> str:
+    return _stream_reference_for_photo(photo)[1]
 
 @app.get("/api/gallery/{album_code}")
 def get_gallery(album_code: str, db: Session = Depends(get_db)):
@@ -399,9 +403,10 @@ def verify_album_code(request: Request, req: VerifyCodeRequest, db: Session = De
 
     media_tokens = []
     for photo in album.photos:
+        stream_token, stream_url = _stream_reference_for_photo(photo)
         media_tokens.append({
-            "token": str(photo.id),
-            "url": _stream_url_for_photo(photo),
+            "token": stream_token,
+            "url": stream_url,
             "media_type": "image"
         })
     

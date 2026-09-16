@@ -15,6 +15,13 @@ from . import models, storage
 from .logger import log
 from .db import get_db, init_db
 from .auth import verify_telegram_auth, create_access_token
+from .authorization import (
+    require_admin,
+    require_admin_or_photographer,
+    require_album_owner,
+    require_client_album,
+    require_photographer,
+)
 from .rate_limit import limiter
 from .schemas import PublicPhotoResponse
 from .stream_tokens import TOKEN_TTL_SECONDS, stream_token_store
@@ -222,7 +229,7 @@ def get_current_user(authorization: str = Header(None), db: Session = Depends(ge
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
-@app.post("/api/payments/submit")
+@app.post("/api/payments/submit", dependencies=[Depends(require_photographer)])
 def submit_payment(target_plan: str, payment_method: str, transaction_id: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     # Photographer submits a manual payment receipt
     receipt = models.PaymentReceipt(
@@ -237,7 +244,7 @@ def submit_payment(target_plan: str, payment_method: str, transaction_id: str, c
     db.refresh(receipt)
     return {"success": True, "message": "Payment submitted and awaiting admin approval.", "receipt_id": receipt.id}
 
-@app.get("/api/admin/payments")
+@app.get("/api/admin/payments", dependencies=[Depends(require_admin)])
 def list_pending_payments(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -255,7 +262,7 @@ def list_pending_payments(current_user: models.User = Depends(get_current_user),
         } for p in payments
     ]}
 
-@app.post("/api/admin/payments/{receipt_id}/approve")
+@app.post("/api/admin/payments/{receipt_id}/approve", dependencies=[Depends(require_admin)])
 def approve_payment(receipt_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -276,7 +283,7 @@ def approve_payment(receipt_id: int, current_user: models.User = Depends(get_cur
     db.commit()
     return {"success": True, "message": f"Payment approved. User upgraded to {receipt.target_plan}."}
 
-@app.post("/api/admin/payments/{receipt_id}/reject")
+@app.post("/api/admin/payments/{receipt_id}/reject", dependencies=[Depends(require_admin)])
 def reject_payment(receipt_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -325,7 +332,7 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     return {"token": token, "user": {"id": user.id, "email": user.email, "role": user.role}}
 
 @app.get("/api/albums")
-def list_albums(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_albums(current_user: models.User = Depends(require_admin_or_photographer), db: Session = Depends(get_db)):
     if current_user.role == "admin":
         albums = db.query(models.Album).all()
     else:
@@ -345,7 +352,7 @@ def list_albums(current_user: models.User = Depends(get_current_user), db: Sessi
     return result
 
 @app.post("/api/albums")
-def create_album(req: AlbumCreateRequest, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_album(req: AlbumCreateRequest, current_user: models.User = Depends(require_admin_or_photographer), db: Session = Depends(get_db)):
     import random
     import string
     import datetime
@@ -390,11 +397,7 @@ def _public_photo_response(photo: models.Photo) -> dict:
     ).dict(exclude_none=True)
 
 @app.get("/api/gallery/{album_code}")
-def get_gallery(album_code: str, db: Session = Depends(get_db)):
-    album = db.query(models.Album).filter(models.Album.code == album_code).first()
-    if not album:
-        raise HTTPException(status_code=404, detail="Album not found")
-    
+def get_gallery(album_code: str, album: models.Album = Depends(require_client_album)):
     images = []
     for photo in album.photos:
         images.append(_public_photo_response(photo))
@@ -479,12 +482,12 @@ def stream_photo(token: str, db: Session = Depends(get_db)):
         },
     )
 
-@app.post("/api/security/log")
+@app.post("/api/security/log", dependencies=[Depends(require_admin)])
 def log_security(req: dict):
     log.warning(f"Security event logged: {req}")
     return {"status": "ok"}
 
-@app.post("/api/albums/{album_code}/photos")
+@app.post("/api/albums/{album_code}/photos", dependencies=[Depends(require_album_owner)])
 async def upload_photos(album_code: str, current_user: models.User = Depends(get_current_user), photos: List[UploadFile] = File(...), db: Session = Depends(get_db)):
     photographer_id = current_user.id
     photographer_tier = current_user.tier
@@ -515,12 +518,11 @@ async def upload_photos(album_code: str, current_user: models.User = Depends(get
     return {"success": True, "tier_applied": photographer_tier, "data": uploaded_data}
 
 @app.post("/api/gallery/{album_code}/submit")
-def client_submit_selections(album_code: str, payload: ClientSelectionPayload, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    album = db.query(models.Album).filter(models.Album.code == album_code).first()
-    if not album:
-        raise HTTPException(status_code=404, detail="Album not found")
-        
-    db.query(models.Photo).filter(models.Photo.id.in_(payload.selected_photo_ids)).update({"is_selected": True})
+def client_submit_selections(album_code: str, payload: ClientSelectionPayload, background_tasks: BackgroundTasks, album: models.Album = Depends(require_client_album), db: Session = Depends(get_db)):
+    db.query(models.Photo).filter(
+        models.Photo.id.in_(payload.selected_photo_ids),
+        models.Photo.album_id == album.id,
+    ).update({"is_selected": True})
     
     submission = models.ClientSubmission(album_id=album.id, client_notes=payload.notes)
     db.add(submission)
@@ -536,12 +538,12 @@ def client_submit_selections(album_code: str, payload: ClientSelectionPayload, b
     
     return {"success": True, "message": "Selections submitted! Photographer notified."}
 
-@app.get("/api/albums/{album_code}/download_originals")
-def get_high_res_downloads(album_code: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+@app.get("/api/albums/{album_code}/download_originals", dependencies=[Depends(require_album_owner)])
+def get_high_res_downloads(album_code: str, current_user: models.User = Depends(require_admin_or_photographer), db: Session = Depends(get_db)):
     photographer_tier = current_user.tier
     
     
-    if photographer_tier == "starter":
+    if photographer_tier == "starter" and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="High-resolution downloads are locked for Starter plans. Please upgrade.")
         
     album = db.query(models.Album).filter(models.Album.code == album_code).first()
@@ -566,7 +568,7 @@ if os.path.isdir(FRONTEND_DIST):
 
 import datetime
 
-@app.post("/api/admin/trigger-expiry-notifications")
+@app.post("/api/admin/trigger-expiry-notifications", dependencies=[Depends(require_admin)])
 def trigger_expiry_notifications(db: Session = Depends(get_db)):
     # Find albums expiring in exactly 3 days
     now = datetime.datetime.utcnow()

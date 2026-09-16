@@ -16,6 +16,7 @@ from .logger import log
 from .db import get_db, init_db
 from .auth import verify_telegram_auth, create_access_token
 from .rate_limit import limiter
+from .schemas import PublicPhotoResponse
 from .stream_tokens import TOKEN_TTL_SECONDS, stream_token_store
 import datetime
 import mimetypes
@@ -38,6 +39,15 @@ except ImportError:
 app = FastAPI(title="PhotoGuard Live API", version="4.0.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.middleware("http")
+async def disable_api_caching(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+    return response
 
 # CORS setup
 app.add_middleware(
@@ -368,6 +378,17 @@ def _stream_reference_for_photo(photo: models.Photo) -> tuple[str, str]:
 def _stream_url_for_photo(photo: models.Photo) -> str:
     return _stream_reference_for_photo(photo)[1]
 
+
+def _public_photo_response(photo: models.Photo) -> dict:
+    stream_token, stream_url = _stream_reference_for_photo(photo)
+    return PublicPhotoResponse(
+        id=photo.id,
+        filename=photo.filename,
+        token=stream_token,
+        url=stream_url,
+        selected=photo.is_selected,
+    ).dict(exclude_none=True)
+
 @app.get("/api/gallery/{album_code}")
 def get_gallery(album_code: str, db: Session = Depends(get_db)):
     album = db.query(models.Album).filter(models.Album.code == album_code).first()
@@ -376,12 +397,7 @@ def get_gallery(album_code: str, db: Session = Depends(get_db)):
     
     images = []
     for photo in album.photos:
-        images.append({
-            "id": photo.id,
-            "filename": photo.filename,
-            "url": _stream_url_for_photo(photo),
-            "selected": photo.is_selected
-        })
+        images.append(_public_photo_response(photo))
     return {"albumName": album.name, "images": images}
 
 class VerifyCodeRequest(BaseModel):
@@ -403,12 +419,7 @@ def verify_album_code(request: Request, req: VerifyCodeRequest, db: Session = De
 
     media_tokens = []
     for photo in album.photos:
-        stream_token, stream_url = _stream_reference_for_photo(photo)
-        media_tokens.append({
-            "token": stream_token,
-            "url": stream_url,
-            "media_type": "image"
-        })
+        media_tokens.append(_public_photo_response(photo))
     
     return {
         "albumId": str(album.id),
@@ -538,7 +549,7 @@ def get_high_res_downloads(album_code: str, current_user: models.User = Depends(
         raise HTTPException(status_code=404, detail="Album not found")
         
     photos = db.query(models.Photo).filter(models.Photo.album_id == album.id, models.Photo.is_selected == True).all()
-    download_links = [{"filename": p.filename, "download_url": storage.generate_presigned_download_url(p.secure_s3_url)} for p in photos]
+    download_links = [{"filename": p.filename, "download_url": _stream_url_for_photo(p)} for p in photos]
         
     return {"success": True, "downloads": download_links}
 

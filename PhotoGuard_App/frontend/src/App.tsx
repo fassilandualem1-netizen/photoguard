@@ -133,9 +133,139 @@ function Login({ onLogin }: { onLogin: (user: any) => void }) {
   );
 }
 
+function ClientAlbumView() {
+  const { code } = useParams();
+  const [gallery, setGallery] = useState<any>(null);
+  const [branding, setBranding] = useState<any>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!code) return;
+    apiFetch(`/api/gallery/${code}`, { requireAuth: false })
+      .then(async data => {
+        setGallery(data);
+        if (data.photographerId) {
+          const publicBranding = await apiFetch(`/api/photographers/${data.photographerId}/branding`, { requireAuth: false });
+          setBranding(publicBranding);
+        }
+      })
+      .catch(() => setError('This album is unavailable or has expired.'));
+  }, [code]);
+
+  const brandColor = branding?.brand_color || '#24A1DE';
+
+  if (error) {
+    return <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-6"><p className="text-red-300">{error}</p></div>;
+  }
+  if (!gallery) {
+    return <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-6"><p className="text-neutral-400">Loading secure gallery...</p></div>;
+  }
+
+  return (
+    <div className="min-h-screen bg-neutral-950 text-white" style={{ '--client-brand': brandColor } as React.CSSProperties}>
+      <header className="border-b border-neutral-800 px-6 py-5" style={{ borderColor: `${brandColor}55` }}>
+        <div className="max-w-6xl mx-auto flex items-center gap-4">
+          {branding?.logo_url ? <img src={branding.logo_url} alt="Photographer logo" className="h-12 w-12 rounded-xl object-contain bg-white p-1" /> : <Shield className="text-[var(--client-brand)]" size={34} />}
+          <div>
+            <h1 className="text-2xl font-semibold">{gallery.albumName}</h1>
+            {branding?.custom_welcome_message && <p className="text-neutral-400 mt-1">{branding.custom_welcome_message}</p>}
+          </div>
+        </div>
+      </header>
+      <main className="max-w-6xl mx-auto p-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {(gallery.images || []).map((image: any) => (
+            <img key={image.id} src={image.url} alt={image.filename} className="aspect-square w-full rounded-xl object-cover border border-neutral-800" />
+          ))}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function BrandingSettings() {
+  const [brandColor, setBrandColor] = useState('#24A1DE');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [welcomeMessage, setWelcomeMessage] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [status, setStatus] = useState('');
+
+  useEffect(() => {
+    apiFetch('/api/photographer/branding')
+      .then(data => {
+        setBrandColor(data.brand_color || '#24A1DE');
+        setLogoUrl(data.logo_url || '');
+        setWelcomeMessage(data.custom_welcome_message || '');
+      })
+      .catch(() => setStatus('Unable to load branding settings.'));
+  }, []);
+
+  const saveBranding = async () => {
+    setIsSaving(true);
+    setStatus('');
+    try {
+      await apiFetch('/api/photographer/branding', {
+        method: 'PUT',
+        body: JSON.stringify({ brand_color: brandColor, logo_url: logoUrl, custom_welcome_message: welcomeMessage }),
+      });
+      setStatus('Branding saved.');
+    } catch (error: any) {
+      setStatus(error.message || 'Unable to save branding.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const uploadLogo = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('logo', file);
+    try {
+      const data = await apiFetch('/api/photographer/branding/logo', { method: 'POST', body: formData });
+      setLogoUrl(data.logo_url || '');
+      setStatus('Logo uploaded. Save to publish the remaining changes.');
+    } catch (error: any) {
+      setStatus(error.message || 'Logo upload failed.');
+    }
+  };
+
+  return (
+    <section className="max-w-3xl bg-neutral-900 border border-neutral-800 rounded-xl p-6">
+      <div className="flex items-start justify-between gap-6 mb-8">
+        <div>
+          <h2 className="text-xl font-semibold">Branding & Customization</h2>
+          <p className="text-neutral-400 mt-2">Make every client gallery feel like your studio.</p>
+        </div>
+        <div className="w-12 h-12 rounded-xl border border-neutral-700" style={{ backgroundColor: brandColor }} />
+      </div>
+      <div className="space-y-6">
+        <label className="block text-sm text-neutral-300">Theme color
+          <div className="flex items-center gap-3 mt-2">
+            <input type="color" value={brandColor} onChange={event => setBrandColor(event.target.value)} className="h-10 w-14 bg-transparent cursor-pointer" />
+            <input value={brandColor} onChange={event => setBrandColor(event.target.value)} className="bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-white font-mono" />
+          </div>
+        </label>
+        <label className="block text-sm text-neutral-300">Studio logo
+          <input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadLogo} className="block mt-2 text-sm text-neutral-400" />
+        </label>
+        {logoUrl && <img src={logoUrl} alt="Current studio logo" className="h-16 w-16 rounded-xl object-contain bg-white p-2" />}
+        <label className="block text-sm text-neutral-300">Welcome message
+          <textarea value={welcomeMessage} onChange={event => setWelcomeMessage(event.target.value)} maxLength={500} rows={3} className="block w-full mt-2 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-white" placeholder="Welcome to my private gallery." />
+        </label>
+        <div className="flex items-center gap-4">
+          <button onClick={saveBranding} disabled={isSaving} className="bg-white text-black px-4 py-2 rounded-lg font-medium disabled:opacity-50">{isSaving ? 'Saving...' : 'Save Branding'}</button>
+          {status && <span className="text-sm text-neutral-400">{status}</span>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 
 function PhotographerDashboard({ user, onLogout }: { user: any, onLogout: () => void }) {
   const [albums, setAlbums] = useState<any[]>([]);
+  const [activeView, setActiveView] = useState<'albums' | 'branding'>('albums');
   const [uploadingTo, setUploadingTo] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedAlbumCode, setSelectedAlbumCode] = useState<string | null>(null);
@@ -250,10 +380,10 @@ function PhotographerDashboard({ user, onLogout }: { user: any, onLogout: () => 
             <Users size={18} />
             <span>Clients</span>
           </a>
-          <a href="#" className="flex items-center space-x-3 px-3 py-2 text-neutral-400 hover:bg-neutral-900 hover:text-white rounded-lg transition-colors">
+          <button onClick={() => setActiveView('branding')} className={cn("w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors", activeView === 'branding' ? "bg-blue-600/10 text-blue-500" : "text-neutral-400 hover:bg-neutral-900 hover:text-white")}>
             <Camera size={18} />
-            <span>Watermarks</span>
-          </a>
+            <span>Branding & Customization</span>
+          </button>
         </nav>
         <div className="mt-auto pt-6 border-t border-neutral-800">
           <div className="flex items-center space-x-3 mb-4 px-2">
@@ -276,15 +406,16 @@ function PhotographerDashboard({ user, onLogout }: { user: any, onLogout: () => 
       <main className="flex-1 p-10 overflow-y-auto">
         <header className="flex justify-between items-center mb-10">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Client Albums</h1>
-            <p className="text-neutral-400 mt-1">Manage and securely share your deliverables.</p>
+            <h1 className="text-3xl font-semibold tracking-tight">{activeView === 'branding' ? 'Branding & Customization' : 'Client Albums'}</h1>
+            <p className="text-neutral-400 mt-1">{activeView === 'branding' ? 'Customize the client experience for your studio.' : 'Manage and securely share your deliverables.'}</p>
           </div>
-          <button className="flex items-center space-x-2 bg-white text-black px-4 py-2 rounded-lg font-medium hover:bg-neutral-200 transition-colors">
+          <button onClick={() => setActiveView('albums')} className="flex items-center space-x-2 bg-white text-black px-4 py-2 rounded-lg font-medium hover:bg-neutral-200 transition-colors">
             <Plus size={18} />
             <span>New Album</span>
           </button>
         </header>
 
+        {activeView === 'branding' ? <BrandingSettings /> : <>
         {/* Hidden file input for uploading photos */}
         <input 
           type="file" 
@@ -362,6 +493,7 @@ function PhotographerDashboard({ user, onLogout }: { user: any, onLogout: () => 
             );
           })}
         </div>
+        </>}
       </main>
     </div>
   );
@@ -516,6 +648,7 @@ export default function App() {
   return (
     <Router>
       <Routes>
+        <Route path="/client/:code" element={<ClientAlbumView />} />
         <Route path="/" element={!user ? <Login onLogin={handleLogin} /> : (user.role === 'admin' ? <AdminDashboard user={user} onLogout={handleLogout} /> : <PhotographerDashboard user={user} onLogout={handleLogout} />)} />
         <Route path="/photographer" element={user?.role === 'photographer' || user?.role === 'admin' ? <PhotographerDashboard user={user} onLogout={handleLogout} /> : <Login onLogin={handleLogin} />} />
         <Route path="/admin" element={user?.role === 'admin' ? <AdminDashboard user={user} onLogout={handleLogout} /> : <Login onLogin={handleLogin} />} />

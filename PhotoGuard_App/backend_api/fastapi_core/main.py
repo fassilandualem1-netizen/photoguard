@@ -25,11 +25,12 @@ from .authorization import (
 )
 from .rate_limit import limiter
 from .metrics import metrics
-from .schemas import PublicPhotoResponse
+from .schemas import BrandingUpdateRequest, PublicBrandingResponse, PublicPhotoResponse
 from .stream_tokens import TOKEN_TTL_SECONDS, stream_token_store
 import datetime
 import mimetypes
 import os
+import re
 import requests
 import sys
 from urllib.parse import quote
@@ -341,6 +342,82 @@ class AlbumCreateRequest(BaseModel):
     name: str
     expires: str
 
+
+def _branding_payload(user: models.User) -> dict:
+    return {
+        "brand_color": getattr(user, "brand_color", None) or "#24A1DE",
+        "logo_url": getattr(user, "logo_url", None),
+        "custom_welcome_message": getattr(user, "custom_welcome_message", None),
+    }
+
+
+@app.get("/api/photographers/{photographer_id}/branding", response_model=PublicBrandingResponse)
+def get_public_branding(photographer_id: int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(
+        models.User.id == photographer_id,
+        models.User.role == "photographer",
+    ).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Photographer not found")
+    return _branding_payload(user)
+
+
+@app.get("/api/photographer/branding", response_model=PublicBrandingResponse)
+def get_my_branding(current_user: models.User = Depends(require_photographer)):
+    return _branding_payload(current_user)
+
+
+@app.put("/api/photographer/branding", response_model=PublicBrandingResponse)
+def update_my_branding(
+    payload: BrandingUpdateRequest,
+    current_user: models.User = Depends(require_photographer),
+    db: Session = Depends(get_db),
+):
+    if payload.brand_color is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", payload.brand_color):
+        raise HTTPException(status_code=422, detail="brand_color must be a six-digit hex color")
+    if payload.logo_url is not None and payload.logo_url and not payload.logo_url.startswith("https://"):
+        raise HTTPException(status_code=422, detail="logo_url must use HTTPS")
+    if payload.custom_welcome_message is not None and len(payload.custom_welcome_message) > 500:
+        raise HTTPException(status_code=422, detail="custom_welcome_message is too long")
+
+    if payload.brand_color is not None:
+        current_user.brand_color = payload.brand_color
+    if payload.logo_url is not None:
+        current_user.logo_url = payload.logo_url or None
+    if payload.custom_welcome_message is not None:
+        current_user.custom_welcome_message = payload.custom_welcome_message or None
+    db.commit()
+    db.refresh(current_user)
+    return _branding_payload(current_user)
+
+
+@app.post("/api/photographer/branding/logo", response_model=PublicBrandingResponse)
+async def upload_brand_logo(
+    logo: UploadFile = File(...),
+    current_user: models.User = Depends(require_photographer),
+    db: Session = Depends(get_db),
+):
+    if logo.content_type not in {"image/png", "image/jpeg", "image/webp"}:
+        raise HTTPException(status_code=415, detail="Logo must be PNG, JPEG, or WebP")
+    file_bytes = await logo.read()
+    if len(file_bytes) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Logo must be smaller than 5 MB")
+    try:
+        result = storage.cloudinary.uploader.upload(
+            file_bytes,
+            folder=f"photoguard/branding/{current_user.id}",
+            public_id="logo",
+            overwrite=True,
+            resource_type="image",
+        )
+        current_user.logo_url = result["secure_url"]
+        db.commit()
+        db.refresh(current_user)
+    except Exception as exc:
+        log.error("Brand logo upload failed for photographer %s: %s", current_user.id, exc)
+        raise HTTPException(status_code=502, detail="Logo upload unavailable") from exc
+    return _branding_payload(current_user)
+
 import bcrypt
 
 @app.post("/api/login")
@@ -468,7 +545,11 @@ def get_gallery(album_code: str, album: models.Album = Depends(require_client_al
     images = []
     for photo in album.photos:
         images.append(_public_photo_response(photo))
-    return {"albumName": album.name, "images": images}
+    return {
+        "albumName": album.name,
+        "photographerId": album.photographer_id,
+        "images": images,
+    }
 
 class VerifyCodeRequest(BaseModel):
     code: str = None
@@ -502,6 +583,7 @@ def verify_album_code(request: Request, req: VerifyCodeRequest, db: Session = De
     return {
         "albumId": str(album.id),
         "title": album.name,
+        "photographerId": album.photographer_id,
         "media": media_tokens,
         "photos": media_tokens, # Add both just in case
         "photographerName": photographer_name,

@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 from .models import Base
 
@@ -22,6 +22,21 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    columns = {column["name"] for column in inspect(engine).get_columns("users")}
+    branding_columns = {
+        "brand_color": "VARCHAR(20)",
+        "logo_url": "VARCHAR(255)",
+        "custom_welcome_message": "VARCHAR(500)",
+    }
+    missing = {
+        name: definition
+        for name, definition in branding_columns.items()
+        if name not in columns
+    }
+    if missing:
+        with engine.begin() as connection:
+            for name, definition in missing.items():
+                connection.execute(text(f"ALTER TABLE users ADD COLUMN {name} {definition}"))
 
 def get_db():
     db = SessionLocal()

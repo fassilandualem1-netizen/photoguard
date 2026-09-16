@@ -2,6 +2,7 @@ import os
 import boto3
 import cloudinary
 import cloudinary.uploader
+import requests
 from botocore.exceptions import ClientError
 from datetime import datetime
 from .logger import log, audit_log
@@ -106,6 +107,19 @@ def apply_native_watermark(file_bytes: bytes, profile: dict) -> bytes:
         alpha = int(255 * profile["opacity"] / 100)
         draw.text((coordinates[0] + 2, coordinates[1] + 2), profile["text"], font=font, fill=(0, 0, 0, alpha))
         draw.text(coordinates, profile["text"], font=font, fill=(255, 255, 255, alpha))
+        if profile.get("logo_url"):
+            try:
+                logo_response = requests.get(profile["logo_url"], timeout=5)
+                logo_response.raise_for_status()
+                logo = Image.open(io.BytesIO(logo_response.content)).convert("RGBA")
+                logo.thumbnail((max(64, image.width // 4), max(64, image.height // 4)))
+                logo_alpha = logo.getchannel("A").point(lambda value: int(value * profile["opacity"] / 100))
+                logo.putalpha(logo_alpha)
+                logo_margin = max(24, image.width // 30)
+                logo_position = (image.width - logo.width - logo_margin, image.height - logo.height - logo_margin)
+                overlay.alpha_composite(logo, logo_position)
+            except Exception as exc:
+                log.warning("Native watermark logo fallback failed: %s", exc)
         output = io.BytesIO()
         Image.alpha_composite(image, overlay).convert("RGB").save(output, format="WEBP", quality=70, optimize=True)
         return output.getvalue()

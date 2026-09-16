@@ -1,7 +1,9 @@
-from fastapi import FastAPI, Header
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Header, HTTPException, Request, UploadFile, status
 from fastapi.security import OAuth2PasswordBearer
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 import jwt
-from .auth import SECRET_KEY, ALGORITHM, UploadFile, File, HTTPException, status, BackgroundTasks, Depends, Request
+from .auth import SECRET_KEY, ALGORITHM
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +15,7 @@ from . import models, storage
 from .logger import log
 from .db import get_db, init_db
 from .auth import verify_telegram_auth, create_access_token
+from .rate_limit import limiter
 import datetime
 import os
 import sys
@@ -29,6 +32,8 @@ except ImportError:
         log.warning(f"Telegram utils missing. Could not send: {msg}")
 
 app = FastAPI(title="PhotoGuard Live API", version="4.0.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS setup
 app.add_middleware(
@@ -372,7 +377,8 @@ class VerifyCodeRequest(BaseModel):
     device_uuid: str = None
 
 @app.post("/api/albums/verify-code")
-def verify_album_code(req: VerifyCodeRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def verify_album_code(request: Request, req: VerifyCodeRequest, db: Session = Depends(get_db)):
     code_to_check = req.code or req.pin
     album = db.query(models.Album).filter(models.Album.code == code_to_check).first()
     if not album:

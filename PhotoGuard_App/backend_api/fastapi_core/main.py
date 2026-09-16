@@ -4,7 +4,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 import jwt
 from .auth import SECRET_KEY, ALGORITHM
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -16,9 +16,13 @@ from .logger import log
 from .db import get_db, init_db
 from .auth import verify_telegram_auth, create_access_token
 from .rate_limit import limiter
+from .stream_tokens import TOKEN_TTL_SECONDS, stream_token_store
 import datetime
+import mimetypes
 import os
+import requests
 import sys
+from urllib.parse import quote
 
 # Ensure tables exist
 init_db()
@@ -355,6 +359,11 @@ def create_album(req: AlbumCreateRequest, current_user: models.User = Depends(ge
         "expires": req.expires
     }
 
+
+def _stream_url_for_photo(photo: models.Photo) -> str:
+    token = stream_token_store.issue(photo.id)
+    return f"/api/photos/stream?token={quote(token, safe='')}"
+
 @app.get("/api/gallery/{album_code}")
 def get_gallery(album_code: str, db: Session = Depends(get_db)):
     album = db.query(models.Album).filter(models.Album.code == album_code).first()
@@ -366,7 +375,7 @@ def get_gallery(album_code: str, db: Session = Depends(get_db)):
         images.append({
             "id": photo.id,
             "filename": photo.filename,
-            "url": photo.watermarked_url or photo.secure_s3_url,
+            "url": _stream_url_for_photo(photo),
             "selected": photo.is_selected
         })
     return {"albumName": album.name, "images": images}
@@ -392,7 +401,7 @@ def verify_album_code(request: Request, req: VerifyCodeRequest, db: Session = De
     for photo in album.photos:
         media_tokens.append({
             "token": str(photo.id),
-            "url": photo.watermarked_url or photo.secure_s3_url or "",
+            "url": _stream_url_for_photo(photo),
             "media_type": "image"
         })
     
@@ -410,24 +419,49 @@ def verify_album_code(request: Request, req: VerifyCodeRequest, db: Session = De
 
 @app.get("/api/photos/stream")
 def stream_photo(token: str, db: Session = Depends(get_db)):
-    try:
-        photo_id = int(token)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid token")
+    photo_id = stream_token_store.consume(token)
+    if photo_id is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired stream token")
     
     photo = db.query(models.Photo).filter(models.Photo.id == photo_id).first()
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
         
-    url = photo.watermarked_url or photo.secure_s3_url
-    if not url:
+    origin_url = photo.watermarked_url or photo.secure_s3_url
+    if not origin_url:
         raise HTTPException(status_code=404, detail="Photo URL not set")
-        
-    # Ideally proxy the image, but for now redirect with no cache headers
-    from fastapi.responses import RedirectResponse
-    response = RedirectResponse(url)
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    return response
+
+    if origin_url.startswith("s3://"):
+        origin_url = storage.generate_presigned_download_url(
+            origin_url, expiration_seconds=TOKEN_TTL_SECONDS
+        )
+
+    try:
+        upstream = requests.get(origin_url, stream=True, timeout=15)
+        upstream.raise_for_status()
+    except requests.RequestException as exc:
+        log.error("Secure photo stream failed for photo %s: %s", photo_id, exc)
+        raise HTTPException(status_code=502, detail="Photo stream unavailable") from exc
+
+    media_type = mimetypes.guess_type(photo.filename or "")[0] or "application/octet-stream"
+
+    def iter_photo_chunks():
+        try:
+            for chunk in upstream.iter_content(chunk_size=64 * 1024):
+                if chunk:
+                    yield chunk
+        finally:
+            upstream.close()
+
+    return StreamingResponse(
+        iter_photo_chunks(),
+        media_type=media_type,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 @app.post("/api/security/log")
 def log_security(req: dict):
@@ -460,7 +494,7 @@ async def upload_photos(album_code: str, current_user: models.User = Depends(get
         )
         db.add(new_photo)
         db.commit()
-        uploaded_data.append({"filename": file.filename, "urls": urls})
+        uploaded_data.append({"filename": file.filename})
         
     return {"success": True, "tier_applied": photographer_tier, "data": uploaded_data}
 

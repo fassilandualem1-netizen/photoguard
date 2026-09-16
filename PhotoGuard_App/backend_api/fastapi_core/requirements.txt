@@ -9,3 +9,4 @@ psycopg2-binary==2.9.13
 Pillow==12.3.0
 slowapi==0.1.9
 redis[hiredis]>=5.0.0,<6.0.0
+requests==2.31.0

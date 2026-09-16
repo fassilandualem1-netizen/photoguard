@@ -29,10 +29,6 @@
 }
 -keep class com.example.data.model.** { *; }
 
-# Coil Image Loader
--keep class coil.** { *; }
--dontwarn coil.**
-
 # Room Database
 -keep class * extends androidx.room.RoomDatabase
 -keep class com.example.data.local.** { *; }

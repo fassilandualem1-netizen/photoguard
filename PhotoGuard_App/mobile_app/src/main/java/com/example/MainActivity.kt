@@ -9,7 +9,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.ui.CoilImageCacheManager
+import com.example.ui.SecureImageMemory
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.example.data.local.AppDatabase
@@ -86,7 +86,7 @@ class MainActivity : ComponentActivity() {
             if (android.os.Build.VERSION.SDK_INT >= 34) {
                 ScreenCaptureHelper.unregister(this)
             }
-            CoilImageCacheManager.clearSensitiveMedia(this)
+            SecureImageMemory.clear()
             captureBlocked.value = false
         } catch (e: Exception) {
             e.printStackTrace()

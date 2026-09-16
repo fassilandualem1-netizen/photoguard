@@ -24,6 +24,10 @@ class User(Base):
     brand_color = Column(String(20), default="#24A1DE", nullable=True)
     logo_url = Column(String, nullable=True)
     custom_welcome_message = Column(String(500), nullable=True)
+    watermark_text = Column(String(120), nullable=True)
+    watermark_logo_url = Column(String, nullable=True)
+    watermark_opacity = Column(Float, default=40, nullable=True)
+    watermark_position = Column(String(20), default="center", nullable=True)
     
     albums = relationship("Album", back_populates="photographer")
     payments = relationship("PaymentReceipt", back_populates="user")

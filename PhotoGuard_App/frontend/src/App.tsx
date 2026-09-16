@@ -262,10 +262,92 @@ function BrandingSettings() {
   );
 }
 
+function WatermarkSettings() {
+  const [text, setText] = useState('Protected by PhotoGuard');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [opacity, setOpacity] = useState(40);
+  const [position, setPosition] = useState('center');
+  const [status, setStatus] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    apiFetch('/api/photographer/watermark')
+      .then(data => {
+        setText(data.watermark_text || 'Protected by PhotoGuard');
+        setLogoUrl(data.watermark_logo_url || '');
+        setOpacity(data.watermark_opacity || 40);
+        setPosition(data.watermark_position || 'center');
+      })
+      .catch(() => setStatus('Unable to load watermark settings.'));
+  }, []);
+
+  const saveWatermark = async () => {
+    setIsSaving(true);
+    setStatus('');
+    try {
+      await apiFetch('/api/photographer/watermark', {
+        method: 'PUT',
+        body: JSON.stringify({ watermark_text: text, watermark_logo_url: logoUrl, watermark_opacity: opacity, watermark_position: position }),
+      });
+      setStatus('Watermark settings saved. New uploads will use them.');
+    } catch (error: any) {
+      setStatus(error.message || 'Unable to save watermark settings.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const uploadLogo = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('logo', file);
+    try {
+      const data = await apiFetch('/api/photographer/watermark/logo', { method: 'POST', body: formData });
+      setLogoUrl(data.watermark_logo_url || '');
+      setStatus('Watermark logo uploaded.');
+    } catch (error: any) {
+      setStatus(error.message || 'Watermark logo upload failed.');
+    }
+  };
+
+  return (
+    <section className="max-w-3xl bg-neutral-900 border border-neutral-800 rounded-xl p-6">
+      <h2 className="text-xl font-semibold">Watermark Settings</h2>
+      <p className="text-neutral-400 mt-2 mb-8">Protect new client previews with a watermark that matches your studio.</p>
+      <div className="space-y-6">
+        <label className="block text-sm text-neutral-300">Watermark text
+          <input value={text} maxLength={120} onChange={event => setText(event.target.value)} className="block w-full mt-2 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-white" />
+        </label>
+        <label className="block text-sm text-neutral-300">Watermark logo
+          <input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadLogo} className="block mt-2 text-sm text-neutral-400" />
+        </label>
+        {logoUrl && <img src={logoUrl} alt="Current watermark logo" className="h-16 w-16 rounded-xl object-contain bg-white p-2" />}
+        <label className="block text-sm text-neutral-300">Opacity: {opacity}%
+          <input type="range" min="10" max="90" value={opacity} onChange={event => setOpacity(Number(event.target.value))} className="block w-full mt-3 accent-blue-500" />
+        </label>
+        <label className="block text-sm text-neutral-300">Placement
+          <select value={position} onChange={event => setPosition(event.target.value)} className="block w-full mt-2 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-white">
+            <option value="center">Center</option>
+            <option value="top-left">Top left</option>
+            <option value="top-right">Top right</option>
+            <option value="bottom-left">Bottom left</option>
+            <option value="bottom-right">Bottom right</option>
+          </select>
+        </label>
+        <div className="flex items-center gap-4">
+          <button onClick={saveWatermark} disabled={isSaving} className="bg-white text-black px-4 py-2 rounded-lg font-medium disabled:opacity-50">{isSaving ? 'Saving...' : 'Save Watermark'}</button>
+          {status && <span className="text-sm text-neutral-400">{status}</span>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 
 function PhotographerDashboard({ user, onLogout }: { user: any, onLogout: () => void }) {
   const [albums, setAlbums] = useState<any[]>([]);
-  const [activeView, setActiveView] = useState<'albums' | 'branding'>('albums');
+  const [activeView, setActiveView] = useState<'albums' | 'branding' | 'watermark'>('albums');
   const [uploadingTo, setUploadingTo] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedAlbumCode, setSelectedAlbumCode] = useState<string | null>(null);
@@ -384,6 +466,10 @@ function PhotographerDashboard({ user, onLogout }: { user: any, onLogout: () => 
             <Camera size={18} />
             <span>Branding & Customization</span>
           </button>
+          <button onClick={() => setActiveView('watermark')} className={cn("w-full flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors", activeView === 'watermark' ? "bg-blue-600/10 text-blue-500" : "text-neutral-400 hover:bg-neutral-900 hover:text-white")}>
+            <Shield size={18} />
+            <span>Watermark Settings</span>
+          </button>
         </nav>
         <div className="mt-auto pt-6 border-t border-neutral-800">
           <div className="flex items-center space-x-3 mb-4 px-2">
@@ -406,8 +492,8 @@ function PhotographerDashboard({ user, onLogout }: { user: any, onLogout: () => 
       <main className="flex-1 p-10 overflow-y-auto">
         <header className="flex justify-between items-center mb-10">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight">{activeView === 'branding' ? 'Branding & Customization' : 'Client Albums'}</h1>
-            <p className="text-neutral-400 mt-1">{activeView === 'branding' ? 'Customize the client experience for your studio.' : 'Manage and securely share your deliverables.'}</p>
+            <h1 className="text-3xl font-semibold tracking-tight">{activeView === 'branding' ? 'Branding & Customization' : activeView === 'watermark' ? 'Watermark Settings' : 'Client Albums'}</h1>
+            <p className="text-neutral-400 mt-1">{activeView === 'branding' ? 'Customize the client experience for your studio.' : activeView === 'watermark' ? 'Configure protection for new client previews.' : 'Manage and securely share your deliverables.'}</p>
           </div>
           <button onClick={() => setActiveView('albums')} className="flex items-center space-x-2 bg-white text-black px-4 py-2 rounded-lg font-medium hover:bg-neutral-200 transition-colors">
             <Plus size={18} />
@@ -415,7 +501,7 @@ function PhotographerDashboard({ user, onLogout }: { user: any, onLogout: () => 
           </button>
         </header>
 
-        {activeView === 'branding' ? <BrandingSettings /> : <>
+        {activeView === 'branding' ? <BrandingSettings /> : activeView === 'watermark' ? <WatermarkSettings /> : <>
         {/* Hidden file input for uploading photos */}
         <input 
           type="file" 

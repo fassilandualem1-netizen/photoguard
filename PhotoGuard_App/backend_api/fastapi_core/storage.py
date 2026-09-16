@@ -52,7 +52,66 @@ IDRIVE_BUCKET = os.getenv("IDRIVE_BUCKET", "photoguard-starter-originals")
 
 
 import io
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
+from urllib.parse import quote
+
+DEFAULT_WATERMARK_TEXT = "Protected by PhotoGuard"
+WATERMARK_POSITIONS = {
+    "center": "center",
+    "top-left": "north_west",
+    "top-right": "north_east",
+    "bottom-left": "south_west",
+    "bottom-right": "south_east",
+}
+
+
+def normalize_watermark_profile(profile: dict | None, studio_name: str | None = None) -> dict:
+    profile = profile or {}
+    text = (profile.get("text") or studio_name or DEFAULT_WATERMARK_TEXT).strip()
+    try:
+        opacity = max(10, min(90, int(float(profile.get("opacity", 40)))))
+    except (TypeError, ValueError):
+        opacity = 40
+    position = profile.get("position") if profile.get("position") in WATERMARK_POSITIONS else "center"
+    return {
+        "text": text[:120],
+        "logo_url": profile.get("logo_url") if str(profile.get("logo_url", "")).startswith("https://") else None,
+        "opacity": opacity,
+        "position": position,
+    }
+
+
+def apply_native_watermark(file_bytes: bytes, profile: dict) -> bytes:
+    """Deterministic Pillow fallback for providers without transformations."""
+    try:
+        image = Image.open(io.BytesIO(file_bytes)).convert("RGBA")
+        overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+        font = ImageFont.load_default()
+        bbox = draw.textbbox((0, 0), profile["text"], font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        margin = max(24, image.width // 30)
+        position = profile["position"]
+        if position == "center":
+            coordinates = ((image.width - text_width) // 2, (image.height - text_height) // 2)
+        elif position == "top-left":
+            coordinates = (margin, margin)
+        elif position == "top-right":
+            coordinates = (image.width - text_width - margin, margin)
+        elif position == "bottom-left":
+            coordinates = (margin, image.height - text_height - margin)
+        else:
+            coordinates = (image.width - text_width - margin, image.height - text_height - margin)
+        alpha = int(255 * profile["opacity"] / 100)
+        draw.text((coordinates[0] + 2, coordinates[1] + 2), profile["text"], font=font, fill=(0, 0, 0, alpha))
+        draw.text(coordinates, profile["text"], font=font, fill=(255, 255, 255, alpha))
+        output = io.BytesIO()
+        Image.alpha_composite(image, overlay).convert("RGB").save(output, format="WEBP", quality=70, optimize=True)
+        return output.getvalue()
+    except Exception as exc:
+        log.error("Native watermark fallback failed: %s", exc)
+        return file_bytes
 
 def compress_image(file_bytes: bytes, max_dim: int = 1080, quality: int = 70) -> bytes:
     try:
@@ -94,13 +153,20 @@ class MultiCloudStorageManager:
             return False
 
     @staticmethod
-    def _upload_to_cloudinary(file_bytes: bytes, folder: str, tier: str) -> str:
+    def _upload_to_cloudinary(file_bytes: bytes, folder: str, tier: str, profile: dict) -> str:
         transformations = [{'width': 1080, 'crop': 'limit'}]
-        if tier == 'starter':
-            # Aggressive watermarking for starter tier
-            transformations.append(
-                {'overlay': 'text:Arial_60_bold:PhotoGuard_Starter', 'gravity': 'center', 'opacity': 40, 'color': 'white'}
-            )
+        transformations.append({
+            "overlay": f"text:Arial_60_bold:{quote(profile['text'], safe='')}",
+            "gravity": WATERMARK_POSITIONS[profile["position"]],
+            "opacity": profile["opacity"],
+            "color": "white",
+        })
+        if profile.get("logo_url"):
+            transformations.append({
+                "overlay": {"url": profile["logo_url"]},
+                "gravity": WATERMARK_POSITIONS[profile["position"]],
+                "opacity": profile["opacity"],
+            })
         try:
             resp = cloudinary.uploader.upload(
                 file_bytes,
@@ -113,10 +179,10 @@ class MultiCloudStorageManager:
             return None
 
     @staticmethod
-    def _upload_to_imagekit(file_bytes: bytes, folder: str, filename: str) -> str:
+    def _upload_to_imagekit(file_bytes: bytes, folder: str, filename: str, profile: dict) -> str:
         if not imagekit:
             log.warning("ImageKit SDK not configured. Simulating via Cloudinary fallback.")
-            return MultiCloudStorageManager._upload_to_cloudinary(file_bytes, folder, "pro")
+            return MultiCloudStorageManager._upload_to_cloudinary(file_bytes, folder, "pro", profile)
             
         try:
             upload = imagekit.upload_file(
@@ -130,9 +196,11 @@ class MultiCloudStorageManager:
             return None
 
     @classmethod
-    async def process_and_store(cls, file_bytes: bytes, filename: str, album_code: str, tier: str) -> dict:
+    async def process_and_store(cls, file_bytes: bytes, filename: str, album_code: str, tier: str, watermark_profile: dict | None = None) -> dict:
         # Prevent RAM crashes on high-res photos: compress locally before upload!
         compressed_bytes = compress_image(file_bytes, max_dim=1080, quality=70)
+        profile = normalize_watermark_profile(watermark_profile)
+        fallback_preview_bytes = apply_native_watermark(compressed_bytes, profile)
         
         """
         Core logic for auto-selecting storage provider and verifying persistence.
@@ -154,7 +222,7 @@ class MultiCloudStorageManager:
             cdn_provider = "Cloudinary"
             original_bucket = IDRIVE_BUCKET
             
-            watermarked_url = cls._upload_to_cloudinary(compressed_bytes, folder_path, tier)
+            watermarked_url = cls._upload_to_cloudinary(compressed_bytes, folder_path, tier, profile)
             success = cls._upload_to_s3_compatible(s3_client_idrive, original_bucket, compressed_bytes, s3_key)
             
         elif tier == 'pro':
@@ -162,7 +230,7 @@ class MultiCloudStorageManager:
             cdn_provider = "ImageKit"
             original_bucket = AWS_BUCKET
             
-            watermarked_url = cls._upload_to_imagekit(compressed_bytes, folder_path, filename)
+            watermarked_url = cls._upload_to_imagekit(fallback_preview_bytes, folder_path, filename, profile)
             success = cls._upload_to_s3_compatible(s3_client_aws, original_bucket, compressed_bytes, s3_key)
             
         else: # 'studio'
@@ -170,7 +238,7 @@ class MultiCloudStorageManager:
             cdn_provider = "ImageKit_Premium"
             original_bucket = AWS_BUCKET
             
-            watermarked_url = cls._upload_to_imagekit(compressed_bytes, folder_path, filename)
+            watermarked_url = cls._upload_to_imagekit(fallback_preview_bytes, folder_path, filename, profile)
             success = cls._upload_to_s3_compatible(s3_client_aws, original_bucket, compressed_bytes, s3_key)
 
         secure_original_url = f"s3://{original_bucket}/{s3_key}"
@@ -197,8 +265,8 @@ class MultiCloudStorageManager:
         }
 
 # Adapter to maintain backward compatibility with main.py
-async def upload_photo_multicloud(file_bytes: bytes, filename: str, album_code: str, photographer_tier: str) -> dict:
-    return await MultiCloudStorageManager.process_and_store(file_bytes, filename, album_code, photographer_tier)
+async def upload_photo_multicloud(file_bytes: bytes, filename: str, album_code: str, photographer_tier: str, watermark_profile: dict | None = None) -> dict:
+    return await MultiCloudStorageManager.process_and_store(file_bytes, filename, album_code, photographer_tier, watermark_profile)
     
 def generate_presigned_download_url(s3_url: str, expiration_seconds=3600):
     try:

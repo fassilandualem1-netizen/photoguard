@@ -27,6 +27,10 @@ def init_db():
         "brand_color": "VARCHAR(20)",
         "logo_url": "VARCHAR(255)",
         "custom_welcome_message": "VARCHAR(500)",
+        "watermark_text": "VARCHAR(120)",
+        "watermark_logo_url": "VARCHAR(255)",
+        "watermark_opacity": "FLOAT",
+        "watermark_position": "VARCHAR(20)",
     }
     missing = {
         name: definition

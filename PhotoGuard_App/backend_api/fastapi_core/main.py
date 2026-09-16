@@ -25,7 +25,13 @@ from .authorization import (
 )
 from .rate_limit import limiter
 from .metrics import metrics
-from .schemas import BrandingUpdateRequest, PublicBrandingResponse, PublicPhotoResponse
+from .schemas import (
+    BrandingUpdateRequest,
+    PublicBrandingResponse,
+    PublicPhotoResponse,
+    WatermarkProfileResponse,
+    WatermarkUpdateRequest,
+)
 from .stream_tokens import TOKEN_TTL_SECONDS, stream_token_store
 import datetime
 import mimetypes
@@ -418,6 +424,77 @@ async def upload_brand_logo(
         raise HTTPException(status_code=502, detail="Logo upload unavailable") from exc
     return _branding_payload(current_user)
 
+
+def _watermark_payload(user: models.User) -> dict:
+    return {
+        "watermark_text": getattr(user, "watermark_text", None) or "Protected by PhotoGuard",
+        "watermark_logo_url": getattr(user, "watermark_logo_url", None),
+        "watermark_opacity": float(getattr(user, "watermark_opacity", None) or 40),
+        "watermark_position": getattr(user, "watermark_position", None) or "center",
+    }
+
+
+@app.get("/api/photographer/watermark", response_model=WatermarkProfileResponse)
+def get_my_watermark(current_user: models.User = Depends(require_photographer)):
+    return _watermark_payload(current_user)
+
+
+@app.put("/api/photographer/watermark", response_model=WatermarkProfileResponse)
+def update_my_watermark(
+    payload: WatermarkUpdateRequest,
+    current_user: models.User = Depends(require_photographer),
+    db: Session = Depends(get_db),
+):
+    positions = {"center", "top-left", "top-right", "bottom-left", "bottom-right"}
+    if payload.watermark_text is not None and len(payload.watermark_text) > 120:
+        raise HTTPException(status_code=422, detail="watermark_text is too long")
+    if payload.watermark_opacity is not None and not 10 <= payload.watermark_opacity <= 90:
+        raise HTTPException(status_code=422, detail="watermark_opacity must be between 10 and 90")
+    if payload.watermark_position is not None and payload.watermark_position not in positions:
+        raise HTTPException(status_code=422, detail="Unsupported watermark position")
+    if payload.watermark_logo_url is not None and payload.watermark_logo_url and not payload.watermark_logo_url.startswith("https://"):
+        raise HTTPException(status_code=422, detail="watermark_logo_url must use HTTPS")
+
+    if payload.watermark_text is not None:
+        current_user.watermark_text = payload.watermark_text or None
+    if payload.watermark_logo_url is not None:
+        current_user.watermark_logo_url = payload.watermark_logo_url or None
+    if payload.watermark_opacity is not None:
+        current_user.watermark_opacity = payload.watermark_opacity
+    if payload.watermark_position is not None:
+        current_user.watermark_position = payload.watermark_position
+    db.commit()
+    db.refresh(current_user)
+    return _watermark_payload(current_user)
+
+
+@app.post("/api/photographer/watermark/logo", response_model=WatermarkProfileResponse)
+async def upload_watermark_logo(
+    logo: UploadFile = File(...),
+    current_user: models.User = Depends(require_photographer),
+    db: Session = Depends(get_db),
+):
+    if logo.content_type not in {"image/png", "image/jpeg", "image/webp"}:
+        raise HTTPException(status_code=415, detail="Logo must be PNG, JPEG, or WebP")
+    file_bytes = await logo.read()
+    if len(file_bytes) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Logo must be smaller than 5 MB")
+    try:
+        result = storage.cloudinary.uploader.upload(
+            file_bytes,
+            folder=f"photoguard/watermarks/{current_user.id}",
+            public_id="logo",
+            overwrite=True,
+            resource_type="image",
+        )
+        current_user.watermark_logo_url = result["secure_url"]
+        db.commit()
+        db.refresh(current_user)
+    except Exception as exc:
+        log.error("Watermark logo upload failed for photographer %s: %s", current_user.id, exc)
+        raise HTTPException(status_code=502, detail="Watermark logo upload unavailable") from exc
+    return _watermark_payload(current_user)
+
 import bcrypt
 
 @app.post("/api/login")
@@ -659,9 +736,21 @@ async def upload_photos(album_code: str, current_user: models.User = Depends(get
         db.refresh(album)
 
     uploaded_data = []
+    watermark_profile = {
+        "text": current_user.watermark_text or current_user.first_name or current_user.username or "Protected by PhotoGuard",
+        "logo_url": current_user.watermark_logo_url,
+        "opacity": current_user.watermark_opacity or 40,
+        "position": current_user.watermark_position or "center",
+    }
     for file in photos:
         file_bytes = await file.read()
-        urls = await storage.upload_photo_multicloud(file_bytes, file.filename, album_code, photographer_tier)
+        urls = await storage.upload_photo_multicloud(
+            file_bytes,
+            file.filename,
+            album_code,
+            photographer_tier,
+            watermark_profile,
+        )
         
         new_photo = models.Photo(
             filename=file.filename,

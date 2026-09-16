@@ -24,3 +24,17 @@ class PublicBrandingResponse(BaseModel):
     brand_color: str
     logo_url: Optional[str] = None
     custom_welcome_message: Optional[str] = None
+
+
+class WatermarkUpdateRequest(BaseModel):
+    watermark_text: Optional[str] = None
+    watermark_logo_url: Optional[str] = None
+    watermark_opacity: Optional[float] = None
+    watermark_position: Optional[str] = None
+
+
+class WatermarkProfileResponse(BaseModel):
+    watermark_text: str
+    watermark_logo_url: Optional[str] = None
+    watermark_opacity: float
+    watermark_position: str

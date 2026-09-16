@@ -5,21 +5,6 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { apiFetch, API_BASE } from './apiClient';
 
-interface TelegramWidgetUser {
-  id: number;
-  first_name: string;
-  username?: string;
-  photo_url?: string;
-  auth_date: number;
-  hash: string;
-}
-
-declare global {
-  interface Window {
-    onTelegramAuth?: (user: TelegramWidgetUser) => void;
-  }
-}
-
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
@@ -49,45 +34,62 @@ function formatExpiryCountdown(expiresAt: string | null | undefined, now: number
 function Login({ onLogin }: { onLogin: (user: any) => void }) {
   const [error, setError] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const widgetRef = useRef<HTMLDivElement>(null);
+  const pollRef = useRef<number | null>(null);
   const navigate = useNavigate();
 
-  const handleTelegramAuth = async (telegramUser: TelegramWidgetUser) => {
+  const stopPolling = () => {
+    if (pollRef.current !== null) {
+      window.clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  const handleTelegramLogin = async () => {
     setIsAuthenticating(true);
     setError('');
     try {
-      const response = await fetch(`${API_BASE}/api/auth/telegram`, {
+      const response = await fetch(`${API_BASE}/api/auth/telegram/deep-link/init`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(telegramUser),
       });
       const data = await response.json();
-      if (!response.ok || !data.success || !data.token) {
-        throw new Error(data.detail || 'Telegram authentication failed.');
+      if (!response.ok || !data.session_uuid || !data.bot_url) {
+        throw new Error(data.detail || 'Unable to start Telegram authentication.');
       }
-      const user = { ...data.user, token: data.token };
-      onLogin(user);
-      navigate(user.role === 'admin' ? '/admin' : '/photographer');
+
+      window.open(data.bot_url, '_blank', 'noopener,noreferrer');
+      const sessionUuid = data.session_uuid as string;
+      const startedAt = Date.now();
+      pollRef.current = window.setInterval(async () => {
+        if (Date.now() - startedAt > 5 * 60 * 1000) {
+          stopPolling();
+          setIsAuthenticating(false);
+          setError('Telegram authentication timed out. Please try again.');
+          return;
+        }
+        try {
+          const statusResponse = await fetch(`${API_BASE}/api/auth/status/${sessionUuid}`);
+          if (statusResponse.status === 404) return;
+          const statusData = await statusResponse.json();
+          if (statusData.status === 'authenticated' && statusData.token) {
+            stopPolling();
+            const user = { ...statusData.user, token: statusData.token };
+            onLogin(user);
+            navigate(user.role === 'admin' ? '/admin' : '/photographer');
+            setIsAuthenticating(false);
+          }
+        } catch (pollError) {
+          console.error('Telegram deep-link polling error', pollError);
+        }
+      }, 2000);
     } catch (authError: any) {
       setError(authError.message || 'Telegram authentication failed.');
-    } finally {
       setIsAuthenticating(false);
     }
   };
 
   useEffect(() => {
-    window.onTelegramAuth = handleTelegramAuth;
-    const script = document.createElement('script');
-    script.src = 'https://telegram.org/js/telegram-widget.js?22';
-    script.async = true;
-    script.dataset.telegramLogin = 'photoguard_alert_bot';
-    script.dataset.size = 'large';
-    script.dataset.onauth = 'onTelegramAuth(user)';
-    script.dataset.requestAccess = 'write';
-    widgetRef.current?.appendChild(script);
     return () => {
-      window.onTelegramAuth = undefined;
-      script.remove();
+      stopPolling();
     };
   }, []);
 
@@ -156,8 +158,15 @@ function Login({ onLogin }: { onLogin: (user: any) => void }) {
 
         {/* Login Action */}
         <div>
-          <div ref={widgetRef} className="flex min-h-11 items-center justify-center" />
-          {isAuthenticating && <p className="text-center text-neutral-400 text-sm mt-3">Verifying Telegram account...</p>}
+          <button
+            type="button"
+            onClick={handleTelegramLogin}
+            disabled={isAuthenticating}
+            className="w-full flex items-center justify-center gap-3 bg-[#24A1DE] hover:bg-[#1d8dbf] disabled:bg-neutral-700 text-white font-medium py-3.5 px-4 rounded-xl transition-all shadow-lg shadow-blue-900/20"
+          >
+            <Send size={20} />
+            <span>{isAuthenticating ? 'Waiting for Telegram...' : 'Log in with Telegram'}</span>
+          </button>
           <p className="text-center text-neutral-600 text-xs mt-5">Strictly For Authorized Photographers Only</p>
           
           <div className="mt-8 pt-6 border-t border-neutral-800/50">

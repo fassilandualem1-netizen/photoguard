@@ -34,10 +34,12 @@ from .schemas import (
 )
 from .stream_tokens import TOKEN_TTL_SECONDS, stream_token_store
 import datetime
+import json
 import mimetypes
 import os
 import re
 import requests
+import uuid
 import sys
 from urllib.parse import quote
 
@@ -157,6 +159,126 @@ def telegram_login(payload: TelegramAuthPayload, db: Session = Depends(get_db)):
         "tier": user.tier,
         "photo_url": user.photo_url,
     }}
+
+
+def _deep_link_session_key(session_uuid: str) -> str:
+    return f"telegram:deep-link:{session_uuid}"
+
+
+def _issue_user_session(user: models.User) -> dict:
+    return {
+        "token": create_access_token({
+            "sub": str(user.id),
+            "role": user.role,
+            "telegram_id": user.telegram_id,
+        }),
+        "user": {
+            "id": user.id,
+            "first_name": user.first_name,
+            "role": user.role,
+            "tier": user.tier,
+            "photo_url": user.photo_url,
+        },
+    }
+
+
+@app.post("/api/auth/telegram/deep-link/init")
+def init_telegram_deep_link():
+    session_uuid = str(uuid.uuid4())
+    redis_client.set(
+        _deep_link_session_key(session_uuid),
+        json.dumps({"status": "pending"}),
+        ex=300,
+    )
+    bot_username = os.getenv("TELEGRAM_BOT_USERNAME", "photoguard_alert_bot").lstrip("@")
+    return {
+        "session_uuid": session_uuid,
+        "bot_url": f"https://t.me/{bot_username}?start={session_uuid}",
+        "expires_in": 300,
+    }
+
+
+@app.get("/api/auth/status/{session_uuid}")
+def telegram_deep_link_status(session_uuid: str):
+    try:
+        uuid.UUID(session_uuid)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid session UUID") from exc
+
+    raw = redis_client.get(_deep_link_session_key(session_uuid))
+    if not raw:
+        raise HTTPException(status_code=404, detail="Authentication session expired")
+    try:
+        session_data = json.loads(raw)
+    except (TypeError, ValueError) as exc:
+        log.error("Invalid deep-link session payload: %s", exc)
+        raise HTTPException(status_code=500, detail="Invalid authentication session") from exc
+
+    if session_data.get("status") != "authenticated":
+        return {"status": "pending"}
+
+    redis_client.delete(_deep_link_session_key(session_uuid))
+    return {"status": "authenticated", "token": session_data["token"], "user": session_data["user"]}
+
+
+@app.post("/api/telegram/webhook")
+async def telegram_deep_link_webhook(request: Request, db: Session = Depends(get_db)):
+    update = await request.json()
+    message = update.get("message") or {}
+    telegram_user = message.get("from") or {}
+    text = (message.get("text") or "").strip()
+    match = re.fullmatch(r"/start(?:@[^ ]+)?(?:\s+([0-9a-fA-F-]{36}))?", text)
+    if not match or not match.group(1) or not telegram_user.get("id"):
+        return {"ok": True}
+
+    session_uuid = match.group(1)
+    session_key = _deep_link_session_key(session_uuid)
+    raw_session = redis_client.get(session_key)
+    if not raw_session:
+        return {"ok": True}
+
+    telegram_id = str(telegram_user["id"])
+    role = "admin" if telegram_id == os.getenv("SUPER_ADMIN_TELEGRAM_ID", "") else "photographer"
+    user = db.query(models.User).filter(models.User.telegram_id == telegram_id).first()
+    if not user:
+        user = models.User(
+            telegram_id=telegram_id,
+            first_name=telegram_user.get("first_name") or "User",
+            username=telegram_user.get("username"),
+            photo_url=telegram_user.get("photo_url"),
+            role=role,
+            tier="starter",
+        )
+        db.add(user)
+    else:
+        user.first_name = telegram_user.get("first_name") or user.first_name
+        user.username = telegram_user.get("username") or user.username
+        user.photo_url = telegram_user.get("photo_url") or user.photo_url
+        user.role = role
+    db.commit()
+    db.refresh(user)
+
+    session_payload = _issue_user_session(user)
+    redis_client.set(
+        session_key,
+        json.dumps({"status": "authenticated", **session_payload}),
+        ex=120,
+    )
+
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    if bot_token:
+        try:
+            requests.post(
+                f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                json={
+                    "chat_id": telegram_id,
+                    "text": "Welcome! You are logged in. You will receive your PhotoGuard notifications here.",
+                },
+                timeout=8,
+            ).raise_for_status()
+        except requests.RequestException as exc:
+            log.warning("Telegram welcome message failed: %s", exc)
+    return {"ok": True}
 
 def trigger_photographer_notification(album_code: str, num_photos: int, notes: str, photographer_telegram_id: str):
     msg = (

@@ -59,5 +59,23 @@ class RedisClient:
             logger.error(f"Redis GET failed for key '{key}': {e}")
             return None
 
+    def delete(self, key):
+        if self.is_mock:
+            return self.mock_store.pop(key, None) is not None
+
+        try:
+            import urllib.parse
+            encoded_key = urllib.parse.quote(str(key), safe='')
+            response = requests.get(
+                f"{self.url}/del/{encoded_key}",
+                headers=self._get_headers(),
+                timeout=5,
+            )
+            response.raise_for_status()
+            return True
+        except Exception as e:
+            logger.error(f"Redis DELETE failed for key '{key}': {e}")
+            return False
+
 # Singleton instance to be used across the application
 redis_client = RedisClient()

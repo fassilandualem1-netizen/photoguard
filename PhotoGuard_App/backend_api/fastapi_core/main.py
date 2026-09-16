@@ -23,6 +23,7 @@ from .authorization import (
     require_photographer,
 )
 from .rate_limit import limiter
+from .metrics import metrics
 from .schemas import PublicPhotoResponse
 from .stream_tokens import TOKEN_TTL_SECONDS, stream_token_store
 import datetime
@@ -45,7 +46,14 @@ except ImportError:
 
 app = FastAPI(title="PhotoGuard Live API", version="4.0.0")
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+def handle_rate_limit_exceeded(request: Request, exc: RateLimitExceeded):
+    metrics.record_security_event("rate_limit_trigger")
+    return _rate_limit_exceeded_handler(request, exc)
+
+
+app.add_exception_handler(RateLimitExceeded, handle_rate_limit_exceeded)
 
 
 @app.middleware("http")
@@ -54,6 +62,10 @@ async def disable_api_caching(request: Request, call_next):
     if request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
+        if request.url.path != "/api/admin/metrics":
+            metrics.record_request(request.url.path, response.status_code)
+        if response.status_code in (401, 403):
+            metrics.record_security_event("unauthorized_access")
     return response
 
 # CORS setup
@@ -414,6 +426,7 @@ def verify_album_code(request: Request, req: VerifyCodeRequest, db: Session = De
     code_to_check = req.code or req.pin
     album = db.query(models.Album).filter(models.Album.code == code_to_check).first()
     if not album:
+        metrics.record_security_event("failed_pin_attempt")
         return {"status": "error", "message": "Invalid access code."}
     
     photographer_name = "PhotoGuard Studio"
@@ -468,6 +481,7 @@ def stream_photo(token: str, db: Session = Depends(get_db)):
         try:
             for chunk in upstream.iter_content(chunk_size=64 * 1024):
                 if chunk:
+                    metrics.record_bandwidth(len(chunk))
                     yield chunk
         finally:
             upstream.close()
@@ -513,6 +527,7 @@ async def upload_photos(album_code: str, current_user: models.User = Depends(get
         )
         db.add(new_photo)
         db.commit()
+        metrics.record_upload(1, len(file_bytes))
         uploaded_data.append({"filename": file.filename})
         
     return {"success": True, "tier_applied": photographer_tier, "data": uploaded_data}
@@ -554,6 +569,11 @@ def get_high_res_downloads(album_code: str, current_user: models.User = Depends(
     download_links = [{"filename": p.filename, "download_url": _stream_url_for_photo(p)} for p in photos]
         
     return {"success": True, "downloads": download_links}
+
+
+    @app.get("/api/admin/metrics", dependencies=[Depends(require_admin)])
+    def get_platform_metrics():
+        return metrics.snapshot()
 
 # Mount React Frontend if running on Render / Production
 FRONTEND_DIST = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'frontend', 'dist')

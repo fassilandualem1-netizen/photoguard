@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.core.database import engine, Base, get_db
 from app.models.user import User
+from app.models.album import Album, MediaItem
 from app.api.auth import router as auth_router
+from app.api.albums import router as albums_router
 
 # Synchronize model definitions with database schema upon startup
 Base.metadata.create_all(bind=engine)
@@ -30,6 +32,7 @@ app.add_middleware(
 
 # Register Core API Routers
 app.include_router(auth_router)
+app.include_router(albums_router)
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 def health_check(db: Session = Depends(get_db)):

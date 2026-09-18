@@ -1,8 +1,8 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from app.models.user import UserRole
 
 class LoginRequest(BaseModel):
-    email: EmailStr = Field(..., description="Registered user email address")
+    email: str = Field(..., description="Registered user email address")
     password: str = Field(..., min_length=6, description="User password")
 
 class UserResponse(BaseModel):

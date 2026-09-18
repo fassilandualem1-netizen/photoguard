@@ -25,6 +25,9 @@ class User(Base):
     storage_quota_limit = Column(BigInteger, default=5368709120, nullable=False)
     storage_used = Column(BigInteger, default=0, nullable=False)
     
+    # Telegram Bot integration for instant submission alerts
+    telegram_chat_id = Column(String(50), nullable=True, index=True)
+    
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)

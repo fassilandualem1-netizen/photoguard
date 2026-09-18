@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.redis import (
@@ -7,6 +7,7 @@ from app.core.redis import (
     lock_album_submit,
     is_album_locked,
 )
+from app.core.telegram import notify_photographer_submission
 from app.models.album import Album, MediaItem
 from app.schemas.album import AlbumDetailResponse
 from app.schemas.client import (
@@ -84,11 +85,16 @@ def sync_album_state(pin: str, db: Session = Depends(get_db)):
     )
 
 @router.post("/submit/{pin}", response_model=ClientSubmitResponse, status_code=status.HTTP_200_OK)
-def submit_album_selection(pin: str, db: Session = Depends(get_db)):
+def submit_album_selection(
+    pin: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
     """
     Atomic Single-Submit Lock.
     When any family member/collaborator clicks Submit, this executes Redis setnx.
     If lock is acquired, updates PostgreSQL Album.is_locked = True.
+    Dispatches asynchronous Telegram alert to photographer if telegram_chat_id is present.
     If already locked, returns HTTP 409 Conflict.
     """
     pin = pin.strip()
@@ -123,6 +129,15 @@ def submit_album_selection(pin: str, db: Session = Depends(get_db)):
 
     # Increment sync version so all polling clients immediately lock their UI
     increment_album_version(pin)
+
+    # Dispatch non-blocking Telegram alert to photographer
+    if album.photographer and album.photographer.telegram_chat_id:
+        background_tasks.add_task(
+            notify_photographer_submission,
+            album_title=album.title,
+            client_name=album.client_name,
+            chat_id=album.photographer.telegram_chat_id
+        )
 
     return ClientSubmitResponse(
         message="Album selection submitted successfully. Gallery is now permanently locked.",

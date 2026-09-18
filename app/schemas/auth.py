@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel, Field
 from app.models.user import UserRole
 
@@ -12,6 +13,7 @@ class UserResponse(BaseModel):
     role: UserRole
     storage_quota_limit: int
     storage_used: int
+    telegram_chat_id: Optional[str] = None
     is_active: bool
 
     class Config:

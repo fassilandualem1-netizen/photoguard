@@ -10,6 +10,7 @@ from app.schemas.album import (
     AlbumUpdate,
     AlbumListItemResponse,
     AlbumDetailResponse,
+    MediaItemResponse,
 )
 
 router = APIRouter(prefix="/api/v1/albums", tags=["Albums"])
@@ -158,6 +159,26 @@ def get_album(
         selected_count=selected_count,
         media_items=album.media_items
     )
+
+@router.get("/{album_id}/export", response_model=List[MediaItemResponse], status_code=status.HTTP_200_OK)
+def export_album_selections(
+    album_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Exports final client photo selections (is_selected = True) for Lightroom/Photoshop workflows.
+    Enforces strict ownership access control.
+    """
+    album = db.query(Album).filter(Album.id == album_id).first()
+    if not album:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
+
+    if current_user.role != UserRole.ADMIN and album.photographer_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this album.")
+
+    selected_items = [item for item in album.media_items if item.is_selected]
+    return selected_items
 
 @router.patch("/{album_id}", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
 def update_album(

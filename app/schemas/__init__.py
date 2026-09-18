@@ -1,4 +1,4 @@
-from app.schemas.auth import LoginRequest, TokenResponse, UserResponse
+from app.schemas.auth import LoginRequest, TokenResponse, UserResponse, UserUpdate
 from app.schemas.album import (
     AlbumCreate,
     AlbumUpdate,
@@ -18,6 +18,7 @@ __all__ = [
     "LoginRequest",
     "TokenResponse",
     "UserResponse",
+    "UserUpdate",
     "AlbumCreate",
     "AlbumUpdate",
     "AlbumListItemResponse",

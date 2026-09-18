@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Shield, Send, Bell, Lock, CheckCircle2 } from 'lucide-react';
+import { Shield, Database, UserCheck, Download, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
   return (
@@ -15,74 +15,74 @@ export default function App() {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-white">PhotoGuard</h1>
-            <p className="text-xs text-slate-400">Master Blueprint v7.0 • Phase 6 Telegram Bot & Notifications</p>
+            <p className="text-xs text-slate-400">Master Blueprint v7.0 • Phase 6.5 Backend Final & Auto-Migration</p>
           </div>
         </div>
         <div className="flex items-center gap-2 text-xs bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-full font-medium">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          Telegram Engine Active
+          Auto-Migration Active
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto w-full my-12 space-y-8">
         <div className="space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-slate-900 border border-slate-800 text-xs font-mono text-cyan-400">
-            <span>FastAPI</span>
+            <span>FastAPI Lifespan</span>
             <span className="text-slate-600">/</span>
-            <span>BackgroundTasks</span>
+            <span>PostgreSQL Migration</span>
             <span className="text-slate-600">/</span>
-            <span>HTTPX Async</span>
+            <span>Profile Update</span>
             <span className="text-slate-600">/</span>
-            <span>Telegram Bot API</span>
+            <span>Export Selections</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-white">
-            Telegram Bot Integration & Notification Engine
+            Final Backend Logic & Safe Auto-Migration
           </h2>
           <p className="text-slate-400 text-sm sm:text-base leading-relaxed max-w-2xl">
-            Phase 6 is complete. Real-time selection submission notifications are dispatched non-blockingly via FastAPI BackgroundTasks and async HTTPX to photographer Telegram channels.
+            Phase 6.5 is complete. Dynamic non-destructive DDL migrations execute seamlessly on startup, profile updates manage Telegram channel links, and final selection exports stream directly to photographer workflows.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
             <div className="flex items-center justify-between text-slate-300">
-              <span className="text-sm font-medium">Async HTTPX Engine</span>
-              <Send className="w-4 h-4 text-cyan-400" />
+              <span className="text-sm font-medium">Safe Auto-Migration</span>
+              <Database className="w-4 h-4 text-cyan-400" />
             </div>
             <p className="text-xs text-slate-400">
-              Non-blocking asynchronous Telegram API communication via httpx.AsyncClient.
+              Lifespan executes non-destructive ALTER TABLE DDL without dropping free-tier PostgreSQL tables.
             </p>
             <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-mono">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>app/core/telegram.py</span>
+              <span>app/main.py lifespan</span>
             </div>
           </div>
 
           <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
             <div className="flex items-center justify-between text-slate-300">
-              <span className="text-sm font-medium">Background Tasks</span>
-              <Bell className="w-4 h-4 text-cyan-400" />
+              <span className="text-sm font-medium">Profile & Alert Settings</span>
+              <UserCheck className="w-4 h-4 text-cyan-400" />
             </div>
             <p className="text-xs text-slate-400">
-              Decoupled submission notifications queued seamlessly in FastAPI BackgroundTasks.
+              PUT /api/auth/profile updates photographer full_name and telegram_chat_id securely.
             </p>
             <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-mono">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>submit_album_selection</span>
+              <span>app/api/auth.py</span>
             </div>
           </div>
 
           <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
             <div className="flex items-center justify-between text-slate-300">
-              <span className="text-sm font-medium">Photographer Alerts</span>
-              <Lock className="w-4 h-4 text-cyan-400" />
+              <span className="text-sm font-medium">Lightroom Export Stream</span>
+              <Download className="w-4 h-4 text-cyan-400" />
             </div>
             <p className="text-xs text-slate-400">
-              Instant alerts sent to telegram_chat_id upon lock execution with client details.
+              GET /api/v1/albums/&#123;id&#125;/export filters exclusively for is_selected client items.
             </p>
             <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-mono">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>User.telegram_chat_id</span>
+              <span>app/api/albums.py</span>
             </div>
           </div>
         </div>
@@ -90,7 +90,7 @@ export default function App() {
 
       <footer className="border-t border-slate-900 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
         <p>PhotoGuard Anti-Piracy Architecture • Production Target: Render</p>
-        <p className="font-mono">v7.0.0-phase6</p>
+        <p className="font-mono">v7.0.0-phase6.5</p>
       </footer>
     </div>
   );

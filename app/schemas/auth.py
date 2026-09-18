@@ -6,6 +6,10 @@ class LoginRequest(BaseModel):
     email: str = Field(..., description="Registered user email address")
     password: str = Field(..., min_length=6, description="User password")
 
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = Field(None, min_length=1, max_length=255, description="Updated full name")
+    telegram_chat_id: Optional[str] = Field(None, max_length=50, description="Telegram chat ID for instant alerts")
+
 class UserResponse(BaseModel):
     id: int
     email: str

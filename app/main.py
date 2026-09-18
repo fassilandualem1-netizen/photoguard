@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -12,6 +13,21 @@ from app.api.albums import router as albums_router
 from app.api.client import router as client_router
 from app.api.media import router as media_router
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application startup and shutdown lifespan management.
+    Performs auto-migration to ensure new schema columns exist safely
+    without dropping existing tables on free-tier PostgreSQL.
+    """
+    # Safe auto-migration for zero-downtime deployments
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(50);"))
+    except Exception as exc:
+        print(f"Auto-migration notice: {exc}")
+    yield
+
 # Synchronize model definitions with database schema upon startup
 Base.metadata.create_all(bind=engine)
 
@@ -20,7 +36,8 @@ app = FastAPI(
     description="Secure Anti-Piracy Photo Selection SaaS Platform Backend",
     version="7.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # Bulletproof CORS configuration for cross-origin communication

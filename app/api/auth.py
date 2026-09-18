@@ -4,7 +4,7 @@ from app.core.database import get_db
 from app.core.security import verify_password, create_access_token
 from app.core.dependencies import get_current_user
 from app.models.user import User
-from app.schemas.auth import LoginRequest, TokenResponse, UserResponse
+from app.schemas.auth import LoginRequest, TokenResponse, UserResponse, UserUpdate
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -49,4 +49,22 @@ def get_authenticated_profile(current_user: User = Depends(get_current_user)):
     """
     Fetches the authenticated user profile using the validated JWT session.
     """
+    return UserResponse.model_validate(current_user)
+
+@router.put("/profile", response_model=UserResponse, status_code=status.HTTP_200_OK)
+def update_profile(
+    payload: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Updates the authenticated photographer's profile (name and Telegram Chat ID).
+    """
+    if payload.full_name is not None:
+        current_user.full_name = payload.full_name.strip()
+    if payload.telegram_chat_id is not None:
+        current_user.telegram_chat_id = payload.telegram_chat_id.strip() if payload.telegram_chat_id else None
+
+    db.commit()
+    db.refresh(current_user)
     return UserResponse.model_validate(current_user)

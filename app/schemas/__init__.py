@@ -8,6 +8,11 @@ from app.schemas.album import (
     MediaItemUpdate,
     MediaItemResponse,
 )
+from app.schemas.client import (
+    ClientVerifyRequest,
+    ClientSyncResponse,
+    ClientSubmitResponse,
+)
 
 __all__ = [
     "LoginRequest",
@@ -20,5 +25,8 @@ __all__ = [
     "MediaItemCreate",
     "MediaItemUpdate",
     "MediaItemResponse",
+    "ClientVerifyRequest",
+    "ClientSyncResponse",
+    "ClientSubmitResponse",
 ]
 

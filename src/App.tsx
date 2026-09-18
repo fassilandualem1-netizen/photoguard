@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Shield, FolderKanban, Image as ImageIcon, Lock, CheckCircle2 } from 'lucide-react';
+import { Shield, Radio, Lock, Smartphone, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
   return (
@@ -15,12 +15,12 @@ export default function App() {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-white">PhotoGuard</h1>
-            <p className="text-xs text-slate-400">Master Blueprint v7.0 • Phase 3 Album & Media Engine</p>
+            <p className="text-xs text-slate-400">Master Blueprint v7.0 • Phase 4 Redis Sync Engine & Client API</p>
           </div>
         </div>
         <div className="flex items-center gap-2 text-xs bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 px-3 py-1.5 rounded-full font-medium">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          Albums API Active
+          Redis Smart Polling Active
         </div>
       </header>
 
@@ -29,60 +29,60 @@ export default function App() {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-slate-900 border border-slate-800 text-xs font-mono text-cyan-400">
             <span>FastAPI</span>
             <span className="text-slate-600">/</span>
-            <span>PostgreSQL</span>
+            <span>Upstash Redis</span>
             <span className="text-slate-600">/</span>
-            <span>6-Digit PIN</span>
+            <span>Smart Polling</span>
             <span className="text-slate-600">/</span>
-            <span>Single Submit Lock</span>
+            <span>Atomic Single-Submit Lock</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-white">
-            Albums & Media Management Engine
+            Redis Live Sync Engine & Client API
           </h2>
           <p className="text-slate-400 text-sm sm:text-base leading-relaxed max-w-2xl">
-            Phase 3 core models and endpoints are operational. Includes album ownership mapping, automated non-colliding 6-digit client PIN generation, download permission flags, and media tracking.
+            Phase 4 is complete. Upstash Redis powers multi-device collaborative photo selection with Smart Polling (no WebSockets) and an atomic Redis SETNX single-submit lock.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
             <div className="flex items-center justify-between text-slate-300">
-              <span className="text-sm font-medium">Album & Media Models</span>
-              <FolderKanban className="w-4 h-4 text-cyan-400" />
+              <span className="text-sm font-medium">Upstash Redis Engine</span>
+              <Radio className="w-4 h-4 text-cyan-400" />
             </div>
             <p className="text-xs text-slate-400">
-              PostgreSQL relational schema binding albums to photographers and cascading to media items.
+              Live version incrementer on album_version:pin for lightweight mobile polling.
             </p>
             <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-mono">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>app/models/album.py</span>
+              <span>app/core/redis.py</span>
             </div>
           </div>
 
           <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
             <div className="flex items-center justify-between text-slate-300">
-              <span className="text-sm font-medium">Collision-Free PINs</span>
+              <span className="text-sm font-medium">Atomic Single-Submit Lock</span>
               <Lock className="w-4 h-4 text-cyan-400" />
             </div>
             <p className="text-xs text-slate-400">
-              Automated 6-digit PIN allocator with collision mitigation for client gallery access.
+              Redis SETNX on album_locked:pin guarantees exactly one submit across all client devices.
             </p>
             <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-mono">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>generate_album_pin()</span>
+              <span>lock_album_submit()</span>
             </div>
           </div>
 
           <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
             <div className="flex items-center justify-between text-slate-300">
-              <span className="text-sm font-medium">Photographer Endpoints</span>
-              <ImageIcon className="w-4 h-4 text-cyan-400" />
+              <span className="text-sm font-medium">Client Mobile Endpoints</span>
+              <Smartphone className="w-4 h-4 text-cyan-400" />
             </div>
             <p className="text-xs text-slate-400">
-              POST & GET /api/v1/albums authenticated via Bearer token with full ownership isolation.
+              POST /verify, GET /sync, and POST /submit for the Kotlin Jetpack Compose client app.
             </p>
             <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-mono">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>app/api/albums.py</span>
+              <span>app/api/client.py</span>
             </div>
           </div>
         </div>
@@ -90,7 +90,7 @@ export default function App() {
 
       <footer className="border-t border-slate-900 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
         <p>PhotoGuard Anti-Piracy Architecture • Production Target: Render</p>
-        <p className="font-mono">v7.0.0-phase3</p>
+        <p className="font-mono">v7.0.0-phase4</p>
       </footer>
     </div>
   );

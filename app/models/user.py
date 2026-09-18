@@ -11,7 +11,7 @@ class UserRole(str, enum.Enum):
 class User(Base):
     """
     Unified User Model for PhotoGuard.
-    Stores system credentials and quota tracking for Admins and Photographers.
+    Stores system credentials, plan monetization, and quota tracking for Admins and Photographers.
     """
     __tablename__ = "users"
 
@@ -21,7 +21,11 @@ class User(Base):
     full_name = Column(String(255), nullable=False)
     role = Column(Enum(UserRole, name="user_role_enum"), default=UserRole.PHOTOGRAPHER, nullable=False)
     
-    # Storage quota tracking in bytes (defaults to 5 GB)
+    # Monetization & Plan tiers: 'basic' or 'studio'
+    subscription_plan = Column(String(50), default="basic", nullable=False)
+    is_verified = Column(Boolean, default=False, nullable=False)
+    
+    # Storage quota tracking in bytes (defaults to 5 GB for basic plan)
     storage_quota_limit = Column(BigInteger, default=5368709120, nullable=False)
     storage_used = Column(BigInteger, default=0, nullable=False)
     
@@ -36,4 +40,4 @@ class User(Base):
     albums = relationship("Album", back_populates="photographer", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<User(id={self.id}, email='{self.email}', role='{self.role}')>"
+        return f"<User(id={self.id}, email='{self.email}', role='{self.role}', plan='{self.subscription_plan}')>"

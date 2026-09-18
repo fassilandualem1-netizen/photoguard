@@ -1,6 +1,7 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.user import User, UserRole
@@ -62,33 +63,42 @@ def create_album(
     else:
         assigned_pin = get_unique_pin(db)
 
-    album = Album(
-        title=payload.title,
-        client_name=payload.client_name,
-        pin=assigned_pin,
-        photographer_id=current_user.id,
-        allow_download=payload.allow_download,
-        is_locked=False
-    )
-    
-    db.add(album)
-    db.commit()
-    db.refresh(album)
+    try:
+        album = Album(
+            title=payload.title,
+            client_name=payload.client_name,
+            pin=assigned_pin,
+            photographer_id=current_user.id,
+            allow_download=payload.allow_download,
+            is_locked=False,
+            submitted_at=None
+        )
+        
+        db.add(album)
+        db.commit()
+        db.refresh(album)
 
-    return AlbumDetailResponse(
-        id=album.id,
-        title=album.title,
-        client_name=album.client_name,
-        pin=album.pin,
-        photographer_id=album.photographer_id,
-        is_locked=album.is_locked,
-        allow_download=album.allow_download,
-        created_at=album.created_at,
-        expires_at=album.expires_at,
-        media_count=0,
-        selected_count=0,
-        media_items=[]
-    )
+        return AlbumDetailResponse(
+            id=album.id,
+            title=album.title,
+            client_name=album.client_name,
+            pin=album.pin,
+            photographer_id=album.photographer_id,
+            is_locked=album.is_locked,
+            allow_download=album.allow_download,
+            created_at=album.created_at,
+            expires_at=album.expires_at,
+            submitted_at=album.submitted_at,
+            media_count=0,
+            selected_count=0,
+            media_items=[]
+        )
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error creating album: {str(exc)}"
+        )
 
 @router.get("", response_model=List[AlbumListItemResponse], status_code=status.HTTP_200_OK)
 def list_albums(
@@ -119,6 +129,7 @@ def list_albums(
                 allow_download=alb.allow_download,
                 created_at=alb.created_at,
                 expires_at=alb.expires_at,
+                submitted_at=alb.submitted_at,
                 media_count=media_count,
                 selected_count=selected_count
             )
@@ -155,6 +166,7 @@ def get_album(
         allow_download=album.allow_download,
         created_at=album.created_at,
         expires_at=album.expires_at,
+        submitted_at=album.submitted_at,
         media_count=media_count,
         selected_count=selected_count,
         media_items=album.media_items
@@ -197,35 +209,43 @@ def update_album(
     if current_user.role != UserRole.ADMIN and album.photographer_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this album.")
 
-    if payload.title is not None:
-        album.title = payload.title
-    if payload.client_name is not None:
-        album.client_name = payload.client_name
-    if payload.is_locked is not None:
-        album.is_locked = payload.is_locked
-    if payload.allow_download is not None:
-        album.allow_download = payload.allow_download
+    try:
+        if payload.title is not None:
+            album.title = payload.title
+        if payload.client_name is not None:
+            album.client_name = payload.client_name
+        if payload.is_locked is not None:
+            album.is_locked = payload.is_locked
+        if payload.allow_download is not None:
+            album.allow_download = payload.allow_download
 
-    db.commit()
-    db.refresh(album)
+        db.commit()
+        db.refresh(album)
 
-    media_count = len(album.media_items)
-    selected_count = sum(1 for m in album.media_items if m.is_selected)
+        media_count = len(album.media_items)
+        selected_count = sum(1 for m in album.media_items if m.is_selected)
 
-    return AlbumDetailResponse(
-        id=album.id,
-        title=album.title,
-        client_name=album.client_name,
-        pin=album.pin,
-        photographer_id=album.photographer_id,
-        is_locked=album.is_locked,
-        allow_download=album.allow_download,
-        created_at=album.created_at,
-        expires_at=album.expires_at,
-        media_count=media_count,
-        selected_count=selected_count,
-        media_items=album.media_items
-    )
+        return AlbumDetailResponse(
+            id=album.id,
+            title=album.title,
+            client_name=album.client_name,
+            pin=album.pin,
+            photographer_id=album.photographer_id,
+            is_locked=album.is_locked,
+            allow_download=album.allow_download,
+            created_at=album.created_at,
+            expires_at=album.expires_at,
+            submitted_at=album.submitted_at,
+            media_count=media_count,
+            selected_count=selected_count,
+            media_items=album.media_items
+        )
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error updating album: {str(exc)}"
+        )
 
 @router.delete("/{album_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_album(
@@ -243,6 +263,13 @@ def delete_album(
     if current_user.role != UserRole.ADMIN and album.photographer_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this album.")
 
-    db.delete(album)
-    db.commit()
-    return None
+    try:
+        db.delete(album)
+        db.commit()
+        return None
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error deleting album: {str(exc)}"
+        )

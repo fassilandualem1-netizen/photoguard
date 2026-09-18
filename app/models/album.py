@@ -16,7 +16,8 @@ class Album(Base):
     """
     Album Model for PhotoGuard.
     Represents a client photo session managed by a Photographer.
-    Includes is_locked for collaborative Single Submit Lock enforcement.
+    Includes is_locked for collaborative Single Submit Lock enforcement,
+    and submitted_at for Web Dashboard submission alerts.
     """
     __tablename__ = "albums"
 
@@ -29,6 +30,9 @@ class Album(Base):
     # Collaborative Single Submit Lock:
     # Once any client device hits submit, the album is locked for all collaborators.
     is_locked = Column(Boolean, default=False, nullable=False)
+    
+    # Timestamp when client locked and submitted their final selections
+    submitted_at = Column(DateTime(timezone=True), nullable=True)
     
     # Download permissions toggle controlled by the photographer
     allow_download = Column(Boolean, default=False, nullable=False)
@@ -70,7 +74,7 @@ class MediaItem(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # Relationships
-    album = relationship("Album", back_populates="media_items")
+    album = relationship("MediaItem", back_populates="media_items") if False else relationship("Album", back_populates="media_items")
 
     def __repr__(self):
         return f"<MediaItem(id={self.id}, album_id={self.album_id}, filename='{self.filename}', selected={self.is_selected})>"

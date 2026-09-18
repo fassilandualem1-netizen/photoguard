@@ -48,6 +48,7 @@ class AlbumListItemResponse(BaseModel):
     allow_download: bool
     created_at: datetime
     expires_at: Optional[datetime] = None
+    submitted_at: Optional[datetime] = None
     media_count: int = 0
     selected_count: int = 0
 
@@ -64,6 +65,7 @@ class AlbumDetailResponse(BaseModel):
     allow_download: bool
     created_at: datetime
     expires_at: Optional[datetime] = None
+    submitted_at: Optional[datetime] = None
     media_count: int = 0
     selected_count: int = 0
     media_items: List[MediaItemResponse] = []

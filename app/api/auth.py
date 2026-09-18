@@ -1,12 +1,64 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from app.core.database import get_db
-from app.core.security import verify_password, create_access_token
+from app.core.security import verify_password, get_password_hash, create_access_token
 from app.core.dependencies import get_current_user
-from app.models.user import User
-from app.schemas.auth import LoginRequest, TokenResponse, UserResponse, UserUpdate
+from app.models.user import User, UserRole
+from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse, UserUpdate
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+    """
+    Registration endpoint for photographers joining PhotoGuard.
+    Creates a basic tier photographer account with standard 5GB quota.
+    Protected with robust transaction rollback error handling.
+    """
+    clean_email = payload.email.strip().lower()
+    
+    try:
+        existing_user = db.query(User).filter(User.email == clean_email).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An account with this email address already exists."
+            )
+
+        new_user = User(
+            email=clean_email,
+            hashed_password=get_password_hash(payload.password),
+            full_name=payload.full_name.strip(),
+            role=UserRole.PHOTOGRAPHER,
+            subscription_plan="basic",
+            is_verified=False,
+            storage_quota_limit=5368709120, # 5 GB in bytes
+            storage_used=0,
+            telegram_chat_id=None,
+            is_active=True
+        )
+
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        return UserResponse.model_validate(new_user)
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error during user registration: {str(exc)}"
+        )
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error during registration: {str(exc)}"
+        )
 
 @router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
@@ -15,7 +67,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     Validates credentials against PostgreSQL and generates a secure JWT
     encapsulating subject ID, email, and system role.
     """
-    user = db.query(User).filter(User.email == payload.email).first()
+    clean_email = payload.email.strip().lower()
+    user = db.query(User).filter(User.email == clean_email).first()
     
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
@@ -59,12 +112,26 @@ def update_profile(
 ):
     """
     Updates the authenticated photographer's profile (name and Telegram Chat ID).
+    Guarded with transaction rollback.
     """
-    if payload.full_name is not None:
-        current_user.full_name = payload.full_name.strip()
-    if payload.telegram_chat_id is not None:
-        current_user.telegram_chat_id = payload.telegram_chat_id.strip() if payload.telegram_chat_id else None
+    try:
+        if payload.full_name is not None:
+            current_user.full_name = payload.full_name.strip()
+        if payload.telegram_chat_id is not None:
+            current_user.telegram_chat_id = payload.telegram_chat_id.strip() if payload.telegram_chat_id else None
 
-    db.commit()
-    db.refresh(current_user)
-    return UserResponse.model_validate(current_user)
+        db.commit()
+        db.refresh(current_user)
+        return UserResponse.model_validate(current_user)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error updating profile: {str(exc)}"
+        )
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error updating profile: {str(exc)}"
+        )

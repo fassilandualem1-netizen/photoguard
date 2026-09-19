@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
 import {
   ArrowLeft,
@@ -21,19 +22,28 @@ import {
   Sliders,
   Eye,
   KeyRound,
+  CalendarPlus,
 } from "lucide-react";
 
 export default function AlbumDetail() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [album, setAlbum] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Live Sync version tracking ref
+  const lastVersionRef = useRef(null);
 
   // Upload state
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [uploadError, setUploadError] = useState(null);
   const fileInputRef = useRef(null);
+
+  // Extend Expiration state (Studio plan)
+  const [extending, setExtending] = useState(false);
+  const [extendSuccessMsg, setExtendSuccessMsg] = useState(false);
 
   // Export dropdown state
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -51,26 +61,55 @@ export default function AlbumDetail() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const fetchAlbumDetail = async () => {
+  const fetchAlbumDetail = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       setError(null);
       const response = await api.get(`/api/v1/albums/${id}`);
       setAlbum(response.data);
     } catch (err) {
       const msg =
         err.response?.data?.detail || "Failed to load album details. Please try again.";
-      setError(msg);
+      if (showLoading) setError(msg);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
     if (id) {
-      fetchAlbumDetail();
+      fetchAlbumDetail(true);
     }
   }, [id]);
+
+  // LIVE SYNC ENGINE: Smart polling every 5s using Upstash Redis version counter
+  useEffect(() => {
+    const pin = album?.pin || album?.client_pin;
+    if (!pin) return;
+
+    const syncInterval = setInterval(async () => {
+      try {
+        const syncRes = await api.get(`/api/v1/client/sync/${pin}`);
+        const currentVersion = syncRes.data?.version;
+        const isLocked = syncRes.data?.is_locked;
+
+        if (lastVersionRef.current === null) {
+          lastVersionRef.current = currentVersion;
+        } else if (lastVersionRef.current !== currentVersion) {
+          // Version updated by client selections: silently refresh state to accumulate changes
+          lastVersionRef.current = currentVersion;
+          await fetchAlbumDetail(false);
+        } else if (isLocked && !album.is_locked) {
+          // Locked by client submission or expiration: silently update album
+          await fetchAlbumDetail(false);
+        }
+      } catch (err) {
+        console.error("Live Sync polling error:", err);
+      }
+    }, 5000);
+
+    return () => clearInterval(syncInterval);
+  }, [album?.pin, album?.client_pin, album?.is_locked, id]);
 
   // Bulk Upload Handler using Promise.all for high-speed concurrent uploads
   const handleFileChange = async (e) => {
@@ -93,18 +132,35 @@ export default function AlbumDetail() {
       });
 
       await Promise.all(uploadPromises);
-      await fetchAlbumDetail();
+      await fetchAlbumDetail(false);
     } catch (err) {
       const msg =
         err.response?.data?.detail ||
         "Error uploading photos. Check storage quota or file sizes and retry.";
       setUploadError(msg);
-      await fetchAlbumDetail();
+      await fetchAlbumDetail(false);
     } finally {
       setUploading(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+    }
+  };
+
+  // Studio Tier: Extend Expiration by 7 days
+  const handleExtendExpiration = async () => {
+    try {
+      setExtending(true);
+      const res = await api.put(`/api/v1/albums/${id}/extend`, { days: 7 });
+      setAlbum(res.data);
+      setExtendSuccessMsg(true);
+      setTimeout(() => setExtendSuccessMsg(false), 3000);
+    } catch (err) {
+      const msg =
+        err.response?.data?.detail || "Failed to extend album lifespan. Please try again.";
+      alert(msg);
+    } finally {
+      setExtending(false);
     }
   };
 
@@ -250,7 +306,7 @@ export default function AlbumDetail() {
           </Link>
           <button
             type="button"
-            onClick={fetchAlbumDetail}
+            onClick={() => fetchAlbumDetail(true)}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-900/60 hover:bg-red-800/60 border border-red-700/60 text-xs font-semibold text-white transition-colors"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -263,6 +319,7 @@ export default function AlbumDetail() {
 
   const daysLeft = calculateDaysLeft(album.expires_at);
   const isSubmitted = album.status === "submitted" || album.is_locked;
+  const isStudio = user?.subscription_plan === "studio";
 
   return (
     <div id="album-detail-container" className="space-y-8">
@@ -276,12 +333,20 @@ export default function AlbumDetail() {
           <span>Back to Proof Galleries</span>
         </Link>
 
-        {copiedUrls && (
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 text-xs animate-in fade-in">
-            <Check className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Original URLs copied to clipboard!</span>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {extendSuccessMsg && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-950/90 border border-amber-500/40 text-amber-300 text-xs animate-in fade-in">
+              <Check className="w-3.5 h-3.5 text-amber-400" />
+              <span>Lifespan extended by +7 days!</span>
+            </div>
+          )}
+          {copiedUrls && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 text-xs animate-in fade-in">
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Original URLs copied to clipboard!</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Top Header Section */}
@@ -301,7 +366,7 @@ export default function AlbumDetail() {
             ) : (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-medium">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Client Selecting
+                Client Selecting (Live Sync Active)
               </span>
             )}
           </div>
@@ -335,8 +400,8 @@ export default function AlbumDetail() {
           </div>
         </div>
 
-        {/* Prominent Client PIN & Export Bar */}
-        <div className="flex flex-wrap items-center gap-4">
+        {/* Prominent Client PIN & Action Buttons */}
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
           {/* Prominent 6-Digit PIN Pill */}
           <div
             id="client-pin-banner"
@@ -354,6 +419,25 @@ export default function AlbumDetail() {
               </p>
             </div>
           </div>
+
+          {/* STUDIO PLAN ONLY: Extend Expiration Button */}
+          {isStudio && (
+            <button
+              id="extend-expiration-btn"
+              type="button"
+              onClick={handleExtendExpiration}
+              disabled={extending}
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 hover:text-amber-200 font-semibold text-xs transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Add 7 days to this album's lifespan (Studio plan feature)"
+            >
+              {extending ? (
+                <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+              ) : (
+                <CalendarPlus className="w-4 h-4 text-amber-400" />
+              )}
+              <span>{extending ? "Extending..." : "Extend Expiration (+7 Days)"}</span>
+            </button>
+          )}
 
           {/* Export Selections Dropdown (Targets Original URLs) */}
           <div className="relative" ref={exportDropdownRef}>
@@ -422,6 +506,37 @@ export default function AlbumDetail() {
         </div>
       </div>
 
+      {/* SINGLE SUBMIT LOCK PROMINENT BANNER */}
+      {isSubmitted && (
+        <div
+          id="single-submit-locked-banner"
+          className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-amber-500/5 border border-amber-500/40 text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl shadow-amber-500/5 animate-in fade-in"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-bold shrink-0 shadow-lg shadow-amber-500/20">
+              <Lock className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-400 text-[10px] font-mono font-bold tracking-widest uppercase">
+                  Single Submit Lock Active
+                </span>
+                <h3 className="text-base font-bold tracking-tight text-white uppercase">
+                  SUBMITTED & LOCKED
+                </h3>
+              </div>
+              <p className="text-xs text-amber-300/80 mt-1 max-w-xl leading-relaxed">
+                The client has submitted their final selections. All collaborative modifications are permanently locked and photo proof uploads are blocked.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black/40 border border-amber-500/30 text-xs font-mono text-amber-400 shrink-0">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <span>Ready for Export Engine</span>
+          </div>
+        </div>
+      )}
+
       {/* Bulk Upload Section */}
       <div
         id="bulk-upload-section"
@@ -434,7 +549,9 @@ export default function AlbumDetail() {
               <span>Bulk Proof Upload Engine</span>
             </h2>
             <p className="text-xs text-slate-400">
-              Select multiple RAW or JPEG photos. Compressed WebP previews are generated automatically while preserving original URLs.
+              {isSubmitted
+                ? "This gallery is submitted and locked. New photo uploads are blocked."
+                : "Select multiple RAW or JPEG photos. Compressed WebP previews are generated automatically while preserving original URLs."}
             </p>
           </div>
 

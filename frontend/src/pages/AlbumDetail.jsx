@@ -111,7 +111,7 @@ export default function AlbumDetail() {
     return () => clearInterval(syncInterval);
   }, [album?.pin, album?.client_pin, album?.is_locked, id]);
 
-  // Bulk Upload Handler using Promise.all for high-speed concurrent uploads
+  // Bulk Upload Handler using Promise.allSettled for concurrency & partial failure resilience
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -131,9 +131,51 @@ export default function AlbumDetail() {
         return res.data;
       });
 
-      await Promise.all(uploadPromises);
+      const results = await Promise.allSettled(uploadPromises);
+
+      let successCount = 0;
+      let failureCount = 0;
+      let failureReason = "";
+      let isLockedError = false;
+
+      results.forEach((res) => {
+        if (res.status === "fulfilled") {
+          successCount += 1;
+        } else {
+          failureCount += 1;
+          const status = res.reason?.response?.status;
+          const detail = res.reason?.response?.data?.detail;
+          if (status === 423 || status === 409) {
+            isLockedError = true;
+          }
+          if (detail && !failureReason) {
+            failureReason = detail;
+          }
+        }
+      });
+
+      // If locked, instantly force album.is_locked = true so the banner appears immediately
+      if (isLockedError) {
+        setAlbum((prev) => (prev ? { ...prev, is_locked: true } : prev));
+      }
+
+      // Display UI summary if any uploads failed
+      if (failureCount > 0) {
+        const reasonText = isLockedError
+          ? "Album is locked"
+          : failureReason || "Quota Exceeded";
+        setUploadError(`${successCount} Uploaded | ${failureCount} Failed - ${reasonText}`);
+      } else {
+        setUploadError(null);
+      }
+
+      // Always fetch album detail so successful uploads are never discarded
       await fetchAlbumDetail(false);
     } catch (err) {
+      const status = err.response?.status;
+      if (status === 423 || status === 409) {
+        setAlbum((prev) => (prev ? { ...prev, is_locked: true } : prev));
+      }
       const msg =
         err.response?.data?.detail ||
         "Error uploading photos. Check storage quota or file sizes and retry.";
@@ -156,6 +198,10 @@ export default function AlbumDetail() {
       setExtendSuccessMsg(true);
       setTimeout(() => setExtendSuccessMsg(false), 3000);
     } catch (err) {
+      const status = err.response?.status;
+      if (status === 423 || status === 409) {
+        setAlbum((prev) => (prev ? { ...prev, is_locked: true } : prev));
+      }
       const msg =
         err.response?.data?.detail || "Failed to extend album lifespan. Please try again.";
       alert(msg);
@@ -181,6 +227,10 @@ export default function AlbumDetail() {
         };
       });
     } catch (err) {
+      const status = err.response?.status;
+      if (status === 423 || status === 409) {
+        setAlbum((prev) => (prev ? { ...prev, is_locked: true } : prev));
+      }
       alert(err.response?.data?.detail || "Failed to delete photo.");
     }
   };

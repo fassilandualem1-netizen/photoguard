@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import api from "../api/axios";
 
 const AuthContext = createContext(null);
@@ -15,26 +15,52 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(() => localStorage.getItem("token") || null);
   const [loading, setLoading] = useState(true);
 
+  // Re-fetch profile to sync plan upgrades and user metadata
+  const refreshProfile = useCallback(async () => {
+    const storedToken = localStorage.getItem("token");
+    if (!storedToken) return null;
+    try {
+      const response = await api.get("/api/auth/me");
+      setUser(response.data);
+      localStorage.setItem("user", JSON.stringify(response.data));
+      return response.data;
+    } catch (error) {
+      if (error.response?.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        setUser(null);
+        setToken(null);
+      }
+      return null;
+    }
+  }, []);
+
   useEffect(() => {
     const initializeAuth = async () => {
       const storedToken = localStorage.getItem("token");
       if (storedToken) {
-        try {
-          const response = await api.get("/api/auth/me");
-          setUser(response.data);
-          localStorage.setItem("user", JSON.stringify(response.data));
-        } catch (error) {
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
-          setUser(null);
-          setToken(null);
-        }
+        await refreshProfile();
       }
       setLoading(false);
     };
 
     initializeAuth();
-  }, []);
+  }, [refreshProfile]);
+
+  // Window Focus Listener: Auto-sync user plan upgrades when returning from Admin tab
+  useEffect(() => {
+    const handleFocus = () => {
+      const storedToken = localStorage.getItem("token");
+      if (storedToken) {
+        refreshProfile();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [refreshProfile]);
 
   const login = async (email, password) => {
     const response = await api.post("/api/auth/login", {
@@ -83,6 +109,7 @@ export const AuthProvider = ({ children }) => {
     login,
     changePassword,
     logout,
+    refreshProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

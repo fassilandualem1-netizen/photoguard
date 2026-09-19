@@ -2,7 +2,8 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.core.database import engine, Base, get_db
@@ -81,19 +82,16 @@ app.include_router(client_router)
 app.include_router(media_router)
 app.include_router(admin_router)
 
-@app.get("/", status_code=status.HTTP_200_OK)
-def root():
-    """
-    Root landing endpoint for Render health checks and API discovery.
-    """
-    return {
-        "service": "PhotoGuard API",
-        "version": "7.0.0",
-        "status": "operational",
-        "docs_url": "/docs",
-        "health_url": "/health",
-        "message": "PhotoGuard Elite Anti-Piracy Photo Selection SaaS Backend is Live."
-    }
+# Static files directory resolution (built React app in dist/)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DIST_DIR = os.path.join(BASE_DIR, "dist")
+if not os.path.exists(DIST_DIR):
+    DIST_DIR = os.path.join(os.getcwd(), "dist")
+
+# Mount /assets if dist/assets exists
+assets_path = os.path.join(DIST_DIR, "assets")
+if os.path.exists(assets_path):
+    app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 def health_check(db: Session = Depends(get_db)):
@@ -121,6 +119,44 @@ def health_check(db: Session = Depends(get_db)):
                 "version": "7.0.0"
             }
         )
+
+@app.get("/", status_code=status.HTTP_200_OK)
+def root():
+    """
+    Root endpoint: serves the production React SPA frontend if built in dist/,
+    otherwise falls back to API status.
+    """
+    index_file = os.path.join(DIST_DIR, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+    return {
+        "service": "PhotoGuard API",
+        "version": "7.0.0",
+        "status": "operational",
+        "docs_url": "/docs",
+        "health_url": "/health",
+        "message": "PhotoGuard Elite Anti-Piracy Photo Selection SaaS Backend is Live."
+    }
+
+@app.get("/{full_path:path}")
+async def catch_all_spa(full_path: str):
+    """
+    Catch-all route: Serves static files from dist/ if they exist,
+    or falls back to index.html for React Router client-side routing.
+    Excludes all /api/v1/* routes and system endpoints.
+    """
+    if full_path.startswith("api/") or full_path in ["health", "docs", "redoc", "openapi.json"]:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
+    
+    file_path = os.path.join(DIST_DIR, full_path)
+    if os.path.isfile(file_path):
+        return FileResponse(file_path)
+    
+    index_file = os.path.join(DIST_DIR, "index.html")
+    if os.path.isfile(index_file):
+        return FileResponse(index_file)
+    
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
 
 if __name__ == "__main__":
     import uvicorn

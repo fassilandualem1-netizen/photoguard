@@ -17,6 +17,10 @@ from app.schemas.client import (
     ClientDownloadRequest,
     ClientDownloadResponse,
 )
+from app.schemas.admin import (
+    PlatformStatsResponse,
+    AdminUserUpdateRequest,
+)
 
 __all__ = [
     "LoginRequest",
@@ -38,4 +42,6 @@ __all__ = [
     "ClientSubmitResponse",
     "ClientDownloadRequest",
     "ClientDownloadResponse",
+    "PlatformStatsResponse",
+    "AdminUserUpdateRequest",
 ]

@@ -12,6 +12,7 @@ from app.api.auth import router as auth_router
 from app.api.albums import router as albums_router
 from app.api.client import router as client_router
 from app.api.media import router as media_router
+from app.api.admin import router as admin_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -57,6 +58,7 @@ app.include_router(auth_router)
 app.include_router(albums_router)
 app.include_router(client_router)
 app.include_router(media_router)
+app.include_router(admin_router)
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 def health_check(db: Session = Depends(get_db)):

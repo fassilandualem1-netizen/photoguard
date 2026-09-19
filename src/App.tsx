@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import ForceChangePassword from "./pages/ForceChangePassword";
 import DashboardLayout from "./layouts/DashboardLayout";
 import DashboardHome from "./pages/DashboardHome";
+import AlbumDetail from "./pages/AlbumDetail";
 
 // Protected Route Wrapper enforcing Authentication and First-Login Password Change
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -124,6 +125,18 @@ export default function App() {
             <ProtectedRoute>
               <DashboardLayout>
                 <DashboardHome />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Protected Album Detail Route */}
+        <Route
+          path="/dashboard/albums/:id"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout>
+                <AlbumDetail />
               </DashboardLayout>
             </ProtectedRoute>
           }

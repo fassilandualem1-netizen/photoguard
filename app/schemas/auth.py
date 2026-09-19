@@ -11,6 +11,9 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=6, description="User password")
     full_name: str = Field(..., min_length=2, max_length=255, description="Photographer full name or studio name")
 
+class PasswordChangeRequest(BaseModel):
+    new_password: str = Field(..., min_length=6, description="New secure password for the user account")
+
 class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=1, max_length=255, description="Updated full name")
     telegram_chat_id: Optional[str] = Field(None, max_length=50, description="Telegram chat ID for instant alerts")
@@ -25,6 +28,7 @@ class UserResponse(BaseModel):
     telegram_chat_id: Optional[str] = None
     subscription_plan: str = "basic"
     is_verified: bool = False
+    needs_password_change: bool = True
     is_active: bool
 
     class Config:

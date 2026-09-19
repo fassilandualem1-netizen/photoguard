@@ -5,7 +5,14 @@ from app.core.database import get_db
 from app.core.security import verify_password, get_password_hash, create_access_token
 from app.core.dependencies import get_current_user
 from app.models.user import User, UserRole
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse, UserUpdate
+from app.schemas.auth import (
+    LoginRequest,
+    RegisterRequest,
+    PasswordChangeRequest,
+    TokenResponse,
+    UserResponse,
+    UserUpdate
+)
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -33,8 +40,9 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
             role=UserRole.PHOTOGRAPHER,
             subscription_plan="basic",
             is_verified=False,
-            storage_quota_limit=5368709120, # 5 GB in bytes
+            storage_quota_limit=5368709120,  # 5 GB in bytes
             storage_used=0,
+            needs_password_change=True,
             telegram_chat_id=None,
             is_active=True
         )
@@ -66,6 +74,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     Unified Login endpoint for PhotoGuard.
     Validates credentials against PostgreSQL and generates a secure JWT
     encapsulating subject ID, email, and system role.
+    Includes needs_password_change status in UserResponse.
     """
     clean_email = payload.email.strip().lower()
     user = db.query(User).filter(User.email == clean_email).first()
@@ -96,6 +105,43 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         token_type="bearer",
         user=UserResponse.model_validate(user)
     )
+
+@router.put("/change-password", response_model=UserResponse, status_code=status.HTTP_200_OK)
+def change_password(
+    payload: PasswordChangeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Enterprise First-Login Password Change endpoint.
+    Accepts new_password, hashes it securely, sets needs_password_change = False,
+    and commits the transaction wrapped in strict try...except with db.rollback().
+    """
+    if len(payload.new_password.strip()) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 6 characters long."
+        )
+
+    try:
+        current_user.hashed_password = get_password_hash(payload.new_password)
+        current_user.needs_password_change = False
+
+        db.commit()
+        db.refresh(current_user)
+        return UserResponse.model_validate(current_user)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error while changing password: {str(exc)}"
+        )
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error while changing password: {str(exc)}"
+        )
 
 @router.get("/me", response_model=UserResponse, status_code=status.HTTP_200_OK)
 def get_authenticated_profile(current_user: User = Depends(get_current_user)):

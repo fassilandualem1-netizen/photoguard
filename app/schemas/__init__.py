@@ -1,4 +1,11 @@
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse, UserUpdate
+from app.schemas.auth import (
+    LoginRequest,
+    RegisterRequest,
+    PasswordChangeRequest,
+    TokenResponse,
+    UserResponse,
+    UserUpdate
+)
 from app.schemas.album import (
     AlbumCreate,
     AlbumUpdate,
@@ -25,6 +32,7 @@ from app.schemas.admin import (
 __all__ = [
     "LoginRequest",
     "RegisterRequest",
+    "PasswordChangeRequest",
     "TokenResponse",
     "UserResponse",
     "UserUpdate",

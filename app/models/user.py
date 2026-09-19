@@ -29,6 +29,9 @@ class User(Base):
     storage_quota_limit = Column(BigInteger, default=5368709120, nullable=False)
     storage_used = Column(BigInteger, default=0, nullable=False)
     
+    # Enterprise Auth Flow: Force password change on first login for admin-created accounts
+    needs_password_change = Column(Boolean, default=True, nullable=False)
+    
     # Telegram Bot integration for instant submission alerts
     telegram_chat_id = Column(String(50), nullable=True, index=True)
     
@@ -40,4 +43,4 @@ class User(Base):
     albums = relationship("Album", back_populates="photographer", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<User(id={self.id}, email='{self.email}', role='{self.role}', plan='{self.subscription_plan}')>"
+        return f"<User(id={self.id}, email='{self.email}', role='{self.role}', plan='{self.subscription_plan}', needs_password_change={self.needs_password_change})>"

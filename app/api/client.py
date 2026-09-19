@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request, status
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 from sqlalchemy.exc import SQLAlchemyError
@@ -9,6 +9,9 @@ from app.core.redis import (
     increment_album_version,
     lock_album_submit,
     is_album_locked,
+    check_pin_rate_limit,
+    record_failed_pin_attempt,
+    reset_pin_rate_limit,
 )
 from app.core.telegram import notify_photographer_submission
 from app.models.album import Album, MediaItem
@@ -24,25 +27,54 @@ from app.schemas.client import (
 
 router = APIRouter(prefix="/api/v1/client", tags=["Client Mobile API"])
 
+def get_client_ip(request: Request) -> str:
+    """
+    Extracts real client IP address handling reverse proxies and forward headers.
+    """
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
 @router.post("/verify", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
-def verify_client_pin(payload: ClientVerifyRequest, db: Session = Depends(get_db)):
+def verify_client_pin(
+    payload: ClientVerifyRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
     """
     Verifies the 6-digit PIN entered on the Client Mobile App (Kotlin/Jetpack Compose).
     Returns the album gallery and media items for RAM-only rendering.
+    Enforces Upstash Redis-backed rate limiting against brute-force attacks:
+    If failed attempts exceed 5 within 15 minutes, returns HTTP 429 Too Many Requests.
     Enforces expiration engine: If album.expires_at is past current UTC time,
     automatically sets is_locked = True in PostgreSQL, locks in Redis, and returns HTTP 403.
-    Returns HTTP 403 Forbidden if the album is locked or expired.
     """
     pin = payload.pin.strip()
+    client_ip = get_client_ip(request)
+
+    # 1. Check Rate Limit (Upstash Redis)
+    is_limited, retry_after = check_pin_rate_limit(client_ip=client_ip, pin=pin, max_attempts=5, window_seconds=900)
+    if is_limited:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many failed verification attempts. Please try again in {retry_after} seconds."
+        )
+
     album = db.query(Album).filter(Album.pin == pin).first()
     
     if not album:
+        # Record failed attempt in Redis
+        record_failed_pin_attempt(client_ip=client_ip, pin=pin, window_seconds=900)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Invalid 6-digit PIN. Album not found."
         )
 
-    # Check Expiration Engine: validate if expires_at is past current UTC time
+    # PIN is valid: Reset rate limit counter for this client/PIN
+    reset_pin_rate_limit(client_ip=client_ip, pin=pin)
+
+    # 2. Check Expiration Engine: validate if expires_at is past current UTC time
     now_utc = datetime.now(timezone.utc)
     if album.expires_at is not None:
         album_expires_utc = (
@@ -69,7 +101,7 @@ def verify_client_pin(payload: ClientVerifyRequest, db: Session = Depends(get_db
                 detail="This album has expired and is no longer accessible. Access is permanently locked."
             )
 
-    # Check if locked either in PostgreSQL or Upstash Redis
+    # 3. Check if locked either in PostgreSQL or Upstash Redis
     if album.is_locked or is_album_locked(pin):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

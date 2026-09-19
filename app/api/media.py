@@ -1,9 +1,11 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.storage import upload_file_to_s3, generate_cdn_urls
+from app.core.s3_cleanup import delete_file_from_s3
 from app.core.redis import increment_album_version
 from app.models.user import User, UserRole
 from app.models.album import Album, MediaItem
@@ -90,13 +92,22 @@ async def upload_album_photo(
         client_notes=None
     )
 
-    # Update virtual quota
-    if photographer:
-        photographer.storage_used += original_size
+    try:
+        # Update virtual quota
+        if photographer:
+            photographer.storage_used += original_size
 
-    db.add(media_item)
-    db.commit()
-    db.refresh(media_item)
+        db.add(media_item)
+        db.commit()
+        db.refresh(media_item)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        # Clean up uploaded file if DB commit fails
+        delete_file_from_s3(object_path)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error saving media item: {str(exc)}"
+        )
 
     # Inform collaborative mobile clients of new photos via Redis smart polling
     increment_album_version(album.pin)
@@ -124,11 +135,15 @@ def list_album_media(
 @router.delete("/{media_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_media_item(
     media_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Deletes a media item and credits back the photographer's virtual storage quota.
+    Deletes a media item:
+    1. Reclaims virtual storage quota (subtracts item.original_size from photographer.storage_used).
+    2. Physical storage cleanup: Deletes actual high-res object from IDrive e2 S3 bucket via boto3 to prevent ghost costs.
+    3. Wrapped in strict try...except with db.rollback().
     """
     item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
     if not item:
@@ -141,14 +156,38 @@ def delete_media_item(
     if current_user.role != UserRole.ADMIN and album.photographer_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
-    # Reclaim virtual storage quota
+    item_url = item.url
+    item_original_size = item.original_size or 0
+    album_pin = album.pin
     photographer = db.query(User).filter(User.id == album.photographer_id).first()
-    if photographer and photographer.storage_used >= item.original_size:
-        photographer.storage_used -= item.original_size
 
-    db.delete(item)
-    db.commit()
+    try:
+        # Reclaim virtual storage quota
+        if photographer and photographer.storage_used >= item_original_size:
+            photographer.storage_used -= item_original_size
+        elif photographer:
+            photographer.storage_used = max(0, photographer.storage_used - item_original_size)
 
-    # Increment sync version
-    increment_album_version(album.pin)
-    return None
+        db.delete(item)
+        db.commit()
+
+        # Physical Cloud Storage Cleanup: delete actual file from IDrive e2 S3 bucket
+        background_tasks.add_task(delete_file_from_s3, item_url)
+
+        # Increment sync version for active client apps
+        increment_album_version(album_pin)
+
+        return None
+
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error deleting media item: {str(exc)}"
+        )
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error deleting media item: {str(exc)}"
+        )

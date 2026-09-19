@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import Optional, Tuple
 from redis import Redis
 from dotenv import load_dotenv
 
@@ -62,3 +62,65 @@ def is_album_locked(pin: str) -> bool:
     client = get_redis()
     key = f"album_locked:{pin}"
     return bool(client.exists(key))
+
+def check_pin_rate_limit(client_ip: str, pin: str, max_attempts: int = 5, window_seconds: int = 900) -> Tuple[bool, int]:
+    """
+    Checks if the client IP or target PIN has exceeded allowed verification attempts.
+    Window: 900 seconds (15 minutes).
+    Max attempts: 5.
+    Returns (is_limited: bool, remaining_ttl: int).
+    """
+    client = get_redis()
+    key_ip = f"ratelimit:pin_verify:ip:{client_ip}"
+    key_pin = f"ratelimit:pin_verify:pin:{pin}"
+    
+    attempts_ip = client.get(key_ip)
+    attempts_pin = client.get(key_pin)
+    
+    count_ip = int(attempts_ip) if attempts_ip else 0
+    count_pin = int(attempts_pin) if attempts_pin else 0
+
+    if count_ip >= max_attempts:
+        ttl = client.ttl(key_ip)
+        return True, max(ttl, 1)
+
+    if count_pin >= max_attempts:
+        ttl = client.ttl(key_pin)
+        return True, max(ttl, 1)
+
+    return False, 0
+
+def record_failed_pin_attempt(client_ip: str, pin: str, window_seconds: int = 900) -> int:
+    """
+    Increments the failed verification attempt counter in Redis with an expiration window.
+    """
+    client = get_redis()
+    key_ip = f"ratelimit:pin_verify:ip:{client_ip}"
+    key_pin = f"ratelimit:pin_verify:pin:{pin}"
+
+    pipe = client.pipeline()
+    pipe.incr(key_ip)
+    pipe.ttl(key_ip)
+    pipe.incr(key_pin)
+    pipe.ttl(key_pin)
+    results = pipe.execute()
+
+    attempts_ip, ttl_ip, attempts_pin, ttl_pin = results[0], results[1], results[2], results[3]
+
+    if ttl_ip == -1 or attempts_ip == 1:
+        client.expire(key_ip, window_seconds)
+    if ttl_pin == -1 or attempts_pin == 1:
+        client.expire(key_pin, window_seconds)
+
+    return max(attempts_ip, attempts_pin)
+
+def reset_pin_rate_limit(client_ip: str, pin: str) -> None:
+    """
+    Resets failed attempts upon successful PIN verification.
+    """
+    try:
+        client = get_redis()
+        client.delete(f"ratelimit:pin_verify:ip:{client_ip}")
+        client.delete(f"ratelimit:pin_verify:pin:{pin}")
+    except Exception:
+        pass

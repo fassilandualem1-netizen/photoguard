@@ -8,6 +8,7 @@ from sqlalchemy import text
 from app.core.database import engine, Base, get_db
 from app.models.user import User
 from app.models.album import Album, MediaItem
+from app.models.payment import PaymentReceipt
 from app.api.auth import router as auth_router
 from app.api.albums import router as albums_router
 from app.api.client import router as client_router
@@ -18,7 +19,7 @@ from app.api.admin import router as admin_router
 async def lifespan(app: FastAPI):
     """
     Application startup and shutdown lifespan management.
-    Performs auto-migration to ensure new schema columns exist safely
+    Performs auto-migration to ensure new schema columns and tables exist safely
     without dropping existing tables on free-tier PostgreSQL.
     """
     # Safe auto-migration for zero-downtime deployments
@@ -28,6 +29,20 @@ async def lifespan(app: FastAPI):
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan VARCHAR(50) DEFAULT 'basic';"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;"))
             conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP WITH TIME ZONE;"))
+            
+            # Safe table creation for PaymentReceipts (Telebirr/CBE manual upgrade workflow)
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS payment_receipts (
+                    id SERIAL PRIMARY KEY,
+                    photographer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    transaction_ref VARCHAR(100) UNIQUE NOT NULL,
+                    amount DOUBLE PRECISION NOT NULL,
+                    payment_method VARCHAR(50) DEFAULT 'telebirr',
+                    status VARCHAR(50) DEFAULT 'pending' NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+                );
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_payment_receipts_transaction_ref ON payment_receipts(transaction_ref);"))
     except Exception as exc:
         print(f"Auto-migration notice: {exc}")
     yield

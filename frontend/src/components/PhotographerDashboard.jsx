@@ -1,11 +1,23 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import api from "../api/axios";
-import { Plus, Image as ImageIcon, Clock, Lock, CheckCircle2, AlertCircle, RefreshCw, Sparkles, FolderPlus } from "lucide-react";
+import CreateAlbumModal from "./CreateAlbumModal";
+import {
+  Plus,
+  Image as ImageIcon,
+  Clock,
+  Lock,
+  AlertCircle,
+  RefreshCw,
+  FolderPlus,
+  ExternalLink,
+} from "lucide-react";
 
 export default function PhotographerDashboard() {
   const [albums, setAlbums] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const fetchAlbums = async () => {
     try {
@@ -28,7 +40,11 @@ export default function PhotographerDashboard() {
   }, []);
 
   const handleCreateAlbum = () => {
-    console.log("Create New Album clicked - Launch modal or workflow");
+    setIsCreateModalOpen(true);
+  };
+
+  const handleAlbumCreated = () => {
+    fetchAlbums();
   };
 
   const calculateDaysLeft = (expiresAt) => {
@@ -40,7 +56,10 @@ export default function PhotographerDashboard() {
 
   if (loading) {
     return (
-      <div id="photographer-dashboard-loading" className="flex flex-col items-center justify-center py-20 text-slate-400">
+      <div
+        id="photographer-dashboard-loading"
+        className="flex flex-col items-center justify-center py-20 text-slate-400"
+      >
         <div className="w-8 h-8 rounded-full border-2 border-amber-400 border-t-transparent animate-spin mb-3" />
         <p className="text-xs font-mono uppercase tracking-wider text-slate-500">
           Loading client galleries...
@@ -51,7 +70,10 @@ export default function PhotographerDashboard() {
 
   if (error) {
     return (
-      <div id="photographer-dashboard-error" className="p-6 rounded-2xl border border-red-500/20 bg-red-950/40 text-red-300 flex flex-col items-start gap-4">
+      <div
+        id="photographer-dashboard-error"
+        className="p-6 rounded-2xl border border-red-500/20 bg-red-950/40 text-red-300 flex flex-col items-start gap-4"
+      >
         <div className="flex items-center gap-3">
           <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
           <span className="text-sm font-medium">{error}</span>
@@ -73,7 +95,9 @@ export default function PhotographerDashboard() {
       {/* Top Action Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800/80">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">Client Proof Galleries</h1>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+            Client Proof Galleries
+          </h1>
           <p className="text-xs text-slate-400 mt-1">
             Manage high-resolution collections, track live collaborative selections, and generate secure client PINs.
           </p>
@@ -128,25 +152,30 @@ export default function PhotographerDashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {albums.map((album) => {
             const daysLeft = calculateDaysLeft(album.expires_at);
-            const isSubmitted = album.status === "submitted";
+            const isSubmitted = album.status === "submitted" || album.is_locked;
+            const photoCount = album.photo_count ?? album.media_count ?? 0;
+            const pinCode = album.pin || album.client_pin;
 
             return (
-              <div
+              <Link
+                to={`/dashboard/albums/${album.id}`}
                 key={album.id}
                 id={`album-card-${album.id}`}
-                className="group rounded-2xl border border-slate-800 bg-slate-900/40 backdrop-blur-sm overflow-hidden hover:border-slate-700 transition-all flex flex-col justify-between"
+                className="group rounded-2xl border border-slate-800 bg-slate-900/40 backdrop-blur-sm overflow-hidden hover:border-slate-700 hover:bg-slate-900/60 transition-all flex flex-col justify-between cursor-pointer"
               >
                 {/* Visual Header / Cover Preview */}
                 <div className="h-44 bg-gradient-to-tr from-slate-950 to-slate-900 flex items-center justify-center relative p-4 border-b border-slate-800/60">
                   <ImageIcon className="w-10 h-10 text-slate-700 group-hover:text-amber-400/80 transition-colors" />
 
                   {/* 6-Digit PIN Pill */}
-                  <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-black/70 backdrop-blur-md border border-slate-700/60 text-xs font-mono font-semibold text-amber-400 tracking-wider">
-                    PIN: {album.client_pin}
-                  </div>
+                  {pinCode && (
+                    <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-black/70 backdrop-blur-md border border-slate-700/60 text-xs font-mono font-semibold text-amber-400 tracking-wider">
+                      PIN: {pinCode}
+                    </div>
+                  )}
 
                   {/* Status Indicator */}
-                  <div className="absolute top-3 right-3">
+                  <div className="absolute top-3 right-3 flex items-center gap-1.5">
                     {isSubmitted ? (
                       <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-950/80 border border-amber-500/40 text-[10px] font-medium text-amber-300">
                         <Lock className="w-3 h-3 text-amber-400" />
@@ -165,9 +194,11 @@ export default function PhotographerDashboard() {
                 <div className="p-5 space-y-3 flex-1 flex flex-col justify-between">
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-1">
-                      <h3 className="text-sm font-semibold text-white truncate">{album.title}</h3>
+                      <h3 className="text-sm font-semibold text-white group-hover:text-amber-400 transition-colors truncate">
+                        {album.title}
+                      </h3>
                       <span className="text-[11px] text-slate-400 font-mono shrink-0">
-                        {album.photo_count ?? 0} Photos
+                        {photoCount} Photos
                       </span>
                     </div>
                     <p className="text-xs text-slate-400 truncate">
@@ -179,14 +210,21 @@ export default function PhotographerDashboard() {
                   <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500">
                     <span className="flex items-center gap-1 text-[11px]">
                       <Clock className="w-3.5 h-3.5 text-slate-500" />
-                      {daysLeft !== null ? `${daysLeft} days left` : "Permanent"}
+                      {daysLeft !== null
+                        ? album.is_expired || daysLeft === 0
+                          ? "Expired"
+                          : `${daysLeft} days left`
+                        : "Permanent"}
                     </span>
-                    <span className="text-amber-400/90 font-medium text-[11px]">
-                      {album.selected_count ?? 0} Selected
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-amber-400/90 font-medium text-[11px]">
+                        {album.selected_count ?? 0} Selected
+                      </span>
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-600 group-hover:text-amber-400 transition-colors" />
+                    </div>
                   </div>
                 </div>
-              </div>
+              </Link>
             );
           })}
 
@@ -206,6 +244,13 @@ export default function PhotographerDashboard() {
           </button>
         </div>
       )}
+
+      {/* Create Album Modal */}
+      <CreateAlbumModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onAlbumCreated={handleAlbumCreated}
+      />
     </div>
   );
 }

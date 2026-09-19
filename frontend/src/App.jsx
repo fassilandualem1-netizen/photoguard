@@ -6,7 +6,7 @@ import ForceChangePassword from "./pages/ForceChangePassword";
 import DashboardLayout from "./layouts/DashboardLayout";
 
 // Protected Route Wrapper enforcing Authentication and First-Login Password Change
-export function ProtectedRoute({ children }: { children: React.ReactNode }) {
+export function ProtectedRoute({ children }) {
   const { isAuthenticated, needsPasswordChange, loading } = useAuth();
 
   if (loading) {
@@ -30,7 +30,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/setup-password" replace />;
   }
 
-  return <>{children}</>;
+  return children;
 }
 
 // Password Setup Wrapper: Accessible only if authenticated and password change is required
@@ -95,7 +95,7 @@ export function LoginRoute() {
 
   return (
     <Login
-      onLoginSuccess={(user: any) => {
+      onLoginSuccess={(user) => {
         if (user?.needs_password_change) {
           navigate("/setup-password", { replace: true });
         } else {

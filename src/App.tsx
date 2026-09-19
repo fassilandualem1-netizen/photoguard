@@ -4,6 +4,7 @@ import { useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
 import ForceChangePassword from "./pages/ForceChangePassword";
 import DashboardLayout from "./layouts/DashboardLayout";
+import DashboardHome from "./pages/DashboardHome";
 
 // Protected Route Wrapper enforcing Authentication and First-Login Password Change
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -122,14 +123,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <DashboardLayout>
-                <div className="p-8 rounded-2xl border border-slate-800 bg-slate-900/40 backdrop-blur-sm text-center">
-                  <h2 className="text-lg font-semibold text-white mb-2">
-                    Welcome to PhotoGuard Dashboard
-                  </h2>
-                  <p className="text-xs text-slate-400 max-w-md mx-auto">
-                    Your authenticated studio workspace is ready. Active client proofing galleries and multi-device collaborative sync are live.
-                  </p>
-                </div>
+                <DashboardHome />
               </DashboardLayout>
             </ProtectedRoute>
           }

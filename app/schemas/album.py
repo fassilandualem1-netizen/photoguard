@@ -31,12 +31,16 @@ class AlbumCreate(BaseModel):
     client_name: str = Field(..., min_length=1, max_length=255, description="Client or family name")
     allow_download: bool = Field(False, description="Enable or disable client high-res download")
     pin: Optional[str] = Field(None, min_length=6, max_length=6, description="Optional custom 6-digit PIN")
+    expires_in_days: Optional[int] = Field(None, ge=1, le=365, description="Initial album lifespan in days")
 
 class AlbumUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     client_name: Optional[str] = Field(None, min_length=1, max_length=255)
     is_locked: Optional[bool] = Field(None, description="Single Submit Lock toggle")
     allow_download: Optional[bool] = Field(None, description="Download permission toggle")
+
+class AlbumExtendRequest(BaseModel):
+    days: int = Field(..., ge=1, le=365, description="Number of days to extend album expiration")
 
 class AlbumListItemResponse(BaseModel):
     id: int
@@ -48,6 +52,7 @@ class AlbumListItemResponse(BaseModel):
     allow_download: bool
     created_at: datetime
     expires_at: Optional[datetime] = None
+    is_expired: bool = False
     submitted_at: Optional[datetime] = None
     media_count: int = 0
     selected_count: int = 0
@@ -65,6 +70,7 @@ class AlbumDetailResponse(BaseModel):
     allow_download: bool
     created_at: datetime
     expires_at: Optional[datetime] = None
+    is_expired: bool = False
     submitted_at: Optional[datetime] = None
     media_count: int = 0
     selected_count: int = 0

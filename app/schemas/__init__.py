@@ -2,6 +2,7 @@ from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserR
 from app.schemas.album import (
     AlbumCreate,
     AlbumUpdate,
+    AlbumExtendRequest,
     AlbumListItemResponse,
     AlbumDetailResponse,
     MediaItemCreate,
@@ -13,6 +14,8 @@ from app.schemas.client import (
     ClientSyncResponse,
     ClientMediaUpdateRequest,
     ClientSubmitResponse,
+    ClientDownloadRequest,
+    ClientDownloadResponse,
 )
 
 __all__ = [
@@ -23,6 +26,7 @@ __all__ = [
     "UserUpdate",
     "AlbumCreate",
     "AlbumUpdate",
+    "AlbumExtendRequest",
     "AlbumListItemResponse",
     "AlbumDetailResponse",
     "MediaItemCreate",
@@ -32,4 +36,6 @@ __all__ = [
     "ClientSyncResponse",
     "ClientMediaUpdateRequest",
     "ClientSubmitResponse",
+    "ClientDownloadRequest",
+    "ClientDownloadResponse",
 ]

@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
@@ -17,6 +18,8 @@ from app.schemas.client import (
     ClientSyncResponse,
     ClientSubmitResponse,
     ClientMediaUpdateRequest,
+    ClientDownloadRequest,
+    ClientDownloadResponse,
 )
 
 router = APIRouter(prefix="/api/v1/client", tags=["Client Mobile API"])
@@ -26,7 +29,9 @@ def verify_client_pin(payload: ClientVerifyRequest, db: Session = Depends(get_db
     """
     Verifies the 6-digit PIN entered on the Client Mobile App (Kotlin/Jetpack Compose).
     Returns the album gallery and media items for RAM-only rendering.
-    Returns HTTP 403 Forbidden if the album is already locked after submission.
+    Enforces expiration engine: If album.expires_at is past current UTC time,
+    automatically sets is_locked = True in PostgreSQL, locks in Redis, and returns HTTP 403.
+    Returns HTTP 403 Forbidden if the album is locked or expired.
     """
     pin = payload.pin.strip()
     album = db.query(Album).filter(Album.pin == pin).first()
@@ -36,6 +41,33 @@ def verify_client_pin(payload: ClientVerifyRequest, db: Session = Depends(get_db
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Invalid 6-digit PIN. Album not found."
         )
+
+    # Check Expiration Engine: validate if expires_at is past current UTC time
+    now_utc = datetime.now(timezone.utc)
+    if album.expires_at is not None:
+        album_expires_utc = (
+            album.expires_at if album.expires_at.tzinfo is not None
+            else album.expires_at.replace(tzinfo=timezone.utc)
+        )
+        if album_expires_utc < now_utc:
+            # Automatically lock expired album in PostgreSQL and Redis
+            try:
+                if not album.is_locked:
+                    album.is_locked = True
+                    db.commit()
+                    db.refresh(album)
+            except SQLAlchemyError:
+                db.rollback()
+            except Exception:
+                db.rollback()
+
+            lock_album_submit(pin)
+            increment_album_version(pin)
+
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This album has expired and is no longer accessible. Access is permanently locked."
+            )
 
     # Check if locked either in PostgreSQL or Upstash Redis
     if album.is_locked or is_album_locked(pin):
@@ -57,6 +89,7 @@ def verify_client_pin(payload: ClientVerifyRequest, db: Session = Depends(get_db
         allow_download=album.allow_download,
         created_at=album.created_at,
         expires_at=album.expires_at,
+        is_expired=False,
         submitted_at=album.submitted_at,
         media_count=media_count,
         selected_count=selected_count,
@@ -79,8 +112,26 @@ def sync_album_state(pin: str, db: Session = Depends(get_db)):
             detail="Album with specified PIN not found."
         )
 
+    # Expiration check during smart polling
+    now_utc = datetime.now(timezone.utc)
+    is_expired = False
+    if album.expires_at is not None:
+        album_expires_utc = (
+            album.expires_at if album.expires_at.tzinfo is not None
+            else album.expires_at.replace(tzinfo=timezone.utc)
+        )
+        if album_expires_utc < now_utc:
+            is_expired = True
+            if not album.is_locked:
+                try:
+                    album.is_locked = True
+                    db.commit()
+                except Exception:
+                    db.rollback()
+            lock_album_submit(pin)
+
     version = get_album_version(pin)
-    locked = album.is_locked or is_album_locked(pin)
+    locked = album.is_locked or is_album_locked(pin) or is_expired
 
     return ClientSyncResponse(
         pin=pin,
@@ -96,7 +147,9 @@ def update_client_media_selection(
 ):
     """
     Updates photo selection status (is_selected) and client feedback notes (client_notes).
-    Enforces Single Submit Lock validation: If album is already locked, rejects update with 403.
+    Enforces Single Submit Lock and Expiration validation:
+    MUST check is_album_locked(pin) and album.is_locked. If locked or expired, rejects update with 403.
+    Wraps DB commit in strict try...except with db.rollback().
     Bumps Redis version counter for instant collaborative sync among family members.
     """
     pin = payload.pin.strip()
@@ -109,7 +162,28 @@ def update_client_media_selection(
             detail="Invalid album PIN."
         )
 
-    # Check lock state
+    # Check expiration engine
+    now_utc = datetime.now(timezone.utc)
+    if album.expires_at is not None:
+        album_expires_utc = (
+            album.expires_at if album.expires_at.tzinfo is not None
+            else album.expires_at.replace(tzinfo=timezone.utc)
+        )
+        if album_expires_utc < now_utc:
+            try:
+                if not album.is_locked:
+                    album.is_locked = True
+                    db.commit()
+            except Exception:
+                db.rollback()
+            lock_album_submit(pin)
+            increment_album_version(pin)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Album has expired. Selections and notes cannot be modified."
+            )
+
+    # Check lock state in PostgreSQL and Redis
     if album.is_locked or is_album_locked(pin):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -165,7 +239,7 @@ def submit_album_selection(
     When any family member/collaborator clicks Submit, this executes Redis setnx.
     If lock is acquired, updates PostgreSQL Album.is_locked = True and album.submitted_at = func.now().
     Dispatches asynchronous Telegram alert to photographer if telegram_chat_id is configured.
-    If already locked, returns HTTP 409 Conflict.
+    If already locked or expired, returns HTTP 409 Conflict or 403 Forbidden.
     """
     pin = pin.strip()
     album = db.query(Album).filter(Album.pin == pin).first()
@@ -174,6 +248,26 @@ def submit_album_selection(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Album with specified PIN not found."
         )
+
+    # Check expiration engine
+    now_utc = datetime.now(timezone.utc)
+    if album.expires_at is not None:
+        album_expires_utc = (
+            album.expires_at if album.expires_at.tzinfo is not None
+            else album.expires_at.replace(tzinfo=timezone.utc)
+        )
+        if album_expires_utc < now_utc:
+            try:
+                if not album.is_locked:
+                    album.is_locked = True
+                    db.commit()
+            except Exception:
+                db.rollback()
+            lock_album_submit(pin)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Album has expired and cannot be submitted."
+            )
 
     if album.is_locked:
         raise HTTPException(
@@ -184,7 +278,6 @@ def submit_album_selection(
     # Enforce atomic single-submit lock via Redis setnx
     lock_acquired = lock_album_submit(pin)
     if not lock_acquired:
-        # Another request acquired the lock simultaneously
         try:
             album.is_locked = True
             album.submitted_at = func.now()
@@ -208,6 +301,12 @@ def submit_album_selection(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database error while submitting album: {str(exc)}"
         )
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error while submitting album: {str(exc)}"
+        )
 
     # Increment sync version so all polling clients immediately lock their UI
     increment_album_version(pin)
@@ -225,4 +324,56 @@ def submit_album_selection(
         message="Album selection submitted successfully. Gallery is now permanently locked.",
         pin=pin,
         is_locked=True
+    )
+
+@router.post("/download", response_model=ClientDownloadResponse, status_code=status.HTTP_200_OK)
+def request_client_download(
+    payload: ClientDownloadRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Enforces AI Feature / High-Res Download separation:
+    Verifies that the photographer has explicitly enabled download permissions (album.allow_download == True).
+    If allow_download is False, rejects request with HTTP 403 Forbidden.
+    Verifies expiration and returns high-resolution download URLs for selected photos.
+    """
+    pin = payload.pin.strip()
+    album = db.query(Album).filter(Album.pin == pin).first()
+    if not album:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invalid album PIN."
+        )
+
+    # Verify expiration
+    now_utc = datetime.now(timezone.utc)
+    if album.expires_at is not None:
+        album_expires_utc = (
+            album.expires_at if album.expires_at.tzinfo is not None
+            else album.expires_at.replace(tzinfo=timezone.utc)
+        )
+        if album_expires_utc < now_utc:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Album has expired. High-resolution downloads are disabled."
+            )
+
+    # Strict download security enforcement
+    if not album.allow_download:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="High-resolution downloads are disabled by the photographer for this album."
+        )
+
+    # Return download URLs for selected media items (or all items if none specifically tagged)
+    selected_items = [m for m in album.media_items if m.is_selected]
+    if not selected_items:
+        selected_items = album.media_items
+
+    urls = [m.url for m in selected_items]
+
+    return ClientDownloadResponse(
+        pin=pin,
+        allow_download=True,
+        download_urls=urls
     )

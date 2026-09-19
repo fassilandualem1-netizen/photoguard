@@ -1,4 +1,5 @@
 from typing import List
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
@@ -9,6 +10,7 @@ from app.models.album import Album, MediaItem, generate_album_pin
 from app.schemas.album import (
     AlbumCreate,
     AlbumUpdate,
+    AlbumExtendRequest,
     AlbumListItemResponse,
     AlbumDetailResponse,
     MediaItemResponse,
@@ -30,6 +32,16 @@ def get_unique_pin(db: Session) -> str:
         detail="Unable to allocate a unique PIN. Please retry."
     )
 
+def check_is_expired(expires_at: datetime | None) -> bool:
+    """
+    Helper function to calculate accurate UTC expiration state.
+    """
+    if expires_at is None:
+        return False
+    now_utc = datetime.now(timezone.utc)
+    target_utc = expires_at if expires_at.tzinfo is not None else expires_at.replace(tzinfo=timezone.utc)
+    return target_utc < now_utc
+
 @router.post("", response_model=AlbumDetailResponse, status_code=status.HTTP_201_CREATED)
 def create_album(
     payload: AlbumCreate,
@@ -39,6 +51,7 @@ def create_album(
     """
     Creates a new Album belonging to the authenticated photographer.
     Auto-generates a unique 6-digit access PIN if not explicitly supplied.
+    Sets optional initial expiration based on days or tier (7 days Basic / 30 days Studio).
     """
     if current_user.role not in [UserRole.PHOTOGRAPHER, UserRole.ADMIN]:
         raise HTTPException(
@@ -63,6 +76,14 @@ def create_album(
     else:
         assigned_pin = get_unique_pin(db)
 
+    # Calculate expiration lifespan (default 7 days basic, 30 days studio, or user specified)
+    now_utc = datetime.now(timezone.utc)
+    if payload.expires_in_days:
+        expires_at = now_utc + timedelta(days=payload.expires_in_days)
+    else:
+        default_days = 30 if getattr(current_user, "subscription_plan", "basic") == "studio" else 7
+        expires_at = now_utc + timedelta(days=default_days)
+
     try:
         album = Album(
             title=payload.title,
@@ -71,6 +92,7 @@ def create_album(
             photographer_id=current_user.id,
             allow_download=payload.allow_download,
             is_locked=False,
+            expires_at=expires_at,
             submitted_at=None
         )
         
@@ -88,6 +110,7 @@ def create_album(
             allow_download=album.allow_download,
             created_at=album.created_at,
             expires_at=album.expires_at,
+            is_expired=check_is_expired(album.expires_at),
             submitted_at=album.submitted_at,
             media_count=0,
             selected_count=0,
@@ -108,6 +131,7 @@ def list_albums(
     """
     Lists all albums for the logged-in photographer.
     Administrators receive all albums across the platform.
+    Calculates exact expiration status for each album.
     """
     if current_user.role == UserRole.ADMIN:
         albums = db.query(Album).order_by(Album.created_at.desc()).all()
@@ -129,6 +153,7 @@ def list_albums(
                 allow_download=alb.allow_download,
                 created_at=alb.created_at,
                 expires_at=alb.expires_at,
+                is_expired=check_is_expired(alb.expires_at),
                 submitted_at=alb.submitted_at,
                 media_count=media_count,
                 selected_count=selected_count
@@ -144,6 +169,7 @@ def get_album(
 ):
     """
     Fetches full album details including associated media items.
+    Returns the exact expiration status (is_expired).
     Enforces ownership permissions (photographer must own the album unless admin).
     """
     album = db.query(Album).filter(Album.id == album_id).first()
@@ -155,6 +181,7 @@ def get_album(
 
     media_count = len(album.media_items)
     selected_count = sum(1 for m in album.media_items if m.is_selected)
+    is_expired = check_is_expired(album.expires_at)
 
     return AlbumDetailResponse(
         id=album.id,
@@ -166,11 +193,87 @@ def get_album(
         allow_download=album.allow_download,
         created_at=album.created_at,
         expires_at=album.expires_at,
+        is_expired=is_expired,
         submitted_at=album.submitted_at,
         media_count=media_count,
         selected_count=selected_count,
         media_items=album.media_items
     )
+
+@router.put("/{album_id}/extend", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
+def extend_album_expiration(
+    album_id: int,
+    payload: AlbumExtendRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Allows photographers to extend expires_at by a given number of days.
+    If the album was already expired, resets expiration from current UTC time plus requested days.
+    If the album was locked due to expiration, unlocks it if not already submitted.
+    Wrapped in strict try...except with db.rollback().
+    """
+    album = db.query(Album).filter(Album.id == album_id).first()
+    if not album:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
+
+    if current_user.role != UserRole.ADMIN and album.photographer_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this album.")
+
+    now_utc = datetime.now(timezone.utc)
+
+    try:
+        # Base calculation: from current expiration or from now if already expired or null
+        if album.expires_at is not None:
+            current_exp_utc = (
+                album.expires_at if album.expires_at.tzinfo is not None
+                else album.expires_at.replace(tzinfo=timezone.utc)
+            )
+            base_time = max(current_exp_utc, now_utc)
+        else:
+            base_time = now_utc
+
+        new_expiration = base_time + timedelta(days=payload.days)
+        album.expires_at = new_expiration
+
+        # If it was locked only due to expiration (and not finalized via client submit), unlock it
+        if album.is_locked and album.submitted_at is None:
+            album.is_locked = False
+
+        db.commit()
+        db.refresh(album)
+
+        media_count = len(album.media_items)
+        selected_count = sum(1 for m in album.media_items if m.is_selected)
+
+        return AlbumDetailResponse(
+            id=album.id,
+            title=album.title,
+            client_name=album.client_name,
+            pin=album.pin,
+            photographer_id=album.photographer_id,
+            is_locked=album.is_locked,
+            allow_download=album.allow_download,
+            created_at=album.created_at,
+            expires_at=album.expires_at,
+            is_expired=check_is_expired(album.expires_at),
+            submitted_at=album.submitted_at,
+            media_count=media_count,
+            selected_count=selected_count,
+            media_items=album.media_items
+        )
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error extending album expiration: {str(exc)}"
+        )
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error extending album expiration: {str(exc)}"
+        )
 
 @router.get("/{album_id}/export", response_model=List[MediaItemResponse], status_code=status.HTTP_200_OK)
 def export_album_selections(
@@ -235,6 +338,7 @@ def update_album(
             allow_download=album.allow_download,
             created_at=album.created_at,
             expires_at=album.expires_at,
+            is_expired=check_is_expired(album.expires_at),
             submitted_at=album.submitted_at,
             media_count=media_count,
             selected_count=selected_count,

@@ -31,18 +31,23 @@ async def lifespan(app: FastAPI):
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS needs_password_change BOOLEAN DEFAULT TRUE;"))
             conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP WITH TIME ZONE;"))
             
-            # Safe table creation for PaymentReceipts (Telebirr/CBE manual upgrade workflow)
+            # Safe table creation & migration for PaymentReceipts (Telebirr/CBE manual upgrade workflow)
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS payment_receipts (
                     id SERIAL PRIMARY KEY,
                     photographer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                    transaction_ref VARCHAR(100) UNIQUE NOT NULL,
-                    amount DOUBLE PRECISION NOT NULL,
+                    transaction_ref VARCHAR(100),
+                    amount DOUBLE PRECISION,
                     payment_method VARCHAR(50) DEFAULT 'telebirr',
                     status VARCHAR(50) DEFAULT 'pending' NOT NULL,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
                 );
             """))
+            conn.execute(text("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS transaction_ref VARCHAR(100);"))
+            conn.execute(text("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS amount DOUBLE PRECISION;"))
+            conn.execute(text("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT 'telebirr';"))
+            conn.execute(text("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending';"))
+            conn.execute(text("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_payment_receipts_transaction_ref ON payment_receipts(transaction_ref);"))
     except Exception as exc:
         print(f"Auto-migration notice: {exc}")
@@ -75,6 +80,20 @@ app.include_router(albums_router)
 app.include_router(client_router)
 app.include_router(media_router)
 app.include_router(admin_router)
+
+@app.get("/", status_code=status.HTTP_200_OK)
+def root():
+    """
+    Root landing endpoint for Render health checks and API discovery.
+    """
+    return {
+        "service": "PhotoGuard API",
+        "version": "7.0.0",
+        "status": "operational",
+        "docs_url": "/docs",
+        "health_url": "/health",
+        "message": "PhotoGuard Elite Anti-Piracy Photo Selection SaaS Backend is Live."
+    }
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 def health_check(db: Session = Depends(get_db)):

@@ -312,7 +312,7 @@ export default function AdminDashboard() {
               <span className="text-xs text-cyan-400 font-medium">GB</span>
             </div>
             <p className="mt-1 text-[11px] text-slate-500">
-              Multi-cloud compressed assets
+              Cloud storage utilized
             </p>
           </div>
 

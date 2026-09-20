@@ -101,7 +101,7 @@ export default function AdminDashboard() {
       color: "text-purple-400",
       bgGradient: "from-purple-500/10 to-transparent",
       borderColor: "border-purple-500/20",
-      subtext: "Protected WebP proofs on edge",
+      subtext: "Protected gallery proof assets",
     },
   ];
 

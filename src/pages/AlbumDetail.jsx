@@ -26,6 +26,8 @@ import {
   Share2,
   Send,
   MessageCircle,
+  X,
+  ZoomIn,
 } from "lucide-react";
 
 export default function AlbumDetail() {
@@ -57,6 +59,12 @@ export default function AlbumDetail() {
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [copiedInvite, setCopiedInvite] = useState(false);
   const shareDropdownRef = useRef(null);
+
+  // Uploaded batch summary feedback banner
+  const [lastUploadSummary, setLastUploadSummary] = useState(null);
+
+  // Lightbox Preview Modal state
+  const [previewPhoto, setPreviewPhoto] = useState(null);
 
   // Close dropdowns on click outside
   useEffect(() => {
@@ -179,6 +187,19 @@ export default function AlbumDetail() {
           media_items: combined,
           media_count: (prev.media_count || 0) + uploadedItems.length,
         };
+      });
+
+      // Calculate total original size uploaded in this batch
+      const totalBatchBytes = uploadedItems.reduce((acc, curr) => {
+        const sz = curr?.original_size || 0;
+        return acc + sz;
+      }, 0);
+      const totalBatchMb = (totalBatchBytes / (1024 * 1024)).toFixed(1);
+
+      setLastUploadSummary({
+        count: uploadedItems.length,
+        totalMb: totalBatchMb,
+        timestamp: Date.now(),
       });
     }
 
@@ -411,10 +432,10 @@ export default function AlbumDetail() {
       <div className="flex items-center justify-between">
         <Link
           to="/dashboard"
-          className="inline-flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-white transition-colors group"
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-300 hover:text-white transition-all group shadow-sm"
         >
-          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-          <span>Back to Proof Galleries</span>
+          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform text-amber-400" />
+          <span>Back to Galleries</span>
         </Link>
 
         <div className="flex items-center gap-3">
@@ -630,7 +651,7 @@ export default function AlbumDetail() {
                     Original High-Res Selections
                   </p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    Targets original uncompressed URLs for professional color grading.
+                    Exports original high-resolution photos for professional color grading and retouching.
                   </p>
                 </div>
 
@@ -722,7 +743,7 @@ export default function AlbumDetail() {
             <p className="text-xs text-slate-400">
               {isSubmitted
                 ? "This gallery is submitted and locked. New photo uploads are blocked."
-                : "Select multiple RAW or JPEG photos. Compressed WebP previews are generated automatically while preserving original URLs."}
+                : "Select multiple RAW or JPEG photos. Photos are uploaded in original full-resolution quality."}
             </p>
           </div>
 
@@ -760,6 +781,25 @@ export default function AlbumDetail() {
             </button>
           </div>
         </div>
+
+        {/* Upload Success Feedback Banner */}
+        {lastUploadSummary && (
+          <div className="mt-4 p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-950/40 text-emerald-200 text-xs flex items-center justify-between gap-2.5 animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                Successfully uploaded <strong className="text-white">{lastUploadSummary.count} photo{lastUploadSummary.count === 1 ? "" : "s"}</strong> ({lastUploadSummary.totalMb} MB total original size).
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLastUploadSummary(null)}
+              className="text-slate-400 hover:text-white p-1"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Upload Error feedback */}
         {uploadError && (
@@ -830,12 +870,20 @@ export default function AlbumDetail() {
 
                     {/* Hover Quick Actions */}
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[2px]">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewPhoto(item)}
+                        className="p-2 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-200 hover:text-white hover:bg-slate-800 transition-colors"
+                        title="Preview Photo"
+                      >
+                        <ZoomIn className="w-4 h-4 text-amber-400" />
+                      </button>
                       <a
                         href={item.url}
                         target="_blank"
                         rel="noreferrer"
                         className="p-2 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-200 hover:text-white hover:bg-slate-800 transition-colors"
-                        title="View Original High-Res"
+                        title="Open Original High-Res File"
                       >
                         <Eye className="w-4 h-4" />
                       </a>
@@ -872,6 +920,60 @@ export default function AlbumDetail() {
           </div>
         )}
       </div>
+
+      {/* Full Resolution Photo Lightbox Modal */}
+      {previewPhoto && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in"
+          onClick={() => setPreviewPhoto(null)}
+        >
+          <div
+            className="relative max-w-5xl w-full max-h-[90vh] flex flex-col items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Controls */}
+            <div className="w-full flex items-center justify-between pb-3 text-slate-300">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-white truncate max-w-xs sm:max-w-md">
+                  {previewPhoto.filename}
+                </span>
+                {previewPhoto.original_size && (
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-xs font-mono text-amber-400">
+                    {(previewPhoto.original_size / (1024 * 1024)).toFixed(1)} MB
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewPhoto.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 hover:text-white transition-colors flex items-center gap-1.5"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Full View</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewPhoto(null)}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Photo View */}
+            <div className="relative rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 flex items-center justify-center max-h-[80vh]">
+              <img
+                src={previewPhoto.url || previewPhoto.thumbnail_url}
+                alt={previewPhoto.filename}
+                className="max-h-[80vh] w-auto object-contain rounded-xl"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

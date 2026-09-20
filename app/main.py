@@ -35,39 +35,57 @@ def run_db_migrations():
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan VARCHAR(50) DEFAULT 'basic';"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(50) DEFAULT 'basic';"))
         
-        # Safe constraint removal on legacy 'plan' and 'subscription_plan' columns
+        # Safe constraint removal and type conversion on legacy 'plan' and 'subscription_plan' columns
         conn.execute(text("""
             DO $$ 
             BEGIN 
-                -- If 'plan' column exists, drop any NOT NULL constraint and guarantee default 'basic'
-                IF EXISTS (
-                    SELECT 1 FROM information_schema.columns 
-                    WHERE table_name = 'users' AND column_name = 'plan'
-                ) THEN 
+                -- If 'plan' column exists and is typed as an enum (e.g. planenum), convert it to VARCHAR(50)
+                BEGIN
+                    ALTER TABLE users ALTER COLUMN plan DROP DEFAULT;
+                EXCEPTION WHEN OTHERS THEN 
+                    NULL;
+                END;
+
+                BEGIN
+                    ALTER TABLE users ALTER COLUMN plan TYPE VARCHAR(50) USING plan::text;
+                EXCEPTION WHEN OTHERS THEN 
+                    NULL;
+                END;
+
+                BEGIN
                     ALTER TABLE users ALTER COLUMN plan DROP NOT NULL;
-                    ALTER TABLE users ALTER COLUMN plan SET DEFAULT 'basic';
-                END IF;
+                EXCEPTION WHEN OTHERS THEN 
+                    NULL;
+                END;
 
                 -- If 'subscription_plan' column exists, drop any NOT NULL constraint and guarantee default 'basic'
-                IF EXISTS (
-                    SELECT 1 FROM information_schema.columns 
-                    WHERE table_name = 'users' AND column_name = 'subscription_plan'
-                ) THEN 
+                BEGIN
                     ALTER TABLE users ALTER COLUMN subscription_plan DROP NOT NULL;
                     ALTER TABLE users ALTER COLUMN subscription_plan SET DEFAULT 'basic';
-                END IF;
+                EXCEPTION WHEN OTHERS THEN 
+                    NULL;
+                END;
 
-                -- Synchronize values across both columns if both exist
-                IF EXISTS (
-                    SELECT 1 FROM information_schema.columns 
-                    WHERE table_name = 'users' AND column_name = 'plan'
-                ) AND EXISTS (
-                    SELECT 1 FROM information_schema.columns 
-                    WHERE table_name = 'users' AND column_name = 'subscription_plan'
-                ) THEN 
-                    UPDATE users SET subscription_plan = COALESCE(plan, 'basic') WHERE subscription_plan IS NULL;
-                    UPDATE users SET plan = COALESCE(subscription_plan, 'basic') WHERE plan IS NULL;
-                END IF;
+                -- Synchronize values across both columns safely
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name = 'users' AND column_name = 'plan'
+                    ) AND EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name = 'users' AND column_name = 'subscription_plan'
+                    ) THEN 
+                        UPDATE users SET subscription_plan = COALESCE(plan, 'basic') WHERE subscription_plan IS NULL;
+                        UPDATE users SET plan = COALESCE(subscription_plan, 'basic') WHERE plan IS NULL;
+                    ELSIF EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name = 'users' AND column_name = 'subscription_plan'
+                    ) THEN
+                        UPDATE users SET subscription_plan = 'basic' WHERE subscription_plan IS NULL;
+                    END IF;
+                EXCEPTION WHEN OTHERS THEN 
+                    NULL;
+                END;
             END $$;
         """))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;"))

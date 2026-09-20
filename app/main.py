@@ -2,7 +2,7 @@ import os
 import logging
 import traceback
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, status
+from fastapi import FastAPI, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,6 +18,7 @@ from app.api.albums import router as albums_router
 from app.api.client import router as client_router
 from app.api.media import router as media_router
 from app.api.admin import router as admin_router
+from app.api.telegram import router as telegram_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("photoguard.core")
@@ -327,6 +328,13 @@ app.include_router(albums_router)
 app.include_router(client_router)
 app.include_router(media_router)
 app.include_router(admin_router)
+app.include_router(telegram_router)
+
+# Direct root webhook alias for Telegram Bot API
+@app.post("/webhook", tags=["Telegram Integration"])
+async def root_telegram_webhook(request: Request, db: Session = Depends(get_db)):
+    from app.api.telegram import telegram_webhook
+    return await telegram_webhook(request=request, db=db)
 
 @app.get("/api/v1/admin/force-seed-admin", tags=["Admin Control"])
 def force_seed_admin_endpoint():

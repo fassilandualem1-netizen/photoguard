@@ -88,6 +88,11 @@ def run_db_migrations():
         conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
         conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE;"))
 
+        # Raw SQL UPDATE statements to sanitize existing NULLs in albums
+        conn.execute(text("UPDATE albums SET is_locked = FALSE WHERE is_locked IS NULL;"))
+        conn.execute(text("UPDATE albums SET allow_download = FALSE WHERE allow_download IS NULL;"))
+        conn.execute(text("UPDATE albums SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL;"))
+
         # Media items table schema migrations
         conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS thumbnail_url VARCHAR(1024);"))
         conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS original_size BIGINT DEFAULT 0;"))
@@ -96,6 +101,12 @@ def run_db_migrations():
         conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS client_notes VARCHAR(1000);"))
         conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS face_encodings JSON;"))
         conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
+
+        # Raw SQL UPDATE statements to sanitize existing NULLs in media items
+        conn.execute(text("UPDATE media_items SET is_selected = FALSE WHERE is_selected IS NULL;"))
+        conn.execute(text("UPDATE media_items SET original_size = 0 WHERE original_size IS NULL;"))
+        conn.execute(text("UPDATE media_items SET compressed_size = 0 WHERE compressed_size IS NULL;"))
+        conn.execute(text("UPDATE media_items SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL;"))
         
         # Safe table creation & migration for PaymentReceipts (Telebirr/CBE manual upgrade workflow)
         conn.execute(text("""

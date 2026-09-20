@@ -26,9 +26,17 @@ export default function PhotographerDashboard() {
       const response = await api.get("/api/v1/albums");
       setAlbums(response.data || []);
     } catch (err) {
-      const msg =
-        err.response?.data?.detail ||
-        "Failed to load client albums. Please try again.";
+      const rawDetail = err.response?.data?.detail;
+      let msg = "Failed to load client albums. Please try again.";
+      if (typeof rawDetail === "string" && rawDetail.trim()) {
+        msg = rawDetail;
+      } else if (Array.isArray(rawDetail) && rawDetail.length > 0) {
+        msg = rawDetail.map((d) => (typeof d === "object" ? d.msg || JSON.stringify(d) : String(d))).join("; ");
+      } else if (err.response?.status) {
+        msg = `Server Error (${err.response.status}): ${err.response.statusText || "Failed to fetch albums"}`;
+      } else if (err.message) {
+        msg = err.message;
+      }
       setError(msg);
     } finally {
       setLoading(false);

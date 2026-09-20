@@ -406,7 +406,19 @@ if os.path.exists(assets_path):
 # Ensure and mount local uploads directory for fallback storage
 UPLOADS_DIR = os.path.join(os.getcwd(), "uploads")
 os.makedirs(UPLOADS_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR, check_dir=False), name="uploads")
+
+@app.get("/uploads/{filename:path}", tags=["Media Storage & CDN"])
+async def serve_uploaded_media(filename: str):
+    """
+    Direct handler to ensure fallback uploaded files in uploads/ are always served
+    with proper MIME types, bypassing any SPA catch-all collisions.
+    """
+    clean_name = os.path.basename(filename)
+    file_path = os.path.join(UPLOADS_DIR, clean_name)
+    if os.path.isfile(file_path):
+        return FileResponse(file_path)
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": f"File '{clean_name}' not found."})
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 def health_check(db: Session = Depends(get_db)):
@@ -462,6 +474,15 @@ async def catch_all_spa(full_path: str):
     """
     if full_path.startswith("api/") or full_path in ["health", "docs", "redoc", "openapi.json"]:
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
+    
+    # Check if this points to an uploaded media item
+    if full_path.startswith("uploads/"):
+        upload_subpath = full_path.replace("uploads/", "", 1)
+        upload_clean = os.path.basename(upload_subpath)
+        file_in_uploads = os.path.join(UPLOADS_DIR, upload_clean)
+        if os.path.isfile(file_in_uploads):
+            return FileResponse(file_in_uploads)
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Uploaded file not found"})
     
     file_path = os.path.join(DIST_DIR, full_path)
     if os.path.isfile(file_path):

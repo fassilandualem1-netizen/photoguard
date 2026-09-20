@@ -366,12 +366,23 @@ def force_seed_admin_endpoint():
                 }
             )
 
+        # Storage health check
+        from app.core.storage import is_s3_configured, S3_BUCKET_NAME, S3_ENDPOINT_URL, S3_ACCESS_KEY
+        s3_status = {
+            "s3_configured": is_s3_configured(),
+            "bucket": S3_BUCKET_NAME,
+            "has_endpoint": bool(S3_ENDPOINT_URL),
+            "has_access_key": bool(S3_ACCESS_KEY),
+            "storage_mode": "Cloud S3 / IDrive e2" if is_s3_configured() else "Ephemeral Local Disk (Warning: files vanish on restart)"
+        }
+
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={
                 "status": "success",
                 "message": "Root admin account has been forcefully verified and synchronized.",
                 "details": result,
+                "storage_diagnostics": s3_status,
                 "login_instructions": {
                     "login_url": "/login",
                     "email": result.get("email"),

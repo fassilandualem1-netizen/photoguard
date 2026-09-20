@@ -5,16 +5,21 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
-from app.core.storage import upload_file_to_s3, generate_cdn_urls
+from app.core.storage import (
+    upload_file_to_s3,
+    generate_cdn_urls,
+    save_file_locally,
+    is_s3_configured,
+)
 from app.core.s3_cleanup import delete_file_from_s3
 from app.core.redis import increment_album_version
 from app.models.user import User, UserRole
 from app.models.album import Album
 from app.models.media import MediaItem
-from app.schemas.album import MediaItemResponse
+from app.schemas.media import MediaItemResponse
 from app.services.image_processor import image_processor
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("photoguard.media")
 
 router = APIRouter(prefix="/api/v1/media", tags=["Media Storage & CDN"])
 
@@ -26,12 +31,13 @@ async def upload_album_photo(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Uploads a photo to IDrive e2 S3 origin storage and distributes via Cloudflare & ImageKit CDNs.
+    Uploads a photo with bulletproof Multi-Cloud S3 storage and automatic Local Storage Fallback.
     Enforces:
     1. Photographer Album ownership & Single-Submit Lock checks.
     2. SaaS Virtual Quota calculation (original size against user limit).
-    3. Silent AI Compression (Lanczos resampling & WebP optimization) & Face Recognition vector extraction.
-    4. Resilient database commits with automatic cleanup upon failure.
+    3. Silent AI Compression & Face Recognition vector extraction.
+    4. S3 Upload with resilient local disk fallback if credentials or S3 endpoint fail.
+    5. Resilient database commits with automatic cleanup upon failure.
     """
     album = db.query(Album).filter(Album.id == album_id).first()
     if not album:
@@ -71,7 +77,6 @@ async def upload_album_photo(
         )
 
     # SaaS Virtual Quota Check:
-    # Display the full RAW/JPEG size against the photographer's plan quota
     photographer = current_user if current_user.id == album.photographer_id else db.query(User).filter(User.id == album.photographer_id).first()
     
     if photographer and (photographer.storage_used + original_size > photographer.storage_quota_limit):
@@ -80,24 +85,30 @@ async def upload_album_photo(
             detail="Storage quota exceeded. Please upgrade your photographer plan."
         )
 
-    # Reset file pointer for S3 upload streaming
-    await file.seek(0)
+    # Storage Upload with Local Fallback:
+    # Attempt cloud S3 upload if configured; on failure or missing credentials, fallback safely to local uploads/
+    object_path = None
+    is_local_storage = False
 
-    # Upload raw image to IDrive e2 S3 origin
-    try:
-        object_path = upload_file_to_s3(file=file, filename=file.filename or "photo.jpg")
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Multi-Cloud storage upload failed: {str(exc)}"
-        )
+    if is_s3_configured():
+        try:
+            await file.seek(0)
+            object_path = upload_file_to_s3(file=file, filename=file.filename or "photo.jpg")
+        except Exception as s3_exc:
+            logger.warning(
+                f"[Storage Warning] S3 upload failed ({s3_exc}). Activating resilient local storage fallback."
+            )
+            object_path = save_file_locally(file_bytes=file_bytes, filename=file.filename or "photo.jpg")
+            is_local_storage = True
+    else:
+        logger.info("[Storage Info] S3 not configured. Using resilient local disk storage.")
+        object_path = save_file_locally(file_bytes=file_bytes, filename=file.filename or "photo.jpg")
+        is_local_storage = True
 
-    # Generate edge CDN URLs: Cloudflare (high-res) & ImageKit (WebP preview)
+    # Generate access URLs: CDN or local static mount
     cdn_urls = generate_cdn_urls(object_path=object_path)
 
     # Phase 7.9 AI Engine Execution:
-    # 1. Silent AI Compression: estimate/calculate real cloud storage
-    # 2. Extract 128-dimensional face recognition feature vectors
     face_encodings = []
     try:
         compressed_bytes = image_processor.compress_image_silent_ai(file_bytes)
@@ -131,14 +142,21 @@ async def upload_album_photo(
     except SQLAlchemyError as exc:
         db.rollback()
         # Clean up uploaded file if DB commit fails
-        delete_file_from_s3(object_path)
+        if not is_local_storage and object_path:
+            try:
+                delete_file_from_s3(object_path)
+            except Exception as del_err:
+                logger.warning(f"Failed to clean up S3 file after rollback: {del_err}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database error saving media item: {str(exc)}"
         )
 
     # Inform collaborative mobile clients of new photos via Redis smart polling
-    increment_album_version(album.pin)
+    try:
+        increment_album_version(album.pin)
+    except Exception as redis_err:
+        logger.warning(f"Redis increment_album_version notice: {redis_err}")
 
     return MediaItemResponse.model_validate(media_item)
 
@@ -170,7 +188,7 @@ def delete_media_item(
     """
     Deletes a media item:
     1. Reclaims virtual storage quota (subtracts item.original_size from photographer.storage_used).
-    2. Physical storage cleanup: Deletes actual high-res object from IDrive e2 S3 bucket via boto3.
+    2. Physical storage cleanup: Deletes actual high-res object from S3 or local storage.
     3. Wrapped in strict try...except with db.rollback().
     """
     item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
@@ -199,11 +217,23 @@ def delete_media_item(
         db.delete(item)
         db.commit()
 
-        # Physical Cloud Storage Cleanup: delete actual file from IDrive e2 S3 bucket
-        background_tasks.add_task(delete_file_from_s3, item_url)
+        # Storage Cleanup: delete from S3 or local filesystem
+        if item_url and item_url.startswith("/uploads/"):
+            clean_filename = os.path.basename(item_url)
+            local_filepath = os.path.join(os.getcwd(), "uploads", clean_filename)
+            if os.path.exists(local_filepath):
+                try:
+                    os.remove(local_filepath)
+                except Exception as del_f_err:
+                    logger.warning(f"Could not remove local file {local_filepath}: {del_f_err}")
+        else:
+            background_tasks.add_task(delete_file_from_s3, item_url)
 
         # Increment sync version for active client apps
-        increment_album_version(album_pin)
+        try:
+            increment_album_version(album_pin)
+        except Exception as redis_err:
+            logger.warning(f"Redis increment_album_version notice: {redis_err}")
 
         return None
 

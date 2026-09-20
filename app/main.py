@@ -127,6 +127,8 @@ def run_db_migrations():
         conn.execute(text("UPDATE albums SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL;"))
 
         # Media items table schema migrations
+        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS filename VARCHAR(255) DEFAULT 'photo.jpg';"))
+        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS url VARCHAR(1024);"))
         conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS thumbnail_url VARCHAR(1024);"))
         conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS original_size BIGINT DEFAULT 0;"))
         conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS compressed_size BIGINT DEFAULT 0;"))
@@ -136,6 +138,7 @@ def run_db_migrations():
         conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
 
         # Raw SQL UPDATE statements to sanitize existing NULLs in media items
+        conn.execute(text("UPDATE media_items SET filename = 'photo.jpg' WHERE filename IS NULL;"))
         conn.execute(text("UPDATE media_items SET is_selected = FALSE WHERE is_selected IS NULL;"))
         conn.execute(text("UPDATE media_items SET original_size = 0 WHERE original_size IS NULL;"))
         conn.execute(text("UPDATE media_items SET compressed_size = 0 WHERE compressed_size IS NULL;"))
@@ -399,6 +402,11 @@ if not os.path.exists(DIST_DIR):
 assets_path = os.path.join(DIST_DIR, "assets")
 if os.path.exists(assets_path):
     app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+
+# Ensure and mount local uploads directory for fallback storage
+UPLOADS_DIR = os.path.join(os.getcwd(), "uploads")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 def health_check(db: Session = Depends(get_db)):

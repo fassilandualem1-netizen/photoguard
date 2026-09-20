@@ -1,30 +1,12 @@
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field
-
-class MediaItemBase(BaseModel):
-    filename: str = Field(..., max_length=255, description="Filename or photo title")
-    url: str = Field(..., description="High-resolution cloud storage URL")
-    thumbnail_url: Optional[str] = Field(default=None, description="WebP preview/thumbnail URL")
-    original_size: int = Field(default=0, description="Virtual original file size in bytes")
-    compressed_size: int = Field(default=0, description="Actual compressed storage size in bytes")
-
-class MediaItemCreate(MediaItemBase):
-    pass
-
-class MediaItemUpdate(BaseModel):
-    is_selected: Optional[bool] = Field(default=None, description="Client photo selection status")
-    client_notes: Optional[str] = Field(default=None, max_length=1000, description="Feedback or retouching instructions")
-
-class MediaItemResponse(MediaItemBase):
-    id: int
-    album_id: int
-    is_selected: bool = Field(default=False)
-    client_notes: Optional[str] = Field(default=None)
-    created_at: Optional[datetime] = Field(default=None)
-
-    class Config:
-        from_attributes = True
+from app.schemas.media import (
+    MediaItemBase,
+    MediaItemCreate,
+    MediaItemUpdate,
+    MediaItemResponse,
+)
 
 class AlbumCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255, description="Album title")

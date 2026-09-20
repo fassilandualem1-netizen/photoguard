@@ -82,6 +82,18 @@ def run_db_migrations():
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE;"))
 
         # Albums table schema migrations
+        conn.execute(text("""
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'albums' AND column_name = 'client') AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'albums' AND column_name = 'client_name') THEN
+                    ALTER TABLE albums RENAME COLUMN client TO client_name;
+                END IF;
+            END $$;
+        """))
+        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS title VARCHAR(255) DEFAULT 'Untitled Album';"))
+        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS client_name VARCHAR(255) DEFAULT 'Valued Client';"))
+        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS pin VARCHAR(6);"))
+        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS photographer_id INTEGER;"))
         conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;"))
         conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP WITH TIME ZONE;"))
         conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS allow_download BOOLEAN DEFAULT FALSE;"))
@@ -89,6 +101,8 @@ def run_db_migrations():
         conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE;"))
 
         # Raw SQL UPDATE statements to sanitize existing NULLs in albums
+        conn.execute(text("UPDATE albums SET title = 'Untitled Album' WHERE title IS NULL;"))
+        conn.execute(text("UPDATE albums SET client_name = 'Valued Client' WHERE client_name IS NULL;"))
         conn.execute(text("UPDATE albums SET is_locked = FALSE WHERE is_locked IS NULL;"))
         conn.execute(text("UPDATE albums SET allow_download = FALSE WHERE allow_download IS NULL;"))
         conn.execute(text("UPDATE albums SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL;"))

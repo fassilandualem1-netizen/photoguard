@@ -44,9 +44,9 @@ class AlbumExtendRequest(BaseModel):
 
 class AlbumListItemResponse(BaseModel):
     id: int
-    title: str
-    client_name: str
-    pin: str
+    title: Optional[str] = Field(default="Untitled Album")
+    client_name: Optional[str] = Field(default="Valued Client")
+    pin: str = Field(default="")
     photographer_id: int
     is_locked: bool = Field(default=False)
     allow_download: bool = Field(default=False)
@@ -62,9 +62,9 @@ class AlbumListItemResponse(BaseModel):
 
 class AlbumDetailResponse(BaseModel):
     id: int
-    title: str
-    client_name: str
-    pin: str
+    title: Optional[str] = Field(default="Untitled Album")
+    client_name: Optional[str] = Field(default="Valued Client")
+    pin: str = Field(default="")
     photographer_id: int
     is_locked: bool = Field(default=False)
     allow_download: bool = Field(default=False)

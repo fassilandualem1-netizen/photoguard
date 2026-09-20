@@ -23,8 +23,8 @@ class Album(Base):
     __tablename__ = "albums"
 
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(255), nullable=False)
-    client_name = Column(String(255), nullable=False)
+    title = Column(String(255), nullable=False, default="Untitled Album")
+    client_name = Column(String(255), nullable=True, default="Valued Client")
     pin = Column(String(6), unique=True, index=True, nullable=False, default=generate_album_pin)
     photographer_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     

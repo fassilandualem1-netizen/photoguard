@@ -1,0 +1,420 @@
+import os
+import logging
+import traceback
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Depends, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from app.core.database import engine, Base, get_db, SessionLocal
+from app.core.security import get_password_hash, verify_password
+from app.models.user import User, UserRole
+from app.models.album import Album, MediaItem
+from app.models.payment import PaymentReceipt
+from app.api.auth import router as auth_router
+from app.api.albums import router as albums_router
+from app.api.client import router as client_router
+from app.api.media import router as media_router
+from app.api.admin import router as admin_router
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("photoguard.core")
+
+def run_db_migrations():
+    """
+    Safe auto-migration for zero-downtime deployments.
+    Ensures missing columns and payment receipt tables exist.
+    """
+    logger.info("[PhotoGuard DB] Starting schema auto-migration...")
+    with engine.begin() as conn:
+        # Users table schema migrations
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(255) DEFAULT 'System Admin';"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'photographer';"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan VARCHAR(50) DEFAULT 'basic';"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(50) DEFAULT 'basic';"))
+        
+        # Safe constraint removal on legacy 'plan' and 'subscription_plan' columns
+        conn.execute(text("""
+            DO $$ 
+            BEGIN 
+                -- If 'plan' column exists, drop any NOT NULL constraint and guarantee default 'basic'
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'users' AND column_name = 'plan'
+                ) THEN 
+                    ALTER TABLE users ALTER COLUMN plan DROP NOT NULL;
+                    ALTER TABLE users ALTER COLUMN plan SET DEFAULT 'basic';
+                END IF;
+
+                -- If 'subscription_plan' column exists, drop any NOT NULL constraint and guarantee default 'basic'
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'users' AND column_name = 'subscription_plan'
+                ) THEN 
+                    ALTER TABLE users ALTER COLUMN subscription_plan DROP NOT NULL;
+                    ALTER TABLE users ALTER COLUMN subscription_plan SET DEFAULT 'basic';
+                END IF;
+
+                -- Synchronize values across both columns if both exist
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'users' AND column_name = 'plan'
+                ) AND EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'users' AND column_name = 'subscription_plan'
+                ) THEN 
+                    UPDATE users SET subscription_plan = COALESCE(plan, 'basic') WHERE subscription_plan IS NULL;
+                    UPDATE users SET plan = COALESCE(subscription_plan, 'basic') WHERE plan IS NULL;
+                END IF;
+            END $$;
+        """))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS storage_quota_limit BIGINT DEFAULT 5368709120;"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS storage_used BIGINT DEFAULT 0;"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS needs_password_change BOOLEAN DEFAULT TRUE;"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(50);"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS studio_logo_url VARCHAR(255);"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS brand_color VARCHAR(50) DEFAULT '#F59E0B';"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE;"))
+
+        # Albums table schema migrations
+        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;"))
+        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP WITH TIME ZONE;"))
+        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS allow_download BOOLEAN DEFAULT FALSE;"))
+        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
+        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE;"))
+
+        # Media items table schema migrations
+        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS thumbnail_url VARCHAR(1024);"))
+        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS original_size BIGINT DEFAULT 0;"))
+        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS compressed_size BIGINT DEFAULT 0;"))
+        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS is_selected BOOLEAN DEFAULT FALSE;"))
+        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS client_notes VARCHAR(1000);"))
+        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS face_encodings JSON;"))
+        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
+        
+        # Safe table creation & migration for PaymentReceipts (Telebirr/CBE manual upgrade workflow)
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS payment_receipts (
+                id SERIAL PRIMARY KEY,
+                photographer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                transaction_ref VARCHAR(100),
+                amount DOUBLE PRECISION,
+                payment_method VARCHAR(50) DEFAULT 'telebirr',
+                status VARCHAR(50) DEFAULT 'pending' NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+            );
+        """))
+        conn.execute(text("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS transaction_ref VARCHAR(100);"))
+        conn.execute(text("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS amount DOUBLE PRECISION;"))
+        conn.execute(text("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT 'telebirr';"))
+        conn.execute(text("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending';"))
+        conn.execute(text("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_payment_receipts_transaction_ref ON payment_receipts(transaction_ref);"))
+    logger.info("[PhotoGuard DB] Schema auto-migration completed successfully.")
+
+SAFE_ADMIN_FALLBACK_PASSWORD = "Admin@123!"
+DEFAULT_ADMIN_EMAIL = "admin@photoguard.com"
+
+def seed_root_admin():
+    """
+    Bulletproof Root Admin Seeder with Multi-Tier Fallbacks.
+    - Reads ADMIN_EMAIL and ADMIN_PASSWORD from os.getenv.
+    - If ADMIN_PASSWORD is None, empty, whitespace, longer than 70 chars (bcrypt max 72),
+      or raises any hashing/encoding error, it safely discards it and falls back to 'Admin@123!'.
+    - Never crashes during startup; catches all hashing/database exceptions with rollbacks.
+    - Guarantees role=UserRole.ADMIN, is_active=True, is_verified=True, needs_password_change=False.
+    """
+    raw_admin_email = os.getenv("ADMIN_EMAIL", "").strip().lower()
+    admin_email = raw_admin_email if raw_admin_email else DEFAULT_ADMIN_EMAIL
+
+    raw_admin_pw = os.getenv("ADMIN_PASSWORD", "")
+    
+    # Audit & sanitize password length for bcrypt safety (bcrypt limit is 72 bytes)
+    if not raw_admin_pw or len(raw_admin_pw) > 70:
+        if raw_admin_pw and len(raw_admin_pw) > 70:
+            logger.warning(f"[PhotoGuard Seeder Warning] Configured ADMIN_PASSWORD exceeds 70 characters ({len(raw_admin_pw)} chars). Discarding to prevent bcrypt failure and using bulletproof fallback.")
+        effective_password = SAFE_ADMIN_FALLBACK_PASSWORD
+        used_fallback = True
+    else:
+        effective_password = raw_admin_pw.strip()
+        used_fallback = False
+
+    logger.info(f"[PhotoGuard Seeder] Initiating root admin synchronization for: '{admin_email}' (fallback_used={used_fallback})")
+
+    # Generate hash safely with fallback recovery
+    try:
+        new_hash = get_password_hash(effective_password)
+    except Exception as hash_err:
+        logger.warning(f"[PhotoGuard Seeder Warning] Failed to hash effective password: {hash_err}. Forcefully using safe default.")
+        effective_password = SAFE_ADMIN_FALLBACK_PASSWORD
+        new_hash = get_password_hash(SAFE_ADMIN_FALLBACK_PASSWORD)
+        used_fallback = True
+
+    db = SessionLocal()
+    try:
+        # Determine all target admin emails to ensure user access
+        target_emails = []
+        if raw_admin_email:
+            target_emails.append(raw_admin_email)
+        for fallback in ["fassilandualem1@gmail.com", "fassilandualem19@gmail.com", DEFAULT_ADMIN_EMAIL]:
+            if fallback not in target_emails:
+                target_emails.append(fallback)
+
+        synced_users = []
+        primary_user = None
+
+        for email_item in target_emails:
+            user = db.query(User).filter(User.email == email_item).first()
+            if user:
+                logger.info(f"[PhotoGuard Seeder] Synchronizing existing user '{email_item}' as verified Root Admin...")
+                user.role = UserRole.ADMIN
+                user.hashed_password = new_hash
+                user.full_name = user.full_name or "Root Administrator"
+                user.is_active = True
+                user.is_verified = True
+                user.needs_password_change = False
+                user.subscription_plan = "studio"
+                user.plan = "studio"
+                user.storage_quota_limit = 26843545600  # 25 GB Studio Tier
+                db.commit()
+                db.refresh(user)
+                synced_users.append({"email": email_item, "action": "updated"})
+            else:
+                logger.info(f"[PhotoGuard Seeder] Creating brand new Root Admin record for '{email_item}'...")
+                user = User(
+                    email=email_item,
+                    hashed_password=new_hash,
+                    full_name="Root Administrator",
+                    role=UserRole.ADMIN,
+                    subscription_plan="studio",
+                    plan="studio",
+                    is_active=True,
+                    is_verified=True,
+                    storage_quota_limit=26843545600,
+                    storage_used=0,
+                    needs_password_change=False
+                )
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+                synced_users.append({"email": email_item, "action": "created"})
+            
+            if not primary_user and (email_item == admin_email or email_item == "fassilandualem1@gmail.com"):
+                primary_user = user
+
+        if not primary_user and synced_users:
+            primary_user = db.query(User).filter(User.email == synced_users[0]["email"]).first()
+
+        pw_check = verify_password(effective_password, primary_user.hashed_password) if primary_user else False
+        logger.info(f"[PhotoGuard Seeder] Password verification test for '{primary_user.email if primary_user else 'unknown'}': {'PASS' if pw_check else 'FAIL'}")
+
+        return {
+            "success": True,
+            "synced_accounts": synced_users,
+            "user_id": primary_user.id if primary_user else None,
+            "email": primary_user.email if primary_user else admin_email,
+            "role": "admin",
+            "is_active": True,
+            "needs_password_change": False,
+            "password_verification_check": pw_check,
+            "used_fallback_password": used_fallback,
+            "effective_password_hint": f"{effective_password[:2]}***{effective_password[-1]}" if len(effective_password) > 3 else "***"
+        }
+    except Exception as exc:
+        db.rollback()
+        logger.error(f"[PhotoGuard Seeder Error] Failed to persist root admin: {exc}\n{traceback.format_exc()}")
+        return {
+            "success": False,
+            "error": str(exc),
+            "email": admin_email
+        }
+    finally:
+        db.close()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application startup and shutdown lifespan management.
+    Runs DDL schema creation, column auto-migrations, and seeds root admin.
+    """
+    logger.info("[PhotoGuard Lifecycle] Application booting up...")
+    try:
+        # 1. Ensure all tables defined by SQLAlchemy Base exist
+        Base.metadata.create_all(bind=engine)
+        logger.info("[PhotoGuard Lifecycle] Base.metadata.create_all completed.")
+        
+        # 2. Execute incremental auto-migrations
+        run_db_migrations()
+        
+        # 3. Seed Root Admin
+        seed_result = seed_root_admin()
+        logger.info(f"[PhotoGuard Lifecycle] Seed result: {seed_result}")
+    except Exception as exc:
+        logger.critical(f"[PhotoGuard Lifecycle Error] Startup sequence failed: {exc}\n{traceback.format_exc()}")
+    
+    yield
+    logger.info("[PhotoGuard Lifecycle] Application shutting down.")
+
+app = FastAPI(
+    title="PhotoGuard API",
+    description="Secure Anti-Piracy Photo Selection SaaS Platform Backend",
+    version="7.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan
+)
+
+# Bulletproof CORS configuration for cross-origin communication
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Register Core API Routers
+app.include_router(auth_router)
+app.include_router(albums_router)
+app.include_router(client_router)
+app.include_router(media_router)
+app.include_router(admin_router)
+
+@app.get("/api/v1/admin/force-seed-admin", tags=["Admin Control"])
+def force_seed_admin_endpoint():
+    """
+    Emergency Diagnostic & Force-Seed Endpoint.
+    Can be directly accessed via browser to force creation/repair of Root Admin
+    and return database status, table columns, and password verification output.
+    """
+    try:
+        # Step 1: Ensure tables exist
+        Base.metadata.create_all(bind=engine)
+        
+        # Step 2: Ensure migrations ran
+        run_db_migrations()
+        
+        # Step 3: Run Seed
+        result = seed_root_admin()
+        
+        if not result.get("success"):
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={
+                    "status": "error",
+                    "message": "Database synchronization failed.",
+                    "details": result
+                }
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": "success",
+                "message": "Root admin account has been forcefully verified and synchronized.",
+                "details": result,
+                "login_instructions": {
+                    "login_url": "/login",
+                    "email": result.get("email"),
+                    "password": "Use 'Admin@123!' or the Render ADMIN_PASSWORD environment variable",
+                    "note": "Admin accounts (fassilandualem1@gmail.com and fassilandualem19@gmail.com) have been synchronized with full studio privileges."
+                }
+            }
+        )
+    except Exception as exc:
+        logger.error(f"[Emergency Force-Seed Error] {exc}\n{traceback.format_exc()}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": "error",
+                "error_type": type(exc).__name__,
+                "detail": str(exc),
+                "traceback": traceback.format_exc().splitlines()
+            }
+        )
+
+# Static files directory resolution (built React app in dist/)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DIST_DIR = os.path.join(BASE_DIR, "dist")
+if not os.path.exists(DIST_DIR):
+    DIST_DIR = os.path.join(os.getcwd(), "dist")
+
+# Mount /assets if dist/assets exists
+assets_path = os.path.join(DIST_DIR, "assets")
+if os.path.exists(assets_path):
+    app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+
+@app.get("/health", status_code=status.HTTP_200_OK)
+def health_check(db: Session = Depends(get_db)):
+    """
+    Production health check verifying API operational status
+    and active database connectivity.
+    """
+    try:
+        db.execute(text("SELECT 1"))
+        return {
+            "status": "operational",
+            "service": "PhotoGuard API",
+            "database": "connected",
+            "environment": os.getenv("ENVIRONMENT", "production"),
+            "version": "7.0.0"
+        }
+    except Exception as exc:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "status": "degraded",
+                "service": "PhotoGuard API",
+                "database": "disconnected",
+                "error": str(exc),
+                "version": "7.0.0"
+            }
+        )
+
+@app.get("/", status_code=status.HTTP_200_OK)
+def root():
+    """
+    Root endpoint: serves the production React SPA frontend if built in dist/,
+    otherwise falls back to API status.
+    """
+    index_file = os.path.join(DIST_DIR, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+    return {
+        "service": "PhotoGuard API",
+        "version": "7.0.0",
+        "status": "operational",
+        "docs_url": "/docs",
+        "health_url": "/health",
+        "message": "PhotoGuard Elite Anti-Piracy Photo Selection SaaS Backend is Live."
+    }
+
+@app.get("/{full_path:path}")
+async def catch_all_spa(full_path: str):
+    """
+    Catch-all route: Serves static files from dist/ if they exist,
+    or falls back to index.html for React Router client-side routing.
+    Excludes all /api/v1/* routes and system endpoints.
+    """
+    if full_path.startswith("api/") or full_path in ["health", "docs", "redoc", "openapi.json"]:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
+    
+    file_path = os.path.join(DIST_DIR, full_path)
+    if os.path.isfile(file_path):
+        return FileResponse(file_path)
+    
+    index_file = os.path.join(DIST_DIR, "index.html")
+    if os.path.isfile(index_file):
+        return FileResponse(index_file)
+    
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
+
+if __name__ == "__main__":
+    import uvicorn
+    server_port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("app.main:app", host="0.0.0.0", port=server_port, reload=False)

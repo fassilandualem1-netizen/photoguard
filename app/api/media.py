@@ -7,6 +7,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.storage import (
+    is_cloudinary_configured,
+    upload_file_to_cloudinary,
+    delete_file_from_cloudinary,
     upload_file_to_s3,
     generate_cdn_urls,
     save_file_locally,
@@ -86,30 +89,50 @@ async def upload_album_photo(
             detail="Storage quota exceeded. Please upgrade your photographer plan."
         )
 
-    # Storage Upload with Local Fallback:
-    # Attempt cloud S3 upload if configured; on failure or missing credentials, fallback safely to local uploads/
+    # Multi-Cloud Storage Upload (Primary: Cloudinary -> Secondary: S3 -> Fallback: Local Disk)
+    high_res_url = None
+    thumbnail_url = None
+    storage_provider = "local"
     object_path = None
-    is_local_storage = False
 
-    if is_s3_configured():
+    # 1. Primary: Cloudinary Permanent Cloud Storage
+    if is_cloudinary_configured():
+        try:
+            cloud_res = upload_file_to_cloudinary(
+                file_bytes=file_bytes,
+                filename=file.filename or "photo.jpg",
+                folder=f"photoguard_vault/{album.pin}"
+            )
+            high_res_url = cloud_res["high_res_url"]
+            thumbnail_url = cloud_res["thumbnail_url"]
+            storage_provider = "cloudinary"
+            logger.info(f"[Storage Success] Uploaded to Cloudinary: {high_res_url}")
+        except Exception as cloud_exc:
+            logger.warning(f"[Cloudinary Warning] Upload failed ({cloud_exc}). Proceeding to secondary storage.")
+
+    # 2. Secondary: S3 / IDrive e2 Storage (if Cloudinary skipped or failed)
+    if not high_res_url and is_s3_configured():
         try:
             await file.seek(0)
             object_path = upload_file_to_s3(file=file, filename=file.filename or "photo.jpg")
+            cdn_urls = generate_cdn_urls(object_path=object_path)
+            high_res_url = cdn_urls["high_res_url"]
+            thumbnail_url = cdn_urls["thumbnail_url"]
+            storage_provider = "s3"
+            logger.info(f"[Storage Success] Uploaded to S3: {high_res_url}")
         except Exception as s3_exc:
-            logger.warning(
-                f"[Storage Warning] S3 upload failed ({s3_exc}). Activating resilient local storage fallback."
-            )
-            object_path = save_file_locally(file_bytes=file_bytes, filename=file.filename or "photo.jpg")
-            is_local_storage = True
-    else:
-        logger.info("[Storage Info] S3 not configured. Using resilient local disk storage.")
+            logger.warning(f"[Storage Warning] S3 upload failed ({s3_exc}). Activating local fallback.")
+
+    # 3. Resilient Fallback: Local Disk Storage
+    if not high_res_url:
         object_path = save_file_locally(file_bytes=file_bytes, filename=file.filename or "photo.jpg")
-        is_local_storage = True
+        cdn_urls = generate_cdn_urls(object_path=object_path)
+        high_res_url = cdn_urls["high_res_url"]
+        thumbnail_url = cdn_urls["thumbnail_url"]
+        storage_provider = "local"
+        logger.info(f"[Storage Info] Saved to local storage fallback: {high_res_url}")
 
-    # Generate access URLs: CDN or local static mount
-    cdn_urls = generate_cdn_urls(object_path=object_path)
-
-    # Phase 7.9 AI Engine Execution:
+    # Silent AI Compression & Face Recognition
     face_encodings = []
     try:
         compressed_bytes = image_processor.compress_image_silent_ai(file_bytes)
@@ -123,8 +146,8 @@ async def upload_album_photo(
     media_item = MediaItem(
         album_id=album.id,
         filename=file.filename or "photo.jpg",
-        url=cdn_urls["high_res_url"],
-        thumbnail_url=cdn_urls["thumbnail_url"],
+        url=high_res_url,
+        thumbnail_url=thumbnail_url,
         original_size=original_size,
         compressed_size=compressed_size,
         is_selected=False,
@@ -133,7 +156,7 @@ async def upload_album_photo(
     )
 
     try:
-        # Update virtual quota in database
+        # Update virtual quota in database (increment only on upload)
         if photographer:
             photographer.storage_used += original_size
 
@@ -143,7 +166,9 @@ async def upload_album_photo(
     except SQLAlchemyError as exc:
         db.rollback()
         # Clean up uploaded file if DB commit fails
-        if not is_local_storage and object_path:
+        if storage_provider == "cloudinary":
+            delete_file_from_cloudinary(high_res_url)
+        elif storage_provider == "s3" and object_path:
             try:
                 delete_file_from_s3(object_path)
             except Exception as del_err:
@@ -213,17 +238,20 @@ def delete_media_item(
         db.delete(item)
         db.commit()
 
-        # Storage Cleanup: delete from S3 or local filesystem
-        if item_url and item_url.startswith("/uploads/"):
-            clean_filename = os.path.basename(item_url)
-            local_filepath = os.path.join(os.getcwd(), "uploads", clean_filename)
-            if os.path.exists(local_filepath):
-                try:
-                    os.remove(local_filepath)
-                except Exception as del_f_err:
-                    logger.warning(f"Could not remove local file {local_filepath}: {del_f_err}")
-        else:
-            background_tasks.add_task(delete_file_from_s3, item_url)
+        # Storage Cleanup: delete from Cloudinary, local filesystem, or S3
+        if item_url:
+            if "res.cloudinary.com" in item_url:
+                background_tasks.add_task(delete_file_from_cloudinary, item_url)
+            elif item_url.startswith("/uploads/"):
+                clean_filename = os.path.basename(item_url)
+                local_filepath = os.path.join(os.getcwd(), "uploads", clean_filename)
+                if os.path.exists(local_filepath):
+                    try:
+                        os.remove(local_filepath)
+                    except Exception as del_f_err:
+                        logger.warning(f"Could not remove local file {local_filepath}: {del_f_err}")
+            else:
+                background_tasks.add_task(delete_file_from_s3, item_url)
 
         # Increment sync version for active client apps
         try:

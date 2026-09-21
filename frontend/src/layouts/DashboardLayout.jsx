@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import api from "../api/axios";
 import {
   Menu,
   X,
@@ -13,9 +12,13 @@ import {
   ExternalLink,
   Sparkles,
   LifeBuoy,
+  Users,
+  BarChart3,
 } from "lucide-react";
 import ProfileSettingsModal from "../components/ProfileSettingsModal";
 import ChangePasswordModal from "../components/ChangePasswordModal";
+import TeamManagement from "../components/TeamManagement";
+import StudioAnalyticsModal from "../components/StudioAnalyticsModal";
 
 export default function DashboardLayout({
   children,
@@ -23,13 +26,33 @@ export default function DashboardLayout({
   onTabChange = () => {},
   onChangePasswordClick = () => {}
 }) {
-  const { user, logout, refreshProfile } = useAuth();
+  const { user = {}, logout = () => {} } = useAuth() || {};
+
+  // Safe User Property Extraction with full fallbacks
+  const safeUser = user || {};
+  const userRole = String(safeUser?.role || "photographer").toLowerCase();
+  const subscriptionPlan = String(safeUser?.subscription_plan || safeUser?.plan || "basic").toLowerCase();
+  const isAssistant = userRole === "assistant";
+  const isAdmin = userRole === "admin";
+  const isStudio = subscriptionPlan === "studio" || isAdmin;
+  const brandColor = safeUser?.brand_color || "#F59E0B";
+  const fullName = safeUser?.full_name || "Photographer";
+  const email = safeUser?.email || "";
+  const studioLogoUrl = safeUser?.studio_logo_url || null;
+
+  const storageUsed = Number(safeUser?.storage_used) || 0;
+  const storageQuota = Number(safeUser?.storage_quota_limit) || 5368709120;
+  const storagePercentage = Math.min(100, Math.max(0, Math.round((storageUsed / storageQuota) * 100)));
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [isAnalyticsModalOpen, setIsAnalyticsModalOpen] = useState(false);
+
   const menuRef = useRef(null);
 
-  // Close menu when clicking outside
+  // Close dropdown menu on outside click
   useEffect(() => {
     function handleClickOutside(event) {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -43,15 +66,11 @@ export default function DashboardLayout({
   }, []);
 
   const formatBytes = (bytes) => {
-    if (!bytes || bytes === 0) return "0 GB";
-    const gb = bytes / (1024 * 1024 * 1024);
+    const num = Number(bytes);
+    if (!num || num <= 0) return "0 GB";
+    const gb = num / (1024 * 1024 * 1024);
     return `${gb.toFixed(1)} GB`;
   };
-
-  const storageUsed = user?.storage_used || 0;
-  const storageQuota = user?.storage_quota_limit || 5368709120;
-  const storagePercentage = Math.min(100, Math.round((storageUsed / storageQuota) * 100));
-  const isStudio = user?.subscription_plan === "studio" || user?.role === "admin";
 
   return (
     <div id="dashboard-layout" className="min-h-screen bg-[#0d0f12] text-slate-100 flex flex-col selection:bg-amber-500/20 selection:text-amber-200">
@@ -60,10 +79,10 @@ export default function DashboardLayout({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Logo / Brand */}
           <div className="flex items-center gap-3">
-            {user?.studio_logo_url && isStudio ? (
+            {studioLogoUrl && isStudio ? (
               <img
-                src={user.studio_logo_url}
-                alt={user.full_name || "Studio Logo"}
+                src={studioLogoUrl}
+                alt={fullName || "Studio Logo"}
                 className="h-9 max-w-[120px] object-contain rounded-lg"
                 onError={(e) => {
                   e.currentTarget.style.display = "none";
@@ -71,10 +90,10 @@ export default function DashboardLayout({
               />
             ) : (
               <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md"
+                className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md shrink-0"
                 style={{
-                  backgroundColor: user?.brand_color || "#F59E0B",
-                  boxShadow: `0 4px 14px ${(user?.brand_color || "#F59E0B")}33`
+                  backgroundColor: brandColor,
+                  boxShadow: `0 4px 14px ${brandColor}33`
                 }}
               >
                 <ShieldCheck className="w-4 h-4 text-black stroke-[2.2]" />
@@ -82,10 +101,10 @@ export default function DashboardLayout({
             )}
             <div className="flex items-baseline gap-2">
               <span className="font-semibold text-base sm:text-lg tracking-tight text-white">
-                {user?.studio_logo_url && isStudio ? user.full_name : "PhotoGuard"}
+                {studioLogoUrl && isStudio ? fullName : "PhotoGuard"}
               </span>
               <span className="hidden sm:inline-block text-[11px] px-2 py-0.5 rounded-full border border-slate-700/80 bg-slate-800/60 text-slate-300 font-medium capitalize">
-                {user?.subscription_plan || "Basic"}
+                {isAssistant ? "Assistant" : `${subscriptionPlan} Tier`}
               </span>
             </div>
           </div>
@@ -101,14 +120,14 @@ export default function DashboardLayout({
                 className="h-full rounded-full transition-all duration-300"
                 style={{
                   width: `${storagePercentage}%`,
-                  backgroundColor: user?.brand_color || "#F59E0B"
+                  backgroundColor: brandColor
                 }}
               />
             </div>
           </div>
 
           {/* Admin Back-to-Command Switcher */}
-          {user?.role === "admin" && (
+          {isAdmin && (
             <Link
               to="/admin"
               id="back-to-admin-btn"
@@ -128,7 +147,7 @@ export default function DashboardLayout({
               aria-label="Open Navigation Menu"
             >
               <span className="text-xs font-medium max-w-[120px] truncate hidden sm:inline">
-                {user?.full_name || "Account"}
+                {fullName}
               </span>
               {isMenuOpen ? (
                 <X className="w-4 h-4 text-slate-300" />
@@ -145,11 +164,11 @@ export default function DashboardLayout({
               >
                 {/* User Header Section */}
                 <div className="px-4 py-3 border-b border-slate-800/80">
-                  <p className="text-xs font-medium text-white truncate">{user?.full_name}</p>
-                  <p className="text-[11px] text-slate-400 truncate">{user?.email}</p>
+                  <p className="text-xs font-medium text-white truncate">{fullName}</p>
+                  <p className="text-[11px] text-slate-400 truncate">{email}</p>
                   <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
-                    <span className="capitalize">{user?.role}</span>
-                    <span className="text-amber-400/90 font-medium capitalize">{user?.subscription_plan} Tier</span>
+                    <span className="capitalize">{userRole}</span>
+                    <span className="text-amber-400/90 font-medium capitalize">{subscriptionPlan} Tier</span>
                   </div>
                 </div>
 
@@ -169,7 +188,7 @@ export default function DashboardLayout({
 
                 {/* Menu Items */}
                 <div className="py-1">
-                  {user?.role === "admin" && (
+                  {isAdmin && (
                     <Link
                       to="/admin"
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-indigo-300 hover:text-white hover:bg-indigo-950/40 transition-colors text-left"
@@ -179,34 +198,70 @@ export default function DashboardLayout({
                     </Link>
                   )}
 
+                  {/* Studio Team Management (Hidden for Assistants) */}
+                  {!isAssistant && (
+                    <button
+                      id="menu-team-btn"
+                      type="button"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setIsTeamModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
+                    >
+                      <Users className="w-4 h-4 text-amber-400" />
+                      <span>Team & Assistants</span>
+                    </button>
+                  )}
+
+                  {/* Studio Client Analytics */}
                   <button
-                    id="menu-profile-btn"
+                    id="menu-analytics-btn"
                     type="button"
                     onClick={() => {
                       setIsMenuOpen(false);
-                      setIsProfileModalOpen(true);
+                      setIsAnalyticsModalOpen(true);
                     }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
                   >
-                    <User className="w-4 h-4 text-slate-400" />
-                    <span>Studio Profile & Branding</span>
+                    <BarChart3 className="w-4 h-4 text-amber-400" />
+                    <span>Client Analytics</span>
                   </button>
 
-                  <button
-                    id="menu-change-password-btn"
-                    type="button"
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      setIsChangePasswordModalOpen(true);
-                      if (typeof onChangePasswordClick === "function") {
-                        onChangePasswordClick();
-                      }
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
-                  >
-                    <KeyRound className="w-4 h-4 text-slate-400" />
-                    <span>Change Password</span>
-                  </button>
+                  {/* Profile & Branding (Studio Owners & Photographers) */}
+                  {!isAssistant && (
+                    <button
+                      id="menu-profile-btn"
+                      type="button"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setIsProfileModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
+                    >
+                      <User className="w-4 h-4 text-slate-400" />
+                      <span>Studio Profile & Branding</span>
+                    </button>
+                  )}
+
+                  {/* Change Password (RBAC: Assistants cannot change owner account password) */}
+                  {!isAssistant && (
+                    <button
+                      id="menu-change-password-btn"
+                      type="button"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setIsChangePasswordModalOpen(true);
+                        if (typeof onChangePasswordClick === "function") {
+                          onChangePasswordClick();
+                        }
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
+                    >
+                      <KeyRound className="w-4 h-4 text-slate-400" />
+                      <span>Change Password</span>
+                    </button>
+                  )}
 
                   <a
                     id="menu-support-link"
@@ -231,7 +286,9 @@ export default function DashboardLayout({
                     type="button"
                     onClick={() => {
                       setIsMenuOpen(false);
-                      logout();
+                      if (typeof logout === "function") {
+                        logout();
+                      }
                     }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors text-left font-medium"
                   >
@@ -260,6 +317,20 @@ export default function DashboardLayout({
       <ChangePasswordModal
         isOpen={isChangePasswordModalOpen}
         onClose={() => setIsChangePasswordModalOpen(false)}
+      />
+
+      {/* Studio Team Management Modal */}
+      <TeamManagement
+        isOpen={isTeamModalOpen}
+        onClose={() => setIsTeamModalOpen(false)}
+        user={safeUser}
+      />
+
+      {/* Studio Client Analytics Modal */}
+      <StudioAnalyticsModal
+        isOpen={isAnalyticsModalOpen}
+        onClose={() => setIsAnalyticsModalOpen(false)}
+        user={safeUser}
       />
     </div>
   );

@@ -2,7 +2,7 @@ import os
 import logging
 import traceback
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, status, Request
+from fastapi import FastAPI, Depends, status, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -10,9 +10,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.core.database import engine, Base, get_db, SessionLocal
 from app.core.security import get_password_hash, verify_password
+from app.core.dependencies import get_current_user
 from app.models.user import User, UserRole
 from app.models.album import Album, MediaItem
 from app.models.payment import PaymentReceipt
+from app.schemas.auth import UserResponse, PasswordChangeRequest
 from app.api.auth import router as auth_router
 from app.api.albums import router as albums_router
 from app.api.client import router as client_router
@@ -24,51 +26,68 @@ from app.api.team import router as team_router
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("photoguard.core")
 
+def safe_execute_ddl(sql_statement: str, description: str = ""):
+    """
+    Executes a single DDL/DML statement safely in its own transaction block.
+    Catches, logs, and passes all exceptions so startup never crashes.
+    """
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(sql_statement))
+    except Exception as exc:
+        desc = description or sql_statement[:60]
+        logger.warning(f"[PhotoGuard DB Auto-Migration] Non-fatal notice for '{desc}': {exc}")
+
 def run_db_migrations():
     """
     Safe auto-migration for zero-downtime deployments.
     Ensures missing columns and payment receipt tables exist.
+    All statements execute independently so one failing query never blocks startup.
     """
     logger.info("[PhotoGuard DB] Starting schema auto-migration...")
-    with engine.begin() as conn:
+    try:
         # Users table schema migrations
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(255) DEFAULT 'System Admin';"))
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'photographer';"))
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan VARCHAR(50) DEFAULT 'basic';"))
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(50) DEFAULT 'basic';"))
-        
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(255) DEFAULT 'System Admin';", "users.full_name")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'photographer';", "users.role")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan VARCHAR(50) DEFAULT 'basic';", "users.subscription_plan")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(50) DEFAULT 'basic';", "users.plan")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;", "users.is_verified")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS storage_quota_limit BIGINT DEFAULT 5368709120;", "users.storage_quota_limit")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS storage_used BIGINT DEFAULT 0;", "users.storage_used")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS needs_password_change BOOLEAN DEFAULT TRUE;", "users.needs_password_change")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(50);", "users.telegram_chat_id")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS studio_logo_url VARCHAR(1024);", "users.studio_logo_url")
+        safe_execute_ddl("ALTER TABLE users ALTER COLUMN studio_logo_url TYPE VARCHAR(1024);", "users.studio_logo_url type")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS brand_color VARCHAR(50) DEFAULT '#F59E0B';", "users.brand_color")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;", "users.is_active")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;", "users.created_at")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE;", "users.updated_at")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS parent_owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL;", "users.parent_owner_id")
+
+        # Safe role type conversions if role was previously typed as enum
+        safe_execute_ddl("ALTER TABLE users ALTER COLUMN role TYPE VARCHAR(50) USING role::text;", "users.role type convert")
+
         # Safe constraint removal and type conversion on legacy 'plan' and 'subscription_plan' columns
-        conn.execute(text("""
+        safe_execute_ddl("""
             DO $$ 
             BEGIN 
-                -- If 'plan' column exists and is typed as an enum (e.g. planenum), convert it to VARCHAR(50)
                 BEGIN
                     ALTER TABLE users ALTER COLUMN plan DROP DEFAULT;
-                EXCEPTION WHEN OTHERS THEN 
-                    NULL;
-                END;
+                EXCEPTION WHEN OTHERS THEN NULL; END;
 
                 BEGIN
                     ALTER TABLE users ALTER COLUMN plan TYPE VARCHAR(50) USING plan::text;
-                EXCEPTION WHEN OTHERS THEN 
-                    NULL;
-                END;
+                EXCEPTION WHEN OTHERS THEN NULL; END;
 
                 BEGIN
                     ALTER TABLE users ALTER COLUMN plan DROP NOT NULL;
-                EXCEPTION WHEN OTHERS THEN 
-                    NULL;
-                END;
+                EXCEPTION WHEN OTHERS THEN NULL; END;
 
-                -- If 'subscription_plan' column exists, drop any NOT NULL constraint and guarantee default 'basic'
                 BEGIN
                     ALTER TABLE users ALTER COLUMN subscription_plan DROP NOT NULL;
                     ALTER TABLE users ALTER COLUMN subscription_plan SET DEFAULT 'basic';
-                EXCEPTION WHEN OTHERS THEN 
-                    NULL;
-                END;
+                EXCEPTION WHEN OTHERS THEN NULL; END;
 
-                -- Synchronize values across both columns safely
                 BEGIN
                     IF EXISTS (
                         SELECT 1 FROM information_schema.columns 
@@ -85,83 +104,60 @@ def run_db_migrations():
                     ) THEN
                         UPDATE users SET subscription_plan = 'basic' WHERE subscription_plan IS NULL;
                     END IF;
-                EXCEPTION WHEN OTHERS THEN 
-                    NULL;
-                END;
+                EXCEPTION WHEN OTHERS THEN NULL; END;
             END $$;
-        """))
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;"))
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS storage_quota_limit BIGINT DEFAULT 5368709120;"))
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS storage_used BIGINT DEFAULT 0;"))
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS needs_password_change BOOLEAN DEFAULT TRUE;"))
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(50);"))
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS studio_logo_url VARCHAR(1024);"))
-        conn.execute(text("ALTER TABLE users ALTER COLUMN studio_logo_url TYPE VARCHAR(1024);"))
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS brand_color VARCHAR(50) DEFAULT '#F59E0B';"))
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;"))
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE;"))
-        conn.execute(text("""
-            DO $$
-            BEGIN
-                ALTER TYPE user_role_enum ADD VALUE IF NOT EXISTS 'owner';
-                ALTER TYPE user_role_enum ADD VALUE IF NOT EXISTS 'assistant';
-            EXCEPTION WHEN OTHERS THEN
-                NULL;
-            END $$;
-        """))
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS parent_owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL;"))
+        """, "users plan and subscription_plan sync")
 
         # Albums table schema migrations
-        conn.execute(text("""
+        safe_execute_ddl("""
             DO $$
             BEGIN
                 IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'albums' AND column_name = 'client') AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'albums' AND column_name = 'client_name') THEN
                     ALTER TABLE albums RENAME COLUMN client TO client_name;
                 END IF;
             END $$;
-        """))
-        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS title VARCHAR(255) DEFAULT 'Untitled Album';"))
-        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS client_name VARCHAR(255) DEFAULT 'Valued Client';"))
-        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS pin VARCHAR(6);"))
-        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS photographer_id INTEGER;"))
-        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;"))
-        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP WITH TIME ZONE;"))
-        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS allow_download BOOLEAN DEFAULT FALSE;"))
-        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
-        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE;"))
-        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0;"))
-        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS last_viewed_at TIMESTAMP WITH TIME ZONE;"))
-        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP WITH TIME ZONE;"))
+        """, "albums rename client to client_name")
+        safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS title VARCHAR(255) DEFAULT 'Untitled Album';", "albums.title")
+        safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS client_name VARCHAR(255) DEFAULT 'Valued Client';", "albums.client_name")
+        safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS pin VARCHAR(6);", "albums.pin")
+        safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS photographer_id INTEGER;", "albums.photographer_id")
+        safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;", "albums.is_locked")
+        safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP WITH TIME ZONE;", "albums.submitted_at")
+        safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS allow_download BOOLEAN DEFAULT FALSE;", "albums.allow_download")
+        safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;", "albums.created_at")
+        safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE;", "albums.expires_at")
+        safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0;", "albums.view_count")
+        safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS last_viewed_at TIMESTAMP WITH TIME ZONE;", "albums.last_viewed_at")
+        safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP WITH TIME ZONE;", "albums.reminder_sent_at")
 
-        # Raw SQL UPDATE statements to sanitize existing NULLs in albums
-        conn.execute(text("UPDATE albums SET title = 'Untitled Album' WHERE title IS NULL;"))
-        conn.execute(text("UPDATE albums SET client_name = 'Valued Client' WHERE client_name IS NULL;"))
-        conn.execute(text("UPDATE albums SET is_locked = FALSE WHERE is_locked IS NULL;"))
-        conn.execute(text("UPDATE albums SET allow_download = FALSE WHERE allow_download IS NULL;"))
-        conn.execute(text("UPDATE albums SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL;"))
-        conn.execute(text("UPDATE albums SET view_count = 0 WHERE view_count IS NULL;"))
+        # Sanitize existing NULLs in albums
+        safe_execute_ddl("UPDATE albums SET title = 'Untitled Album' WHERE title IS NULL;", "sanitize albums.title")
+        safe_execute_ddl("UPDATE albums SET client_name = 'Valued Client' WHERE client_name IS NULL;", "sanitize albums.client_name")
+        safe_execute_ddl("UPDATE albums SET is_locked = FALSE WHERE is_locked IS NULL;", "sanitize albums.is_locked")
+        safe_execute_ddl("UPDATE albums SET allow_download = FALSE WHERE allow_download IS NULL;", "sanitize albums.allow_download")
+        safe_execute_ddl("UPDATE albums SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL;", "sanitize albums.created_at")
+        safe_execute_ddl("UPDATE albums SET view_count = 0 WHERE view_count IS NULL;", "sanitize albums.view_count")
 
         # Media items table schema migrations
-        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS filename VARCHAR(255) DEFAULT 'photo.jpg';"))
-        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS url VARCHAR(1024);"))
-        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS thumbnail_url VARCHAR(1024);"))
-        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS original_size BIGINT DEFAULT 0;"))
-        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS compressed_size BIGINT DEFAULT 0;"))
-        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS is_selected BOOLEAN DEFAULT FALSE;"))
-        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS client_notes VARCHAR(1000);"))
-        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS face_encodings JSON;"))
-        conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
+        safe_execute_ddl("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS filename VARCHAR(255) DEFAULT 'photo.jpg';", "media_items.filename")
+        safe_execute_ddl("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS url VARCHAR(1024);", "media_items.url")
+        safe_execute_ddl("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS thumbnail_url VARCHAR(1024);", "media_items.thumbnail_url")
+        safe_execute_ddl("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS original_size BIGINT DEFAULT 0;", "media_items.original_size")
+        safe_execute_ddl("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS compressed_size BIGINT DEFAULT 0;", "media_items.compressed_size")
+        safe_execute_ddl("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS is_selected BOOLEAN DEFAULT FALSE;", "media_items.is_selected")
+        safe_execute_ddl("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS client_notes VARCHAR(1000);", "media_items.client_notes")
+        safe_execute_ddl("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS face_encodings JSON;", "media_items.face_encodings")
+        safe_execute_ddl("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;", "media_items.created_at")
 
-        # Raw SQL UPDATE statements to sanitize existing NULLs in media items
-        conn.execute(text("UPDATE media_items SET filename = 'photo.jpg' WHERE filename IS NULL;"))
-        conn.execute(text("UPDATE media_items SET is_selected = FALSE WHERE is_selected IS NULL;"))
-        conn.execute(text("UPDATE media_items SET original_size = 0 WHERE original_size IS NULL;"))
-        conn.execute(text("UPDATE media_items SET compressed_size = 0 WHERE compressed_size IS NULL;"))
-        conn.execute(text("UPDATE media_items SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL;"))
+        # Sanitize existing NULLs in media items
+        safe_execute_ddl("UPDATE media_items SET filename = 'photo.jpg' WHERE filename IS NULL;", "sanitize media_items.filename")
+        safe_execute_ddl("UPDATE media_items SET is_selected = FALSE WHERE is_selected IS NULL;", "sanitize media_items.is_selected")
+        safe_execute_ddl("UPDATE media_items SET original_size = 0 WHERE original_size IS NULL;", "sanitize media_items.original_size")
+        safe_execute_ddl("UPDATE media_items SET compressed_size = 0 WHERE compressed_size IS NULL;", "sanitize media_items.compressed_size")
+        safe_execute_ddl("UPDATE media_items SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL;", "sanitize media_items.created_at")
         
-        # Safe table creation & migration for PaymentReceipts (Telebirr/CBE manual upgrade workflow)
-        conn.execute(text("""
+        # Payment receipts table creation & indexing
+        safe_execute_ddl("""
             CREATE TABLE IF NOT EXISTS payment_receipts (
                 id SERIAL PRIMARY KEY,
                 photographer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -171,14 +167,17 @@ def run_db_migrations():
                 status VARCHAR(50) DEFAULT 'pending' NOT NULL,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
             );
-        """))
-        conn.execute(text("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS transaction_ref VARCHAR(100);"))
-        conn.execute(text("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS amount DOUBLE PRECISION;"))
-        conn.execute(text("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT 'telebirr';"))
-        conn.execute(text("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending';"))
-        conn.execute(text("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_payment_receipts_transaction_ref ON payment_receipts(transaction_ref);"))
-    logger.info("[PhotoGuard DB] Schema auto-migration completed successfully.")
+        """, "create payment_receipts table")
+        safe_execute_ddl("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS transaction_ref VARCHAR(100);", "payment_receipts.transaction_ref")
+        safe_execute_ddl("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS amount DOUBLE PRECISION;", "payment_receipts.amount")
+        safe_execute_ddl("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT 'telebirr';", "payment_receipts.payment_method")
+        safe_execute_ddl("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending';", "payment_receipts.status")
+        safe_execute_ddl("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;", "payment_receipts.created_at")
+        safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_payment_receipts_transaction_ref ON payment_receipts(transaction_ref);", "index payment_receipts.transaction_ref")
+        
+        logger.info("[PhotoGuard DB] Schema auto-migration step finalized.")
+    except Exception as exc:
+        logger.warning(f"[PhotoGuard DB] Top-level migration warning (non-fatal): {exc}")
 
 SAFE_ADMIN_FALLBACK_PASSWORD = "Admin@123!"
 DEFAULT_ADMIN_EMAIL = "admin@photoguard.com"
@@ -186,16 +185,16 @@ DEFAULT_ADMIN_EMAIL = "admin@photoguard.com"
 def seed_root_admin():
     """
     Bulletproof Root Admin Seeder with Multi-Tier Fallbacks.
-    - Reads ADMIN_EMAIL and ADMIN_PASSWORD from os.getenv.
+    - Reads ADMIN_EMAIL and ADMIN_PASSWORD from os.environ.
     - If ADMIN_PASSWORD is None, empty, whitespace, longer than 70 chars (bcrypt max 72),
       or raises any hashing/encoding error, it safely discards it and falls back to 'Admin@123!'.
     - Never crashes during startup; catches all hashing/database exceptions with rollbacks.
     - Guarantees role=UserRole.ADMIN, is_active=True, is_verified=True, needs_password_change=False.
     """
-    raw_admin_email = os.getenv("ADMIN_EMAIL", "").strip().lower()
+    raw_admin_email = os.environ.get("ADMIN_EMAIL", "").strip().lower()
     admin_email = raw_admin_email if raw_admin_email else DEFAULT_ADMIN_EMAIL
 
-    raw_admin_pw = os.getenv("ADMIN_PASSWORD", "")
+    raw_admin_pw = os.environ.get("ADMIN_PASSWORD", "")
     
     # Audit & sanitize password length for bcrypt safety (bcrypt limit is 72 bytes)
     if not raw_admin_pw or len(raw_admin_pw) > 70:
@@ -235,7 +234,7 @@ def seed_root_admin():
             user = db.query(User).filter(User.email == email_item).first()
             if user:
                 logger.info(f"[PhotoGuard Seeder] Synchronizing existing user '{email_item}' as verified Root Admin...")
-                user.role = UserRole.ADMIN
+                user.role = "admin"
                 user.hashed_password = new_hash
                 user.full_name = user.full_name or "Root Administrator"
                 user.is_active = True
@@ -253,7 +252,7 @@ def seed_root_admin():
                     email=email_item,
                     hashed_password=new_hash,
                     full_name="Root Administrator",
-                    role=UserRole.ADMIN,
+                    role="admin",
                     subscription_plan="studio",
                     plan="studio",
                     is_active=True,
@@ -303,22 +302,32 @@ def seed_root_admin():
 async def lifespan(app: FastAPI):
     """
     Application startup and shutdown lifespan management.
-    Runs DDL schema creation, column auto-migrations, and seeds root admin.
+    Runs DDL schema creation, column auto-migrations, and seeds root admin safely.
+    Catches all exceptions so Uvicorn startup never aborts with status 1.
     """
     logger.info("[PhotoGuard Lifecycle] Application booting up...")
     try:
         # 1. Ensure all tables defined by SQLAlchemy Base exist
-        Base.metadata.create_all(bind=engine)
-        logger.info("[PhotoGuard Lifecycle] Base.metadata.create_all completed.")
+        try:
+            Base.metadata.create_all(bind=engine)
+            logger.info("[PhotoGuard Lifecycle] Base.metadata.create_all completed.")
+        except Exception as table_err:
+            logger.warning(f"[PhotoGuard Lifecycle] Base.metadata.create_all warning: {table_err}")
         
-        # 2. Execute incremental auto-migrations
-        run_db_migrations()
+        # 2. Execute incremental auto-migrations safely
+        try:
+            run_db_migrations()
+        except Exception as mig_err:
+            logger.warning(f"[PhotoGuard Lifecycle] run_db_migrations warning: {mig_err}")
         
-        # 3. Seed Root Admin
-        seed_result = seed_root_admin()
-        logger.info(f"[PhotoGuard Lifecycle] Seed result: {seed_result}")
+        # 3. Seed Root Admin safely
+        try:
+            seed_result = seed_root_admin()
+            logger.info(f"[PhotoGuard Lifecycle] Seed result: {seed_result}")
+        except Exception as seed_err:
+            logger.warning(f"[PhotoGuard Lifecycle] seed_root_admin warning: {seed_err}")
     except Exception as exc:
-        logger.critical(f"[PhotoGuard Lifecycle Error] Startup sequence failed: {exc}\n{traceback.format_exc()}")
+        logger.critical(f"[PhotoGuard Lifecycle Error] Non-fatal startup sequence error: {exc}\n{traceback.format_exc()}")
     
     yield
     logger.info("[PhotoGuard Lifecycle] Application shutting down.")
@@ -386,7 +395,10 @@ def force_seed_admin_endpoint():
     """
     try:
         # Step 1: Ensure tables exist
-        Base.metadata.create_all(bind=engine)
+        try:
+            Base.metadata.create_all(bind=engine)
+        except Exception as e:
+            logger.warning(f"Base.metadata.create_all error: {e}")
         
         # Step 2: Ensure migrations ran
         run_db_migrations()
@@ -481,7 +493,7 @@ def health_check(db: Session = Depends(get_db)):
             "status": "operational",
             "service": "PhotoGuard API",
             "database": "connected",
-            "environment": os.getenv("ENVIRONMENT", "production"),
+            "environment": os.environ.get("ENVIRONMENT", "production"),
             "version": "7.0.0"
         }
     except Exception as exc:

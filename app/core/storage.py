@@ -6,39 +6,44 @@ import boto3
 from botocore.client import Config
 from fastapi import UploadFile
 from dotenv import load_dotenv
-import cloudinary
-import cloudinary.uploader
 
 load_dotenv()
 
 logger = logging.getLogger("photoguard.storage")
 
 # Cloudinary Permanent Cloud Storage Configuration
-CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
-CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY")
-CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET")
+CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME")
+CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY")
+CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET")
 
 is_cloudinary_initialized = False
-if CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET:
-    try:
+
+try:
+    import cloudinary
+    import cloudinary.uploader
+
+    if CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET:
         cloudinary.config(
-            cloud_name=CLOUDINARY_CLOUD_NAME,
-            api_key=CLOUDINARY_API_KEY,
-            api_secret=CLOUDINARY_API_SECRET,
+            cloud_name=str(CLOUDINARY_CLOUD_NAME).strip(),
+            api_key=str(CLOUDINARY_API_KEY).strip(),
+            api_secret=str(CLOUDINARY_API_SECRET).strip(),
             secure=True
         )
         is_cloudinary_initialized = True
         logger.info("[Storage] Cloudinary permanent storage initialized successfully.")
-    except Exception as c_err:
-        logger.warning(f"[Storage] Cloudinary init warning: {c_err}")
+    else:
+        logger.info("[Storage] Cloudinary environment variables missing or incomplete. Using fallback storage.")
+except Exception as c_err:
+    logger.warning(f"[Storage] Cloudinary initialization safely caught exception: {c_err}")
+    is_cloudinary_initialized = False
 
 def is_cloudinary_configured() -> bool:
     """Checks whether valid Cloudinary credentials are provided in environment."""
     return bool(
         is_cloudinary_initialized or (
-            os.getenv("CLOUDINARY_CLOUD_NAME") and
-            os.getenv("CLOUDINARY_API_KEY") and
-            os.getenv("CLOUDINARY_API_SECRET")
+            os.environ.get("CLOUDINARY_CLOUD_NAME") and
+            os.environ.get("CLOUDINARY_API_KEY") and
+            os.environ.get("CLOUDINARY_API_SECRET")
         )
     )
 
@@ -49,6 +54,8 @@ def upload_file_to_cloudinary(file_bytes: bytes, filename: str, folder: str = "p
     """
     if not is_cloudinary_configured():
         raise ValueError("Cloudinary credentials are not configured.")
+
+    import cloudinary.uploader
 
     base_name = os.path.splitext(filename)[0]
     clean_base = "".join(c for c in base_name if c.isalnum() or c in ("-", "_")).strip()[:40]
@@ -67,7 +74,7 @@ def upload_file_to_cloudinary(file_bytes: bytes, filename: str, folder: str = "p
 
     # Generate responsive WebP thumbnail transformation on-the-fly
     thumbnail_url = secure_url
-    if "/upload/" in secure_url:
+    if secure_url and "/upload/" in secure_url:
         thumbnail_url = secure_url.replace(
             "/upload/",
             "/upload/c_limit,w_600,q_auto:good,f_auto/"
@@ -85,6 +92,8 @@ def delete_file_from_cloudinary(public_id_or_url: str) -> bool:
     """
     if not is_cloudinary_configured() or not public_id_or_url:
         return False
+
+    import cloudinary.uploader
 
     public_id = public_id_or_url
     if "res.cloudinary.com" in public_id_or_url:
@@ -111,13 +120,13 @@ def delete_file_from_cloudinary(public_id_or_url: str) -> bool:
         logger.warning(f"[Cloudinary] Error destroying asset {public_id}: {exc}")
         return False
 
-S3_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL")
-S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY")
-S3_SECRET_KEY = os.getenv("S3_SECRET_KEY")
-S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "photoguard-production")
+S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL")
+S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
+S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
+S3_BUCKET_NAME = os.environ.get("S3_BUCKET_NAME", "photoguard-production")
 
-CLOUDFLARE_CDN_DOMAIN = os.getenv("CLOUDFLARE_CDN_DOMAIN", "https://cdn.photoguard.com")
-IMAGEKIT_URL_ENDPOINT = os.getenv("IMAGEKIT_URL_ENDPOINT", "https://ik.imagekit.io/photoguard")
+CLOUDFLARE_CDN_DOMAIN = os.environ.get("CLOUDFLARE_CDN_DOMAIN", "https://cdn.photoguard.com")
+IMAGEKIT_URL_ENDPOINT = os.environ.get("IMAGEKIT_URL_ENDPOINT", "https://ik.imagekit.io/photoguard")
 
 # Local storage fallback directory
 UPLOADS_DIR = os.path.join(os.getcwd(), "uploads")
@@ -127,7 +136,11 @@ _s3_client = None
 
 def is_s3_configured() -> bool:
     """Checks whether valid S3/IDrive e2 credentials and endpoint are present."""
-    return bool(S3_ACCESS_KEY and S3_SECRET_KEY and S3_ENDPOINT_URL)
+    return bool(
+        os.environ.get("S3_ACCESS_KEY") and
+        os.environ.get("S3_SECRET_KEY") and
+        os.environ.get("S3_ENDPOINT_URL")
+    )
 
 def get_s3_client():
     """
@@ -139,13 +152,17 @@ def get_s3_client():
             raise ValueError(
                 "IDrive e2 storage credentials (S3_ENDPOINT_URL, S3_ACCESS_KEY, S3_SECRET_KEY) are not configured."
             )
-        _s3_client = boto3.client(
-            "s3",
-            endpoint_url=S3_ENDPOINT_URL,
-            aws_access_key_id=S3_ACCESS_KEY,
-            aws_secret_access_key=S3_SECRET_KEY,
-            config=Config(signature_version="s3v4", s3={"addressing_style": "virtual"}),
-        )
+        try:
+            _s3_client = boto3.client(
+                "s3",
+                endpoint_url=os.environ.get("S3_ENDPOINT_URL"),
+                aws_access_key_id=os.environ.get("S3_ACCESS_KEY"),
+                aws_secret_access_key=os.environ.get("S3_SECRET_KEY"),
+                config=Config(signature_version="s3v4", s3={"addressing_style": "virtual"}),
+            )
+        except Exception as s3_err:
+            logger.error(f"[Storage] Failed to initialize S3 client: {s3_err}")
+            raise
     return _s3_client
 
 def save_file_locally(file_bytes: bytes, filename: str) -> str:

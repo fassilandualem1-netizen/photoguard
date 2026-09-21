@@ -344,6 +344,17 @@ async def upload_logo_v1_alias(
     from app.api.auth import upload_studio_logo
     return await upload_studio_logo(file=file, db=db, current_user=current_user)
 
+# Direct alias for user password change
+@app.put("/api/v1/users/change-password", response_model=UserResponse, tags=["User Profile"])
+@app.post("/api/v1/users/change-password", response_model=UserResponse, tags=["User Profile"])
+def change_password_users_alias(
+    payload: PasswordChangeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.api.auth import change_password
+    return change_password(payload=payload, db=db, current_user=current_user)
+
 # Direct root webhook alias for Telegram Bot API
 @app.post("/webhook", tags=["Telegram Integration"])
 async def root_telegram_webhook(request: Request, db: Session = Depends(get_db)):

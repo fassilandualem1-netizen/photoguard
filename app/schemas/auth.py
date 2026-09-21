@@ -12,7 +12,9 @@ class RegisterRequest(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=255, description="Photographer full name or studio name")
 
 class PasswordChangeRequest(BaseModel):
+    current_password: Optional[str] = Field(None, description="Current password for verification")
     new_password: str = Field(..., min_length=6, description="New secure password for the user account")
+    confirm_password: Optional[str] = Field(None, min_length=6, description="Confirmation of new password")
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=1, max_length=255, description="Updated full name")

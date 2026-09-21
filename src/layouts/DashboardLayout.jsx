@@ -12,8 +12,10 @@ import {
   HardDrive,
   ExternalLink,
   Sparkles,
+  LifeBuoy,
 } from "lucide-react";
 import ProfileSettingsModal from "../components/ProfileSettingsModal";
+import ChangePasswordModal from "../components/ChangePasswordModal";
 
 export default function DashboardLayout({
   children,
@@ -24,6 +26,7 @@ export default function DashboardLayout({
   const { user, logout, refreshProfile } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const menuRef = useRef(null);
 
   // Close menu when clicking outside
@@ -194,13 +197,31 @@ export default function DashboardLayout({
                     type="button"
                     onClick={() => {
                       setIsMenuOpen(false);
-                      onChangePasswordClick();
+                      setIsChangePasswordModalOpen(true);
+                      if (typeof onChangePasswordClick === "function") {
+                        onChangePasswordClick();
+                      }
                     }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
                   >
                     <KeyRound className="w-4 h-4 text-slate-400" />
                     <span>Change Password</span>
                   </button>
+
+                  <a
+                    id="menu-support-link"
+                    href="https://t.me/fassilandualem"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-slate-300 hover:text-sky-300 hover:bg-slate-800/60 transition-colors text-left group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <LifeBuoy className="w-4 h-4 text-sky-400" />
+                      <span>Support</span>
+                    </div>
+                    <ExternalLink className="w-3.5 h-3.5 text-slate-500 group-hover:text-sky-400 transition-colors" />
+                  </a>
                 </div>
 
                 {/* Logout Action */}
@@ -233,6 +254,12 @@ export default function DashboardLayout({
       <ProfileSettingsModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
+      />
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordModalOpen}
+        onClose={() => setIsChangePasswordModalOpen(false)}
       />
     </div>
   );

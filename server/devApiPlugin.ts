@@ -422,7 +422,7 @@ export function devApiPlugin(): Plugin {
           }
 
           // 7. Password Change
-          if (url === '/api/auth/change-password' && method === 'PUT') {
+          if ((url === '/api/auth/change-password' || url === '/api/v1/auth/change-password' || url === '/api/v1/users/change-password') && (method === 'PUT' || method === 'POST')) {
             const body = await parseJsonBody(req);
             const authHeader = req.headers['authorization'] || '';
             const token = authHeader.replace('Bearer ', '').trim();
@@ -431,9 +431,37 @@ export function devApiPlugin(): Plugin {
               return sendJson(res, 401, { detail: 'Unauthorized' });
             }
 
+            if (!body.new_password || String(body.new_password).trim().length < 6) {
+              return sendJson(res, 400, { detail: 'New password must be at least 6 characters long.' });
+            }
+
+            if (body.confirm_password && body.confirm_password !== body.new_password) {
+              return sendJson(res, 400, { detail: 'New passwords do not match.' });
+            }
+
             let updatedUserRow: any = null;
             if (client && body.new_password) {
               await client.connect();
+
+              // Verify current password if user row exists
+              if (body.current_password) {
+                const existing = await client.query('SELECT hashed_password, needs_password_change FROM users WHERE id = $1', [decoded.sub]);
+                if (existing.rows.length > 0) {
+                  const currentHash = existing.rows[0].hashed_password || '';
+                  if (currentHash.startsWith('pbkdf2_sha256$')) {
+                    const parts = currentHash.split('$');
+                    if (parts.length === 4) {
+                      const salt = parts[2];
+                      const derived = crypto.pbkdf2Sync(body.current_password, Buffer.from(salt, 'utf-8'), 100000, 32, 'sha256').toString('hex');
+                      if (derived !== parts[3]) {
+                        await client.end();
+                        return sendJson(res, 400, { detail: 'Current password is incorrect.' });
+                      }
+                    }
+                  }
+                }
+              }
+
               const salt = crypto.randomBytes(16).toString('hex');
               const derived = crypto.pbkdf2Sync(body.new_password, Buffer.from(salt, 'utf-8'), 100000, 32, 'sha256').toString('hex');
               const newHash = `pbkdf2_sha256$100000$${salt}$${derived}`;
@@ -455,6 +483,7 @@ export function devApiPlugin(): Plugin {
               needs_password_change: false,
               storage_quota_limit: Number(updatedUserRow?.storage_quota_limit) || 5368709120,
               storage_used: Number(updatedUserRow?.storage_used) || 0,
+              studio_logo_url: updatedUserRow?.studio_logo_url || null,
               brand_color: updatedUserRow?.brand_color || '#F59E0B'
             });
           }

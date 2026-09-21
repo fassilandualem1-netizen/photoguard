@@ -146,28 +146,53 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     )
 
 @router.put("/change-password", response_model=UserResponse, status_code=status.HTTP_200_OK)
+@router.post("/change-password", response_model=UserResponse, status_code=status.HTTP_200_OK)
 def change_password(
     payload: PasswordChangeRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Enterprise First-Login Password Change endpoint.
-    Accepts new_password, hashes it securely, sets needs_password_change = False,
-    and commits the transaction wrapped in strict try...except with db.rollback().
+    Secure Password Change endpoint for authenticated users.
+    Verifies current_password (mandatory unless needs_password_change is True),
+    validates new_password constraints, hashes securely, and marks needs_password_change = False.
     """
-    if len(payload.new_password.strip()) < 6:
+    # 1. Verify current password if provided
+    if payload.current_password:
+        if not verify_password(payload.current_password, current_user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password is incorrect."
+            )
+    elif not current_user.needs_password_change:
+        # If user is not in forced-first-change mode, require current password
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is required to change your password."
+        )
+
+    # 2. Validate new password length
+    new_pw = payload.new_password.strip() if payload.new_password else ""
+    if len(new_pw) < 6:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="New password must be at least 6 characters long."
         )
 
+    # 3. Validate confirmation password match if provided
+    if payload.confirm_password is not None and payload.confirm_password != payload.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New passwords do not match."
+        )
+
     try:
-        current_user.hashed_password = get_password_hash(payload.new_password)
+        current_user.hashed_password = get_password_hash(new_pw)
         current_user.needs_password_change = False
 
         db.commit()
         db.refresh(current_user)
+        logger.info(f"[Auth] Successfully updated password for user id={current_user.id} ({current_user.email})")
         return UserResponse.model_validate(current_user)
     except SQLAlchemyError as exc:
         db.rollback()

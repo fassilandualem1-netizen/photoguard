@@ -128,10 +128,18 @@ export const AuthProvider = ({ children }) => {
     return userData;
   };
 
-  const changePassword = async (newPassword) => {
-    const response = await api.put("/api/auth/change-password", {
-      new_password: newPassword,
-    });
+  const changePassword = async (payloadOrNewPassword, currentPassword = null) => {
+    let payload = {};
+    if (typeof payloadOrNewPassword === "object" && payloadOrNewPassword !== null) {
+      payload = payloadOrNewPassword;
+    } else {
+      payload = {
+        new_password: payloadOrNewPassword,
+        ...(currentPassword ? { current_password: currentPassword } : {})
+      };
+    }
+
+    const response = await api.put("/api/auth/change-password", payload);
 
     const updatedUser = {
       ...(user || {}),

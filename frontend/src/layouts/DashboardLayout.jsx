@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
 import {
@@ -103,6 +104,17 @@ export default function DashboardLayout({
             </div>
           </div>
 
+          {/* Admin Back-to-Command Switcher */}
+          {user?.role === "admin" && (
+            <Link
+              to="/admin"
+              id="back-to-admin-btn"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 hover:text-white text-xs font-semibold transition-all shadow-sm"
+            >
+              <span>← Back to Admin Center</span>
+            </Link>
+          )}
+
           {/* Clean Hamburger Menu Trigger */}
           <div className="relative" ref={menuRef}>
             <button
@@ -154,6 +166,16 @@ export default function DashboardLayout({
 
                 {/* Menu Items */}
                 <div className="py-1">
+                  {user?.role === "admin" && (
+                    <Link
+                      to="/admin"
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-indigo-300 hover:text-white hover:bg-indigo-950/40 transition-colors text-left"
+                    >
+                      <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                      <span>Switch to Admin Center</span>
+                    </Link>
+                  )}
+
                   <button
                     id="menu-profile-btn"
                     type="button"

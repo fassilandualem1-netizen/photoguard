@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -244,6 +245,14 @@ export default function AdminDashboard() {
           </div>
 
           <div className="flex items-center gap-3">
+            <Link
+              to="/dashboard"
+              id="admin-to-galleries-link"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 hover:text-amber-200 text-xs font-semibold transition-all shadow-sm"
+            >
+              <span>Photographer Galleries & Proofs</span>
+              <span className="text-amber-400 font-bold">→</span>
+            </Link>
             <button
               onClick={fetchData}
               className="p-2 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-indigo-300 border border-slate-800 transition-colors"
@@ -361,7 +370,7 @@ export default function AdminDashboard() {
               </span>
             </div>
             <p className="mt-1 text-[11px] text-slate-500">
-              PostgreSQL • Upstash Polling Active
+              Cloud Infrastructure & Live Sync Active
             </p>
           </div>
         </section>

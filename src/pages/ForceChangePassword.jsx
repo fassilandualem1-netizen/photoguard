@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { KeyRound, ShieldAlert, CheckCircle2, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { KeyRound, CheckCircle2, AlertCircle, Eye, EyeOff } from "lucide-react";
 
 export default function ForceChangePassword({ onPasswordChanged }) {
   const { changePassword, logout } = useAuth();

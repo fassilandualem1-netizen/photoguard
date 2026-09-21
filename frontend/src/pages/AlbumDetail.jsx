@@ -28,6 +28,8 @@ import {
   MessageCircle,
   X,
   ZoomIn,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 export default function AlbumDetail() {
@@ -280,13 +282,13 @@ export default function AlbumDetail() {
   const shareText = `Your private proof gallery is ready! Access PIN: ${albumPin}. Download the PhotoGuard app here: https://photoguard.com/app`;
 
   const handleWhatsAppShare = () => {
-    const waUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
     window.open(waUrl, "_blank", "noopener,noreferrer");
     setIsShareOpen(false);
   };
 
   const handleTelegramShare = () => {
-    const tgUrl = `https://t.me/share/url?url=${encodeURIComponent("https://photoguard.com/app")}&text=${encodeURIComponent(`Your private proof gallery "${album?.title || "Session"}" is ready! Access PIN: ${albumPin}`)}`;
+    const tgUrl = `https://t.me/share/url?url=${encodeURIComponent("https://photoguard.com/app")}&text=${encodeURIComponent(shareText)}`;
     window.open(tgUrl, "_blank", "noopener,noreferrer");
     setIsShareOpen(false);
   };
@@ -302,50 +304,40 @@ export default function AlbumDetail() {
     setIsShareOpen(false);
   };
 
-  // NATIVE EXPORT ENGINES - Targets ORIGINAL URLs for lossless editing
-  const handleOpenLightroom = () => {
-    if (exportItems.length === 0) return;
-    console.log(
-      "Opening Lightroom with ORIGINAL RAW/JPEG URLs:",
-      exportItems.map((item) => ({ filename: item.filename, original_url: item.url }))
-    );
-
-    // Deep link integration / batch open
-    exportItems.slice(0, 5).forEach((item) => {
-      window.open(item.url, "_blank");
-    });
-    if (exportItems.length > 5) {
-      alert(
-        `Opened first 5 original files. For all ${exportItems.length} photos, use 'Copy Original URLs' or 'Download Manifest' to import directly into Lightroom.`
-      );
+  // RAW TXT MANIFEST EXPORT: Pure high-res URLs, one per line (\n). No JSON, no quotes, no commas.
+  const handleExportRawManifest = () => {
+    if (exportItems.length === 0) {
+      alert("No photos in this gallery to export.");
+      return;
     }
-    setIsExportOpen(false);
-  };
+    // Clean raw URLs only: one URL per line separated by \n
+    // STRICTLY NO JSON brackets, NO quotes, NO commas.
+    const rawUrls = exportItems
+      .map((item) => item.url)
+      .filter((u) => Boolean(u && typeof u === "string"))
+      .join("\n");
 
-  const handleOpenPhotoshop = () => {
-    if (exportItems.length === 0) return;
-    console.log(
-      "Opening Photoshop with ORIGINAL RAW/JPEG URLs:",
-      exportItems.map((item) => ({ filename: item.filename, original_url: item.url }))
-    );
-
-    // Deep link integration / batch open
-    exportItems.slice(0, 5).forEach((item) => {
-      window.open(item.url, "_blank");
-    });
-    if (exportItems.length > 5) {
-      alert(
-        `Opened first 5 original files. For all ${exportItems.length} photos, use 'Copy Original URLs' or 'Download Manifest' to import directly into Photoshop.`
-      );
-    }
+    const blob = new Blob([rawUrls], { type: "text/plain;charset=utf-8" });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    const cleanAlbumTitle = (album?.title || "gallery").replace(/[^a-zA-Z0-9_-]/g, "_");
+    link.download = `${cleanAlbumTitle}_highres_urls.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
     setIsExportOpen(false);
   };
 
   const handleCopyOriginalUrls = async () => {
     if (exportItems.length === 0) return;
-    const urlsText = exportItems.map((item) => item.url).join("\n");
+    const rawUrls = exportItems
+      .map((item) => item.url)
+      .filter((u) => Boolean(u && typeof u === "string"))
+      .join("\n");
     try {
-      await navigator.clipboard.writeText(urlsText);
+      await navigator.clipboard.writeText(rawUrls);
       setCopiedUrls(true);
       setTimeout(() => setCopiedUrls(false), 2500);
     } catch {
@@ -354,25 +346,38 @@ export default function AlbumDetail() {
     setIsExportOpen(false);
   };
 
+  const handlePrevPhoto = () => {
+    if (!previewPhoto || media.length === 0) return;
+    const currentIndex = media.findIndex((p) => p.id === previewPhoto.id);
+    const prevIndex = (currentIndex - 1 + media.length) % media.length;
+    setPreviewPhoto(media[prevIndex]);
+  };
+
+  const handleNextPhoto = () => {
+    if (!previewPhoto || media.length === 0) return;
+    const currentIndex = media.findIndex((p) => p.id === previewPhoto.id);
+    const nextIndex = (currentIndex + 1) % media.length;
+    setPreviewPhoto(media[nextIndex]);
+  };
+
+  // Keyboard navigation for Lightbox Photo Scanner (ArrowLeft, ArrowRight, Escape)
+  useEffect(() => {
+    if (!previewPhoto) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setPreviewPhoto(null);
+      } else if (e.key === "ArrowLeft") {
+        handlePrevPhoto();
+      } else if (e.key === "ArrowRight") {
+        handleNextPhoto();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [previewPhoto, media]);
+
   const handleDownloadManifest = () => {
-    if (exportItems.length === 0) return;
-    const lines = [
-      `# PhotoGuard Original Proof Export Manifest`,
-      `# Album: ${album.title}`,
-      `# Client: ${album.client_name}`,
-      `# Date: ${new Date().toISOString()}`,
-      `# Total Export Files: ${exportItems.length}`,
-      "",
-      ...exportItems.map((item, idx) => `${idx + 1}. ${item.filename} | ${item.url}`),
-    ];
-    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${album.title.replace(/\s+/g, "_")}_original_selections.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setIsExportOpen(false);
+    handleExportRawManifest();
   };
 
   if (loading) {
@@ -428,15 +433,22 @@ export default function AlbumDetail() {
 
   return (
     <div id="album-detail-container" className="space-y-8">
-      {/* Navigation Breadcrumb */}
-      <div className="flex items-center justify-between">
-        <Link
-          to="/dashboard"
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-xs font-medium text-slate-300 hover:text-white transition-all group shadow-sm"
-        >
-          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform text-amber-400" />
-          <span>Back to Galleries</span>
-        </Link>
+      {/* Navigation Breadcrumb & Back Action */}
+      <div className="flex items-center justify-between flex-wrap gap-4 pb-2 border-b border-slate-800/60">
+        <div className="flex items-center gap-3">
+          <Link
+            to="/dashboard"
+            id="back-to-galleries-link"
+            className="inline-flex items-center gap-2.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-xs sm:text-sm font-semibold text-slate-200 hover:text-white transition-all group shadow-md shadow-black/40 hover:border-amber-500/50"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform text-amber-400 shrink-0" />
+            <span>Back to Galleries</span>
+          </Link>
+          <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 font-medium">
+            <span>/</span>
+            <span className="text-slate-300 truncate max-w-xs">{album.title}</span>
+          </div>
+        </div>
 
         <div className="flex items-center gap-3">
           {extendSuccessMsg && (
@@ -461,7 +473,7 @@ export default function AlbumDetail() {
       </div>
 
       {/* Top Header Section */}
-      <div className="p-6 sm:p-8 rounded-3xl border border-slate-800/90 bg-gradient-to-br from-slate-900/90 via-slate-900/50 to-[#0d0f12] backdrop-blur-xl shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+      <div className="relative z-40 p-6 sm:p-8 rounded-3xl border border-slate-800/90 bg-gradient-to-br from-slate-900/90 via-slate-900/50 to-[#0d0f12] backdrop-blur-xl shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
@@ -512,7 +524,7 @@ export default function AlbumDetail() {
         </div>
 
         {/* Prominent Client PIN & Action Buttons */}
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 relative z-50">
           {/* Prominent 6-Digit PIN Pill */}
           <div
             id="client-pin-banner"
@@ -532,12 +544,12 @@ export default function AlbumDetail() {
           </div>
 
           {/* ONE-CLICK CLIENT SHARE DROPDOWN */}
-          <div className="relative" ref={shareDropdownRef}>
+          <div className="relative z-50" ref={shareDropdownRef}>
             <button
               id="share-client-dropdown-btn"
               type="button"
               onClick={() => setIsShareOpen((prev) => !prev)}
-              className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-semibold text-xs transition-all shadow-lg shadow-emerald-500/20"
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-semibold text-xs transition-all shadow-lg shadow-emerald-500/20 cursor-pointer"
               title="Share PIN and app download link directly with client via WhatsApp, Telegram, or message"
             >
               <Share2 className="w-4 h-4 text-slate-950" />
@@ -546,7 +558,7 @@ export default function AlbumDetail() {
             </button>
 
             {isShareOpen && (
-              <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-slate-800 bg-[#141820] p-2.5 shadow-2xl z-40 space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="absolute right-0 top-full mt-2 w-80 sm:w-88 rounded-2xl border border-slate-700/80 bg-[#12161f] p-3 shadow-2xl shadow-black/95 z-50 space-y-2 animate-in fade-in zoom-in-95 duration-150">
                 <div className="px-3 py-2 border-b border-slate-800/80">
                   <p className="text-xs font-semibold text-white flex items-center gap-1.5">
                     <Share2 className="w-3.5 h-3.5 text-emerald-400" />
@@ -557,12 +569,14 @@ export default function AlbumDetail() {
                   </p>
                 </div>
 
-                {/* WhatsApp Share */}
-                <button
-                  type="button"
+                {/* WhatsApp Share Direct Anchor */}
+                <a
                   id="share-whatsapp-btn"
-                  onClick={handleWhatsAppShare}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-emerald-200 hover:text-white bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/20 hover:border-emerald-500/50 transition-all text-left group"
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setIsShareOpen(false)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-emerald-200 hover:text-white bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/20 hover:border-emerald-500/50 transition-all text-left group cursor-pointer relative z-10"
                 >
                   <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0 group-hover:scale-105 transition-transform">
                     <MessageCircle className="w-4 h-4" />
@@ -572,14 +586,16 @@ export default function AlbumDetail() {
                     <div className="text-[10px] text-emerald-400/80">Direct pre-filled chat invite</div>
                   </div>
                   <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-300 transition-colors" />
-                </button>
+                </a>
 
-                {/* Telegram Share */}
-                <button
-                  type="button"
+                {/* Telegram Share Direct Anchor */}
+                <a
                   id="share-telegram-btn"
-                  onClick={handleTelegramShare}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-sky-200 hover:text-white bg-sky-950/40 hover:bg-sky-900/60 border border-sky-500/20 hover:border-sky-500/50 transition-all text-left group"
+                  href={`https://t.me/share/url?url=${encodeURIComponent("https://photoguard.com/app")}&text=${encodeURIComponent(shareText)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setIsShareOpen(false)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-sky-200 hover:text-white bg-sky-950/40 hover:bg-sky-900/60 border border-sky-500/20 hover:border-sky-500/50 transition-all text-left group cursor-pointer relative z-10"
                 >
                   <div className="w-7 h-7 rounded-lg bg-sky-500/20 flex items-center justify-center text-sky-400 shrink-0 group-hover:scale-105 transition-transform">
                     <Send className="w-4 h-4" />
@@ -589,7 +605,7 @@ export default function AlbumDetail() {
                     <div className="text-[10px] text-sky-400/80">Instant messenger broadcast</div>
                   </div>
                   <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-sky-300 transition-colors" />
-                </button>
+                </a>
 
                 <div className="my-1 border-t border-slate-800/80" />
 
@@ -598,7 +614,7 @@ export default function AlbumDetail() {
                   type="button"
                   id="copy-invite-text-btn"
                   onClick={handleCopyInviteMessage}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/70 transition-colors text-left"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/70 transition-colors text-left cursor-pointer relative z-10"
                 >
                   <Copy className="w-4 h-4 text-slate-400 shrink-0" />
                   <span>Copy Full Invitation Text</span>
@@ -619,7 +635,7 @@ export default function AlbumDetail() {
               type="button"
               onClick={handleExtendExpiration}
               disabled={extending}
-              className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 hover:text-amber-200 font-semibold text-xs transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 hover:text-amber-200 font-semibold text-xs transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               title="Add 7 days to this album's lifespan (Studio plan feature)"
             >
               {extending ? (
@@ -631,13 +647,13 @@ export default function AlbumDetail() {
             </button>
           )}
 
-          {/* Export Selections Dropdown (Targets Original URLs) */}
-          <div className="relative" ref={exportDropdownRef}>
+          {/* Export Selections Dropdown (Raw TXT Manifest & URLs) */}
+          <div className="relative z-50" ref={exportDropdownRef}>
             <button
               id="export-selections-dropdown-btn"
               type="button"
               onClick={() => setIsExportOpen((prev) => !prev)}
-              className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700/80 border border-slate-700/80 text-white font-semibold text-xs transition-all shadow-lg"
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700/80 border border-slate-700/80 text-white font-semibold text-xs transition-all shadow-lg cursor-pointer"
             >
               <Sliders className="w-4 h-4 text-amber-400" />
               <span>Export Selections ({selectedItems.length})</span>
@@ -645,52 +661,38 @@ export default function AlbumDetail() {
             </button>
 
             {isExportOpen && (
-              <div className="absolute right-0 mt-2 w-72 rounded-2xl border border-slate-800 bg-[#141820] p-2 shadow-2xl z-30 space-y-1">
+              <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-slate-700/80 bg-[#12161f] p-3 shadow-2xl shadow-black/95 z-50 space-y-2 animate-in fade-in zoom-in-95 duration-150">
                 <div className="px-3 py-2 border-b border-slate-800/80">
-                  <p className="text-xs font-semibold text-white">
-                    Original High-Res Selections
+                  <p className="text-xs font-semibold text-white flex items-center gap-1.5">
+                    <Download className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Raw High-Res URL Manifest</span>
                   </p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Exports original high-resolution photos for professional color grading and retouching.
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                    Generates clean, raw .txt containing only original URLs (one per line) ready for IDM or Adobe ingest.
                   </p>
                 </div>
 
                 <button
                   type="button"
-                  onClick={handleOpenLightroom}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/70 transition-colors text-left"
+                  id="download-raw-txt-btn"
+                  onClick={handleExportRawManifest}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-amber-300 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-colors text-left cursor-pointer relative z-10"
                 >
-                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>Open with Adobe Lightroom</span>
+                  <Download className="w-4 h-4 text-amber-400 shrink-0" />
+                  <div className="flex-1">
+                    <div>Download Raw URLs (.txt)</div>
+                    <div className="text-[10px] text-amber-400/80 font-normal">One URL per line for IDM / Ingest</div>
+                  </div>
                 </button>
 
                 <button
                   type="button"
-                  onClick={handleOpenPhotoshop}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/70 transition-colors text-left"
-                >
-                  <Sliders className="w-4 h-4 text-sky-400 shrink-0" />
-                  <span>Open with Adobe Photoshop</span>
-                </button>
-
-                <div className="my-1 border-t border-slate-800/80" />
-
-                <button
-                  type="button"
+                  id="copy-raw-urls-btn"
                   onClick={handleCopyOriginalUrls}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/70 transition-colors text-left"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/70 transition-colors text-left cursor-pointer relative z-10"
                 >
                   <Copy className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span>Copy Original URLs List</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleDownloadManifest}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/70 transition-colors text-left"
-                >
-                  <FileText className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span>Download Manifest (.txt)</span>
+                  <span>Copy Raw URLs (\n separated)</span>
                 </button>
               </div>
             )}
@@ -845,7 +847,11 @@ export default function AlbumDetail() {
                   className="break-inside-avoid rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden group hover:border-slate-700 transition-all shadow-md relative"
                 >
                   {/* Photo Container */}
-                  <div className="relative overflow-hidden bg-slate-950">
+                  <div
+                    className="relative overflow-hidden bg-slate-950 cursor-pointer"
+                    onClick={() => setPreviewPhoto(item)}
+                    title="Click to view in Photo Scanner"
+                  >
                     <img
                       src={item.thumbnail_url || item.url}
                       alt={item.filename}
@@ -869,7 +875,10 @@ export default function AlbumDetail() {
                     )}
 
                     {/* Hover Quick Actions */}
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[2px]">
+                    <div
+                      className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[2px]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <button
                         type="button"
                         onClick={() => setPreviewPhoto(item)}
@@ -921,56 +930,103 @@ export default function AlbumDetail() {
         )}
       </div>
 
-      {/* Full Resolution Photo Lightbox Modal */}
+      {/* Full Resolution Photo Scanner Lightbox */}
       {previewPhoto && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in"
+          id="photo-lightbox-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-2 sm:p-4 animate-in fade-in select-none"
           onClick={() => setPreviewPhoto(null)}
         >
+          {/* Navigation Arrows for Scanner */}
+          {media.length > 1 && (
+            <>
+              <button
+                type="button"
+                id="lightbox-prev-btn"
+                onClick={handlePrevPhoto}
+                className="fixed left-3 sm:left-6 top-1/2 -translate-y-1/2 z-50 p-3 sm:p-3.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-white hover:text-amber-400 transition-all shadow-2xl backdrop-blur-md group"
+                title="Previous Photo (Left Arrow)"
+              >
+                <ChevronLeft className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" />
+              </button>
+              <button
+                type="button"
+                id="lightbox-next-btn"
+                onClick={handleNextPhoto}
+                className="fixed right-3 sm:right-6 top-1/2 -translate-y-1/2 z-50 p-3 sm:p-3.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-white hover:text-amber-400 transition-all shadow-2xl backdrop-blur-md group"
+                title="Next Photo (Right Arrow)"
+              >
+                <ChevronRight className="w-6 h-6 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            </>
+          )}
+
           <div
-            className="relative max-w-5xl w-full max-h-[90vh] flex flex-col items-center justify-center"
+            className="relative max-w-6xl w-full max-h-[92vh] flex flex-col items-center justify-center gap-2"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Controls */}
-            <div className="w-full flex items-center justify-between pb-3 text-slate-300">
+            {/* Scanner Controls & Info Header */}
+            <div className="w-full flex items-center justify-between px-3 py-2 rounded-2xl bg-slate-900/80 border border-slate-800 backdrop-blur-md text-slate-300">
               <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-white truncate max-w-xs sm:max-w-md">
+                <span className="text-xs sm:text-sm font-semibold text-white truncate max-w-[180px] sm:max-w-md">
                   {previewPhoto.filename}
                 </span>
+                {media.length > 0 && (
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[11px] font-mono text-slate-300">
+                    {media.findIndex((p) => p.id === previewPhoto.id) + 1} / {media.length}
+                  </span>
+                )}
                 {previewPhoto.original_size && (
-                  <span className="px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-xs font-mono text-amber-400">
-                    {(previewPhoto.original_size / (1024 * 1024)).toFixed(1)} MB
+                  <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[11px] font-mono text-amber-400">
+                    {(previewPhoto.original_size / (1024 * 1024)).toFixed(1)} MB Original
+                  </span>
+                )}
+                {previewPhoto.is_selected && (
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-[11px] font-semibold flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    <span>Selected</span>
                   </span>
                 )}
               </div>
+
               <div className="flex items-center gap-2">
                 <a
                   href={previewPhoto.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 hover:text-white transition-colors flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 hover:text-white transition-colors flex items-center gap-1.5"
+                  title="Open Original High-Resolution File"
                 >
-                  <Eye className="w-3.5 h-3.5" />
-                  <span>Full View</span>
+                  <Eye className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Original View</span>
                 </a>
                 <button
                   type="button"
                   onClick={() => setPreviewPhoto(null)}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white transition-colors"
+                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white transition-colors"
+                  title="Close (Escape)"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            {/* Photo View */}
-            <div className="relative rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 flex items-center justify-center max-h-[80vh]">
+            {/* Photo View Display */}
+            <div className="relative rounded-2xl overflow-hidden border border-slate-800/80 bg-slate-950 flex items-center justify-center max-h-[75vh] w-full shadow-2xl">
               <img
                 src={previewPhoto.url || previewPhoto.thumbnail_url}
                 alt={previewPhoto.filename}
-                className="max-h-[80vh] w-auto object-contain rounded-xl"
+                className="max-h-[75vh] w-auto max-w-full object-contain rounded-xl"
               />
             </div>
+
+            {/* Client Notes / Retouching Instructions Bar */}
+            {previewPhoto.client_notes && (
+              <div className="w-full p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex items-center gap-2">
+                <span className="font-semibold text-white shrink-0">Client Selection Note:</span>
+                <span className="truncate">{previewPhoto.client_notes}</span>
+              </div>
+            )}
           </div>
         </div>
       )}

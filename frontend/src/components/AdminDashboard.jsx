@@ -91,7 +91,7 @@ export default function AdminDashboard() {
       color: "text-emerald-400",
       bgGradient: "from-emerald-500/10 to-transparent",
       borderColor: "border-emerald-500/20",
-      subtext: "Virtual quota tracking across cloud",
+      subtext: "Allocated high-resolution proof storage",
     },
     {
       id: "stat-total-photos",
@@ -170,9 +170,9 @@ export default function AdminDashboard() {
             <ShieldCheck className="w-5 h-5 text-emerald-400" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white">Multi-Cloud Storage & Edge Nodes Operational</h3>
+            <h3 className="text-sm font-semibold text-white">Cloud Storage & Real-Time Sync Operational</h3>
             <p className="text-xs text-slate-400">
-              Cloudinary, ImageKit, and Redis Upstash smart polling sync are running with 100% health.
+              High-resolution proof delivery and collaborative client selection sync are running with 100% reliability.
             </p>
           </div>
         </div>

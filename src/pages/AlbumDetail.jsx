@@ -144,11 +144,15 @@ export default function AlbumDetail() {
     const uploadedItems = [];
     const failedFiles = [];
 
-    // Process in sequential chunks of 3 to avoid browser network queue choking
-    const CHUNK_SIZE = 3;
-    for (let i = 0; i < files.length; i += CHUNK_SIZE) {
-      const chunk = files.slice(i, i + CHUNK_SIZE);
-      const chunkPromises = chunk.map(async (file) => {
+    // High-performance Concurrent Worker Pool (up to 6 simultaneous uploads)
+    const CONCURRENCY_LIMIT = 6;
+    let completedCount = 0;
+    let fileIndex = 0;
+
+    const worker = async () => {
+      while (fileIndex < files.length) {
+        const currentIndex = fileIndex++;
+        const file = files[currentIndex];
         const formData = new FormData();
         formData.append("file", file);
 
@@ -156,27 +160,19 @@ export default function AlbumDetail() {
           const res = await api.post(`/api/v1/media/upload/${id}`, formData, {
             headers: { "Content-Type": "multipart/form-data" },
           });
-          return { status: "fulfilled", value: res.data };
+          uploadedItems.push(res.data);
         } catch (err) {
-          return { status: "rejected", reason: err, filename: file.name };
+          failedFiles.push(file.name);
+        } finally {
+          completedCount++;
+          setUploadProgress({ current: completedCount, total: files.length });
         }
-      });
+      }
+    };
 
-      const results = await Promise.all(chunkPromises);
-
-      results.forEach((result) => {
-        if (result.status === "fulfilled") {
-          uploadedItems.push(result.value);
-        } else {
-          failedFiles.push(result.filename);
-        }
-      });
-
-      setUploadProgress((prev) => ({
-        ...prev,
-        current: Math.min(files.length, i + CHUNK_SIZE),
-      }));
-    }
+    const workerCount = Math.min(CONCURRENCY_LIMIT, files.length);
+    const workers = Array.from({ length: workerCount }, () => worker());
+    await Promise.all(workers);
 
     // Refresh album state with newly uploaded media items
     if (uploadedItems.length > 0) {
@@ -241,7 +237,7 @@ export default function AlbumDetail() {
   };
 
   const handleDeletePhoto = async (mediaId) => {
-    if (!window.confirm("Are you sure you want to remove this photo? Cloud storage will be reclaimed.")) {
+    if (!window.confirm("Are you sure you want to remove this photo from the album?")) {
       return;
     }
     try {
@@ -839,9 +835,9 @@ export default function AlbumDetail() {
         ) : (
           <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
             {mediaItems.map((item) => {
-              const originalMb = item.original_size
-                ? (item.original_size / (1024 * 1024)).toFixed(1)
-                : null;
+              const rawSize = Number(item.original_size || 0);
+              const originalMb = rawSize > 0 ? (rawSize / (1024 * 1024)).toFixed(1) : null;
+              const hasValidSize = originalMb && Number(originalMb) > 0;
 
               return (
                 <div
@@ -870,9 +866,9 @@ export default function AlbumDetail() {
                       </div>
                     )}
 
-                    {/* Original Badge */}
-                    {originalMb && (
-                      <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/75 border border-slate-700/60 text-[10px] font-mono text-slate-300">
+                    {/* Original Badge - only shown if actual original_size > 0 */}
+                    {hasValidSize && (
+                      <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/75 border border-slate-700/60 text-[10px] font-mono text-slate-300 backdrop-blur-sm shadow-sm">
                         {originalMb} MB Original
                       </div>
                     )}
@@ -979,9 +975,9 @@ export default function AlbumDetail() {
                     {mediaItems.findIndex((p) => p.id === previewPhoto.id) + 1} / {mediaItems.length}
                   </span>
                 )}
-                {previewPhoto.original_size && (
+                {Number(previewPhoto.original_size || 0) > 0 && (
                   <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[11px] font-mono text-amber-400">
-                    {(previewPhoto.original_size / (1024 * 1024)).toFixed(1)} MB Original
+                    {(Number(previewPhoto.original_size) / (1024 * 1024)).toFixed(1)} MB Original
                   </span>
                 )}
                 {previewPhoto.is_selected && (

@@ -1,11 +1,13 @@
+import os
 import logging
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.s3_cleanup import delete_file_from_s3
 from app.models.user import User, UserRole
 from app.models.album import Album, MediaItem, generate_album_pin
 from app.schemas.album import (
@@ -421,11 +423,15 @@ def update_album(
 @router.delete("/{album_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_album(
     album_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Deletes an album and cascades removal to all its media items.
+    Deletes an album and cascades removal to all its media items:
+    1. Lifetime Bandwidth Quota: DO NOT decrement storage_used (preserves lifetime upload tracking).
+    2. Physical storage cleanup: Deletes actual media files from S3 or local storage.
+    3. Cascades removal of album and its media records from database.
     """
     album = db.query(Album).filter(Album.id == album_id).first()
     if not album:
@@ -435,6 +441,22 @@ def delete_album(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this album.")
 
     try:
+        # Collect media files for physical storage cleanup prior to DB cascade
+        media_items = album.media_items or []
+        for item in media_items:
+            item_url = item.url
+            if item_url and item_url.startswith("/uploads/"):
+                clean_filename = os.path.basename(item_url)
+                local_filepath = os.path.join(os.getcwd(), "uploads", clean_filename)
+                if os.path.exists(local_filepath):
+                    try:
+                        os.remove(local_filepath)
+                    except Exception as del_f_err:
+                        logger.warning(f"Could not remove local file {local_filepath}: {del_f_err}")
+            elif item_url:
+                background_tasks.add_task(delete_file_from_s3, item_url)
+
+        # Note: Do NOT subtract from user's storage_used. It tracks lifetime upload bandwidth!
         db.delete(album)
         db.commit()
         return None

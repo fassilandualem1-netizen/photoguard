@@ -188,7 +188,7 @@ def delete_media_item(
 ):
     """
     Deletes a media item:
-    1. Reclaims virtual storage quota (subtracts item.original_size from photographer.storage_used).
+    1. Lifetime Bandwidth Quota: DO NOT decrement storage_used (preserves lifetime upload tracking).
     2. Physical storage cleanup: Deletes actual high-res object from S3 or local storage.
     3. Wrapped in strict try...except with db.rollback().
     """
@@ -204,16 +204,11 @@ def delete_media_item(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     item_url = item.url
-    item_original_size = item.original_size or 0
     album_pin = album.pin
-    photographer = db.query(User).filter(User.id == album.photographer_id).first()
 
     try:
-        # Reclaim virtual storage quota
-        if photographer and photographer.storage_used >= item_original_size:
-            photographer.storage_used -= item_original_size
-        elif photographer:
-            photographer.storage_used = max(0, photographer.storage_used - item_original_size)
+        # Note: We intentionally DO NOT subtract item.original_size from photographer.storage_used.
+        # The storage_used field represents lifetime upload bandwidth quota to drive tier upgrades.
 
         db.delete(item)
         db.commit()

@@ -274,6 +274,7 @@ export default function AlbumDetail() {
 
   // Filter selected items, or fallback to all items if none selected
   const mediaItems = album?.media_items || [];
+  const media = mediaItems;
   const selectedItems = mediaItems.filter((m) => m.is_selected);
   const exportItems = selectedItems.length > 0 ? selectedItems : mediaItems;
 
@@ -347,17 +348,19 @@ export default function AlbumDetail() {
   };
 
   const handlePrevPhoto = () => {
-    if (!previewPhoto || media.length === 0) return;
-    const currentIndex = media.findIndex((p) => p.id === previewPhoto.id);
-    const prevIndex = (currentIndex - 1 + media.length) % media.length;
-    setPreviewPhoto(media[prevIndex]);
+    if (!previewPhoto || mediaItems.length === 0) return;
+    const currentIndex = mediaItems.findIndex((p) => p.id === previewPhoto.id);
+    if (currentIndex === -1) return;
+    const prevIndex = (currentIndex - 1 + mediaItems.length) % mediaItems.length;
+    setPreviewPhoto(mediaItems[prevIndex]);
   };
 
   const handleNextPhoto = () => {
-    if (!previewPhoto || media.length === 0) return;
-    const currentIndex = media.findIndex((p) => p.id === previewPhoto.id);
-    const nextIndex = (currentIndex + 1) % media.length;
-    setPreviewPhoto(media[nextIndex]);
+    if (!previewPhoto || mediaItems.length === 0) return;
+    const currentIndex = mediaItems.findIndex((p) => p.id === previewPhoto.id);
+    if (currentIndex === -1) return;
+    const nextIndex = (currentIndex + 1) % mediaItems.length;
+    setPreviewPhoto(mediaItems[nextIndex]);
   };
 
   // Keyboard navigation for Lightbox Photo Scanner (ArrowLeft, ArrowRight, Escape)
@@ -374,7 +377,7 @@ export default function AlbumDetail() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [previewPhoto, media]);
+  }, [previewPhoto, mediaItems]);
 
   const handleDownloadManifest = () => {
     handleExportRawManifest();
@@ -938,7 +941,7 @@ export default function AlbumDetail() {
           onClick={() => setPreviewPhoto(null)}
         >
           {/* Navigation Arrows for Scanner */}
-          {media.length > 1 && (
+          {mediaItems.length > 1 && (
             <>
               <button
                 type="button"
@@ -971,9 +974,9 @@ export default function AlbumDetail() {
                 <span className="text-xs sm:text-sm font-semibold text-white truncate max-w-[180px] sm:max-w-md">
                   {previewPhoto.filename}
                 </span>
-                {media.length > 0 && (
+                {mediaItems.length > 0 && (
                   <span className="px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[11px] font-mono text-slate-300">
-                    {media.findIndex((p) => p.id === previewPhoto.id) + 1} / {media.length}
+                    {mediaItems.findIndex((p) => p.id === previewPhoto.id) + 1} / {mediaItems.length}
                   </span>
                 )}
                 {previewPhoto.original_size && (

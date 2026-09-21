@@ -39,7 +39,7 @@ class User(Base):
     telegram_chat_id = Column(String(50), nullable=True, index=True)
     
     # Studio Tier Custom White-Label Branding
-    studio_logo_url = Column(String(255), nullable=True)
+    studio_logo_url = Column(String(1024), nullable=True)
     brand_color = Column(String(50), default="#F59E0B", nullable=True)
 
     is_active = Column(Boolean, default=True, nullable=False)

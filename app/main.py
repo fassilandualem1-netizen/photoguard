@@ -94,7 +94,8 @@ def run_db_migrations():
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS storage_used BIGINT DEFAULT 0;"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS needs_password_change BOOLEAN DEFAULT TRUE;"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(50);"))
-        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS studio_logo_url VARCHAR(255);"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS studio_logo_url VARCHAR(1024);"))
+        conn.execute(text("ALTER TABLE users ALTER COLUMN studio_logo_url TYPE VARCHAR(1024);"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS brand_color VARCHAR(50) DEFAULT '#F59E0B';"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
@@ -332,6 +333,16 @@ app.include_router(client_router)
 app.include_router(media_router)
 app.include_router(admin_router)
 app.include_router(telegram_router)
+
+# Direct alias for studio logo upload
+@app.post("/api/v1/users/upload-logo", tags=["User Profile"])
+async def upload_logo_v1_alias(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.api.auth import upload_studio_logo
+    return await upload_studio_logo(file=file, db=db, current_user=current_user)
 
 # Direct root webhook alias for Telegram Bot API
 @app.post("/webhook", tags=["Telegram Integration"])

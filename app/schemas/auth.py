@@ -17,7 +17,7 @@ class PasswordChangeRequest(BaseModel):
 class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=1, max_length=255, description="Updated full name")
     telegram_chat_id: Optional[str] = Field(None, max_length=50, description="Telegram chat ID for instant alerts")
-    studio_logo_url: Optional[str] = Field(None, max_length=255, description="Custom studio logo URL for client white-labeling")
+    studio_logo_url: Optional[str] = Field(None, max_length=1024, description="Custom studio logo URL for client white-labeling")
     brand_color: Optional[str] = Field(None, max_length=50, description="Custom studio brand accent color (e.g. #F59E0B)")
 
 class UserResponse(BaseModel):

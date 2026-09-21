@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 import os
@@ -6,6 +6,12 @@ import logging
 from app.core.database import get_db
 from app.core.security import verify_password, get_password_hash, create_access_token
 from app.core.dependencies import get_current_user
+from app.core.storage import (
+    is_cloudinary_configured,
+    upload_file_to_cloudinary,
+    save_file_locally,
+    generate_cdn_urls,
+)
 from app.models.user import User, UserRole
 from app.schemas.auth import (
     LoginRequest,
@@ -230,6 +236,74 @@ def update_profile(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error updating profile: {str(exc)}"
         )
+
+@router.post("/upload-logo", status_code=status.HTTP_200_OK)
+async def upload_studio_logo(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Direct logo upload for Studio white-label branding.
+    Uploads directly to Cloudinary (or resilient fallback) and saves studio_logo_url.
+    Returns: {"url": "https://res.cloudinary.com/..."}
+    """
+    if current_user.subscription_plan != "studio" and current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Custom Studio Logo white-labeling is an exclusive Studio Plan feature. Please upgrade to unlock."
+        )
+
+    try:
+        file_bytes = await file.read()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to read image file: {str(exc)}"
+        )
+
+    if not file_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file is empty."
+        )
+
+    clean_filename = file.filename or "logo.png"
+    logo_url = None
+
+    # 1. Primary: Upload to Cloudinary
+    if is_cloudinary_configured():
+        try:
+            cloud_res = upload_file_to_cloudinary(
+                file_bytes=file_bytes,
+                filename=f"studio_logo_{current_user.id}_{clean_filename}",
+                folder="photoguard_vault/studio_logos"
+            )
+            logo_url = cloud_res["high_res_url"]
+            logger.info(f"[Logo Upload] Uploaded studio logo to Cloudinary: {logo_url}")
+        except Exception as cloud_err:
+            logger.warning(f"[Logo Upload Warning] Cloudinary upload failed ({cloud_err}). Using local fallback.")
+
+    # 2. Fallback: Local upload storage
+    if not logo_url:
+        object_path = save_file_locally(
+            file_bytes=file_bytes,
+            filename=f"studio_logo_{current_user.id}_{clean_filename}"
+        )
+        cdn_urls = generate_cdn_urls(object_path)
+        logo_url = cdn_urls["high_res_url"]
+        logger.info(f"[Logo Upload] Saved studio logo locally: {logo_url}")
+
+    # Immediately persist into current_user profile
+    try:
+        current_user.studio_logo_url = logo_url
+        db.commit()
+        db.refresh(current_user)
+    except Exception as db_err:
+        db.rollback()
+        logger.error(f"[Logo DB Error] Failed to link logo to user: {db_err}")
+
+    return {"url": logo_url}
 
 @router.post("/emergency-login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
 def emergency_admin_login(payload: EmergencyAdminLoginRequest, db: Session = Depends(get_db)):

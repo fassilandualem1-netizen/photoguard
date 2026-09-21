@@ -295,7 +295,81 @@ export function devApiPlugin(): Plugin {
               needs_password_change: Boolean(userRow.needs_password_change),
               storage_quota_limit: Number(userRow.storage_quota_limit) || 26843545600,
               storage_used: Number(userRow.storage_used) || 0,
+              studio_logo_url: userRow.studio_logo_url || null,
               brand_color: userRow.brand_color || '#F59E0B'
+            });
+          }
+
+          // 4b. Update Profile
+          if ((url === '/api/auth/profile' || url === '/api/users/profile' || url === '/api/auth/me') && method === 'PUT') {
+            const body = await parseJsonBody(req);
+            const authHeader = req.headers['authorization'] || '';
+            const token = authHeader.replace('Bearer ', '').trim();
+            const decoded = verifyToken(token);
+            if (!decoded) {
+              return sendJson(res, 401, { detail: 'Could not validate credentials' });
+            }
+
+            let updatedRow: any = null;
+            if (client) {
+              await client.connect();
+              const updates: string[] = [];
+              const values: any[] = [];
+              let idx = 1;
+
+              if (body.full_name !== undefined) {
+                updates.push(`full_name = $${idx++}`);
+                values.push(body.full_name);
+              }
+              if (body.telegram_chat_id !== undefined) {
+                updates.push(`telegram_chat_id = $${idx++}`);
+                values.push(body.telegram_chat_id);
+              }
+              if (body.studio_logo_url !== undefined) {
+                updates.push(`studio_logo_url = $${idx++}`);
+                values.push(body.studio_logo_url);
+              }
+              if (body.brand_color !== undefined) {
+                updates.push(`brand_color = $${idx++}`);
+                values.push(body.brand_color);
+              }
+
+              if (updates.length > 0) {
+                values.push(decoded.sub);
+                const q = await client.query(
+                  `UPDATE users SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`,
+                  values
+                );
+                if (q.rows.length > 0) {
+                  updatedRow = q.rows[0];
+                }
+              } else {
+                const q = await client.query('SELECT * FROM users WHERE id = $1', [decoded.sub]);
+                if (q.rows.length > 0) updatedRow = q.rows[0];
+              }
+              await client.end();
+            }
+
+            return sendJson(res, 200, {
+              id: updatedRow?.id || decoded.sub,
+              email: updatedRow?.email || decoded.email,
+              full_name: updatedRow?.full_name || 'Photographer',
+              role: String(updatedRow?.role || decoded.role || 'photographer').toLowerCase(),
+              subscription_plan: updatedRow?.subscription_plan || 'studio',
+              is_verified: true,
+              is_active: true,
+              needs_password_change: false,
+              storage_quota_limit: Number(updatedRow?.storage_quota_limit) || 26843545600,
+              storage_used: Number(updatedRow?.storage_used) || 0,
+              studio_logo_url: updatedRow?.studio_logo_url || body.studio_logo_url || null,
+              brand_color: updatedRow?.brand_color || body.brand_color || '#F59E0B'
+            });
+          }
+
+          // 4c. Direct Studio Logo Upload (mock/dev helper)
+          if ((url.startsWith('/api/v1/users/upload-logo') || url.startsWith('/api/auth/upload-logo')) && method === 'POST') {
+            return sendJson(res, 200, {
+              url: 'https://res.cloudinary.com/photoguard/image/upload/v1/photoguard_vault/studio_logos/sample_logo.png'
             });
           }
 

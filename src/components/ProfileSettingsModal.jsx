@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   X,
   Palette,
@@ -10,8 +10,10 @@ import {
   Lock,
   RefreshCw,
   Unlink,
-  Sparkles,
-  ShieldCheck
+  ShieldCheck,
+  UploadCloud,
+  ImageIcon,
+  Trash2
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
@@ -33,8 +35,13 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
   const [studioLogoUrl, setStudioLogoUrl] = useState("");
   const [brandColor, setBrandColor] = useState("#F59E0B");
   const [isSavingBranding, setIsSavingBranding] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [logoUploadError, setLogoUploadError] = useState(null);
   const [brandingSuccessMsg, setBrandingSuccessMsg] = useState(null);
   const [brandingErrorMsg, setBrandingErrorMsg] = useState(null);
+  const [isDraggingLogo, setIsDraggingLogo] = useState(false);
+
+  const fileInputRef = useRef(null);
 
   // Telegram Deep-Linking State
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
@@ -57,7 +64,114 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
   const telegramDeepLink = `https://t.me/${botUsername}?start=${user?.id || ""}`;
 
   // ==========================================
-  // SECTION 1: SAVE CUSTOM STUDIO BRANDING
+  // SECTION 1: LOGO FILE UPLOAD HANDLER
+  // ==========================================
+  const handleLogoUpload = async (file) => {
+    if (!file) return;
+
+    // Validate mime type
+    const validMimes = ["image/png", "image/jpeg", "image/jpg", "image/svg+xml", "image/webp"];
+    if (!validMimes.includes(file.type)) {
+      setLogoUploadError("Please upload a PNG, SVG, or JPEG image file.");
+      return;
+    }
+
+    // Limit to 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      setLogoUploadError("Logo file must be under 5MB.");
+      return;
+    }
+
+    setIsUploadingLogo(true);
+    setLogoUploadError(null);
+    setBrandingSuccessMsg(null);
+    setBrandingErrorMsg(null);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      // Direct file upload to backend
+      let response;
+      try {
+        response = await api.post("/api/v1/users/upload-logo", formData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
+      } catch (postErr) {
+        // Fallback to /api/auth/upload-logo
+        response = await api.post("/api/auth/upload-logo", formData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
+      }
+
+      const uploadedUrl = response.data?.url;
+      if (uploadedUrl) {
+        setStudioLogoUrl(uploadedUrl);
+        if (refreshProfile) {
+          await refreshProfile();
+        }
+        setBrandingSuccessMsg("Logo uploaded and saved to permanent cloud storage!");
+      } else {
+        throw new Error("No URL returned from upload endpoint");
+      }
+    } catch (err) {
+      const detail = err?.response?.data?.detail || err?.message || "Failed to upload logo image.";
+      setLogoUploadError(detail);
+    } finally {
+      setIsUploadingLogo(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleLogoUpload(file);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingLogo(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingLogo(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingLogo(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      handleLogoUpload(file);
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    setStudioLogoUrl("");
+    try {
+      await api.put("/api/auth/profile", {
+        studio_logo_url: null
+      });
+      if (refreshProfile) {
+        await refreshProfile();
+      }
+      setBrandingSuccessMsg("Studio logo removed.");
+    } catch (err) {
+      const detail = err?.response?.data?.detail || "Failed to clear logo.";
+      setBrandingErrorMsg(detail);
+    }
+  };
+
+  // ==========================================
+  // SECTION 2: SAVE CUSTOM STUDIO BRANDING
   // ==========================================
   const handleSaveBranding = async (e) => {
     e.preventDefault();
@@ -66,8 +180,8 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
     setBrandingErrorMsg(null);
 
     try {
-      const trimmedLogo = studioLogoUrl.trim();
-      const trimmedColor = brandColor.trim();
+      const trimmedLogo = studioLogoUrl ? studioLogoUrl.trim() : null;
+      const trimmedColor = brandColor ? brandColor.trim() : "#F59E0B";
 
       await api.put("/api/auth/profile", {
         studio_logo_url: trimmedLogo || null,
@@ -88,7 +202,7 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
   };
 
   // ==========================================
-  // SECTION 2: TELEGRAM DEEP LINK & SYNC
+  // SECTION 3: TELEGRAM DEEP LINK & SYNC
   // ==========================================
   const handleCheckConnection = async () => {
     setIsCheckingConnection(true);
@@ -145,12 +259,11 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
         id="profile-settings-modal"
         className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-6 space-y-6 max-h-[90vh] overflow-y-auto"
       >
-        {/* Header */}
+        {/* Header - Completely clean text, no icon next to the title */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div>
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>Studio Profile & Settings</span>
+            <h3 className="text-base font-bold text-white">
+              Studio Profile & Settings
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
               Manage custom white-labeling and automated Telegram submission alerts.
@@ -160,6 +273,7 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
             id="close-settings-modal-btn"
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            title="Close"
           >
             <X className="w-5 h-5" />
           </button>
@@ -192,35 +306,110 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
                   White-label the client mobile application with your photography studio logo and brand accent color.
                 </p>
 
-                {/* Studio Logo URL */}
+                {/* Direct Studio Logo Upload */}
                 <div>
-                  <label htmlFor="studio-logo-url-input" className="text-[11px] font-medium text-slate-300 block mb-1">
-                    Studio Logo URL (PNG/SVG with transparent background)
+                  <label className="text-[11px] font-medium text-slate-300 block mb-1.5">
+                    Studio Logo (PNG, SVG, or JPEG with transparent background)
                   </label>
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <input
-                        id="studio-logo-url-input"
-                        type="url"
-                        value={studioLogoUrl}
-                        onChange={(e) => setStudioLogoUrl(e.target.value)}
-                        placeholder="https://your-domain.com/logo.png"
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all font-mono"
-                      />
-                    </div>
-                    {studioLogoUrl && (
-                      <div className="w-9 h-9 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden p-1 shrink-0">
-                        <img
-                          src={studioLogoUrl}
-                          alt="Logo Preview"
-                          className="max-w-full max-h-full object-contain"
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
+
+                  {/* Logo Preview (if uploaded) */}
+                  {studioLogoUrl ? (
+                    <div className="mb-3 p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-12 h-12 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center p-1.5 overflow-hidden shrink-0">
+                          <img
+                            src={studioLogoUrl}
+                            alt="Studio Logo Preview"
+                            className="max-w-full max-h-full object-contain"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-white truncate">Active Studio Logo</p>
+                          <p className="text-[10px] text-slate-400 truncate max-w-[200px] font-mono">
+                            {studioLogoUrl}
+                          </p>
+                        </div>
                       </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isUploadingLogo}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-200 border border-slate-700 transition-colors"
+                        >
+                          Replace
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRemoveLogo}
+                          disabled={isUploadingLogo}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-red-950/60 hover:text-red-400 text-slate-400 border border-slate-700 transition-colors"
+                          title="Remove logo"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* Hidden native file input */}
+                  <input
+                    ref={fileInputRef}
+                    id="studio-logo-file-input"
+                    type="file"
+                    accept="image/png, image/jpeg, image/svg+xml, image/webp"
+                    className="hidden"
+                    onChange={handleFileChange}
+                    disabled={isUploadingLogo}
+                  />
+
+                  {/* Drag-and-drop or click-to-upload container */}
+                  <div
+                    id="logo-upload-dropzone"
+                    onClick={() => !isUploadingLogo && fileInputRef.current?.click()}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 ${
+                      isDraggingLogo
+                        ? "border-amber-400 bg-amber-500/10 text-amber-300"
+                        : "border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/70 text-slate-400"
+                    }`}
+                  >
+                    {isUploadingLogo ? (
+                      <>
+                        <Loader2 className="w-6 h-6 text-amber-400 animate-spin" />
+                        <span className="text-xs font-medium text-amber-300">
+                          Uploading logo to Cloudinary...
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-300">
+                          <UploadCloud className="w-4 h-4 text-amber-400" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-slate-200">
+                            Click to upload or drag and drop
+                          </p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                            PNG, SVG, or JPEG (Max 5MB)
+                          </p>
+                        </div>
+                      </>
                     )}
                   </div>
+
+                  {logoUploadError && (
+                    <p className="text-[11px] text-red-400 mt-1.5 flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{logoUploadError}</span>
+                    </p>
+                  )}
                 </div>
 
                 {/* Brand Accent Color */}
@@ -288,7 +477,7 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
                 <button
                   id="save-studio-branding-btn"
                   type="submit"
-                  disabled={isSavingBranding}
+                  disabled={isSavingBranding || isUploadingLogo}
                   className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-semibold text-xs transition-all shadow-md flex items-center justify-center gap-1.5"
                 >
                   {isSavingBranding ? (

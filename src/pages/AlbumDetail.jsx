@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
+import AlbumAnalytics from "../components/AlbumAnalytics";
 import {
   ArrowLeft,
   Upload,
@@ -30,14 +31,22 @@ import {
   ZoomIn,
   ChevronLeft,
   ChevronRight,
+  BarChart3,
+  BellRing,
 } from "lucide-react";
 
 export default function AlbumDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [album, setAlbum] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Analytics & Reminders modal state
+  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
+  const [remindingDirect, setRemindingDirect] = useState(false);
+  const [reminderSuccessMsg, setReminderSuccessMsg] = useState(false);
 
   // Live Sync version tracking ref
   const lastVersionRef = useRef(null);
@@ -261,6 +270,43 @@ export default function AlbumDetail() {
     }
   };
 
+  const handleDeleteAlbum = async () => {
+    if (
+      !window.confirm(
+        `Are you sure you want to permanently delete gallery "${album?.title}"? All photo proofs and client selections will be erased.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await api.delete(`/api/v1/albums/${id}`);
+      navigate("/dashboard");
+    } catch (err) {
+      alert(err.response?.data?.detail || "Failed to delete album.");
+    }
+  };
+
+  const handleSendDirectReminder = async () => {
+    try {
+      setRemindingDirect(true);
+      const res = await api.post(`/api/v1/albums/${id}/remind`);
+      setAlbum((prev) =>
+        prev
+          ? {
+              ...prev,
+              reminder_sent_at: res.data?.reminder_sent_at || new Date().toISOString(),
+            }
+          : prev
+      );
+      setReminderSuccessMsg(true);
+      setTimeout(() => setReminderSuccessMsg(false), 3500);
+    } catch (err) {
+      alert(err.response?.data?.detail || "Failed to dispatch reminder.");
+    } finally {
+      setRemindingDirect(false);
+    }
+  };
+
   const calculateDaysLeft = (expiresAt) => {
     if (!expiresAt) return null;
     const diff = new Date(expiresAt).getTime() - new Date().getTime();
@@ -468,6 +514,12 @@ export default function AlbumDetail() {
               <span>Client invitation copied to clipboard!</span>
             </div>
           )}
+          {reminderSuccessMsg && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 text-xs animate-in fade-in">
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Reminder dispatched to client!</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -509,6 +561,24 @@ export default function AlbumDetail() {
                 {album.selected_count ?? selectedItems.length}
               </span>
             </div>
+            <div className="flex items-center gap-1">
+              <Eye className="w-3.5 h-3.5 text-sky-400" />
+              <span>
+                Views: <strong className="text-white font-mono">{album.view_count || 0}</strong>
+              </span>
+            </div>
+            {album.reminder_sent_at && (
+              <div className="flex items-center gap-1">
+                <BellRing className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-amber-400/90 font-medium">
+                  Reminder Sent:{" "}
+                  {new Date(album.reminder_sent_at).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </span>
+              </div>
+            )}
             <div className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5 text-slate-500" />
               <span>
@@ -696,6 +766,51 @@ export default function AlbumDetail() {
               </div>
             )}
           </div>
+
+          {/* Analytics & Activity Modal Trigger */}
+          <button
+            id="open-album-analytics-btn"
+            type="button"
+            onClick={() => setIsAnalyticsOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700/80 border border-slate-700/80 text-white font-semibold text-xs transition-all shadow-lg cursor-pointer"
+            title="View client engagement telemetry, views, and selection progress"
+          >
+            <BarChart3 className="w-4 h-4 text-amber-400" />
+            <span>Analytics</span>
+          </button>
+
+          {/* Direct Reminder Button */}
+          {!isSubmitted && (
+            <button
+              id="album-send-reminder-btn"
+              type="button"
+              onClick={handleSendDirectReminder}
+              disabled={remindingDirect}
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 hover:text-amber-200 font-semibold text-xs transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              title="Send automated selection reminder to client via connected Telegram/WhatsApp"
+            >
+              {remindingDirect ? (
+                <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+              ) : (
+                <BellRing className="w-4 h-4 text-amber-400" />
+              )}
+              <span>{remindingDirect ? "Sending..." : "Send Reminder"}</span>
+            </button>
+          )}
+
+          {/* RBAC: Delete Gallery Button (Hidden for assistants) */}
+          {user?.role !== "assistant" && (
+            <button
+              id="delete-album-btn"
+              type="button"
+              onClick={handleDeleteAlbum}
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-red-950/40 hover:bg-red-900/60 border border-red-800/60 text-red-300 hover:text-red-200 font-semibold text-xs transition-all shadow-md cursor-pointer"
+              title="Permanently delete this gallery and all proofs"
+            >
+              <Trash2 className="w-4 h-4 text-red-400" />
+              <span className="hidden sm:inline">Delete Gallery</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -895,7 +1010,7 @@ export default function AlbumDetail() {
                       >
                         <Eye className="w-4 h-4" />
                       </a>
-                      {!isSubmitted && (
+                      {!isSubmitted && user?.role !== "assistant" && (
                         <button
                           type="button"
                           onClick={() => handleDeletePhoto(item.id)}
@@ -1029,6 +1144,20 @@ export default function AlbumDetail() {
           </div>
         </div>
       )}
+
+      {/* Album Analytics & Client Activity Modal */}
+      <AlbumAnalytics
+        isOpen={isAnalyticsOpen}
+        onClose={() => setIsAnalyticsOpen(false)}
+        album={album}
+        isStudio={isStudio}
+        onExtendExpiration={handleExtendExpiration}
+        onReminderSent={(timestamp) => {
+          setAlbum((prev) => (prev ? { ...prev, reminder_sent_at: timestamp } : prev));
+          setReminderSuccessMsg(true);
+          setTimeout(() => setReminderSuccessMsg(false), 3500);
+        }}
+      />
     </div>
   );
 }

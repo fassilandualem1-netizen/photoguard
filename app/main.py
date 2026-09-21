@@ -19,6 +19,7 @@ from app.api.client import router as client_router
 from app.api.media import router as media_router
 from app.api.admin import router as admin_router
 from app.api.telegram import router as telegram_router
+from app.api.team import router as team_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("photoguard.core")
@@ -100,6 +101,16 @@ def run_db_migrations():
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE;"))
+        conn.execute(text("""
+            DO $$
+            BEGIN
+                ALTER TYPE user_role_enum ADD VALUE IF NOT EXISTS 'owner';
+                ALTER TYPE user_role_enum ADD VALUE IF NOT EXISTS 'assistant';
+            EXCEPTION WHEN OTHERS THEN
+                NULL;
+            END $$;
+        """))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS parent_owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL;"))
 
         # Albums table schema migrations
         conn.execute(text("""
@@ -119,6 +130,9 @@ def run_db_migrations():
         conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS allow_download BOOLEAN DEFAULT FALSE;"))
         conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"))
         conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE;"))
+        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0;"))
+        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS last_viewed_at TIMESTAMP WITH TIME ZONE;"))
+        conn.execute(text("ALTER TABLE albums ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP WITH TIME ZONE;"))
 
         # Raw SQL UPDATE statements to sanitize existing NULLs in albums
         conn.execute(text("UPDATE albums SET title = 'Untitled Album' WHERE title IS NULL;"))
@@ -126,6 +140,7 @@ def run_db_migrations():
         conn.execute(text("UPDATE albums SET is_locked = FALSE WHERE is_locked IS NULL;"))
         conn.execute(text("UPDATE albums SET allow_download = FALSE WHERE allow_download IS NULL;"))
         conn.execute(text("UPDATE albums SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL;"))
+        conn.execute(text("UPDATE albums SET view_count = 0 WHERE view_count IS NULL;"))
 
         # Media items table schema migrations
         conn.execute(text("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS filename VARCHAR(255) DEFAULT 'photo.jpg';"))
@@ -333,6 +348,7 @@ app.include_router(client_router)
 app.include_router(media_router)
 app.include_router(admin_router)
 app.include_router(telegram_router)
+app.include_router(team_router)
 
 # Direct alias for studio logo upload
 @app.post("/api/v1/users/upload-logo", tags=["User Profile"])

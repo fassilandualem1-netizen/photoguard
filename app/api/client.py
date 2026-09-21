@@ -110,6 +110,15 @@ def verify_client_pin(
             detail="This album has already been submitted and locked. Selections are final."
         )
 
+    # Update view analytics
+    try:
+        album.view_count = int(album.view_count or 0) + 1
+        album.last_viewed_at = now_utc
+        db.commit()
+        db.refresh(album)
+    except Exception as view_err:
+        db.rollback()
+
     media_count = len(album.media_items)
     selected_count = sum(1 for item in album.media_items if item.is_selected)
 
@@ -121,6 +130,9 @@ def verify_client_pin(
         photographer_id=album.photographer_id,
         is_locked=album.is_locked,
         allow_download=album.allow_download,
+        view_count=int(album.view_count or 0),
+        last_viewed_at=album.last_viewed_at,
+        reminder_sent_at=album.reminder_sent_at,
         created_at=album.created_at,
         expires_at=album.expires_at,
         is_expired=False,

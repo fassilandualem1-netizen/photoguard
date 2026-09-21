@@ -13,9 +13,14 @@ import {
   ExternalLink,
   Sparkles,
   LifeBuoy,
+  Users,
+  BarChart3,
+  BellRing,
 } from "lucide-react";
 import ProfileSettingsModal from "../components/ProfileSettingsModal";
 import ChangePasswordModal from "../components/ChangePasswordModal";
+import TeamManagement from "../components/TeamManagement";
+import StudioAnalyticsModal from "../components/StudioAnalyticsModal";
 
 export default function DashboardLayout({
   children,
@@ -27,6 +32,9 @@ export default function DashboardLayout({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [isStudioAnalyticsOpen, setIsStudioAnalyticsOpen] = useState(false);
+  const [analyticsDefaultTab, setAnalyticsDefaultTab] = useState("analytics");
   const menuRef = useRef(null);
 
   // Close menu when clicking outside
@@ -179,34 +187,88 @@ export default function DashboardLayout({
                     </Link>
                   )}
 
-                  <button
-                    id="menu-profile-btn"
-                    type="button"
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      setIsProfileModalOpen(true);
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
-                  >
-                    <User className="w-4 h-4 text-slate-400" />
-                    <span>Studio Profile & Branding</span>
-                  </button>
+                  {/* Studio Plan Exclusive Features (Owner Only) */}
+                  {(user?.subscription_plan === "studio" || user?.plan === "studio" || user?.role === "admin") &&
+                    user?.role !== "assistant" && (
+                      <>
+                        <button
+                          id="menu-team-management-btn"
+                          type="button"
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            setIsTeamModalOpen(true);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-amber-300 hover:text-white hover:bg-amber-500/10 transition-colors text-left"
+                        >
+                          <Users className="w-4 h-4 text-amber-400" />
+                          <span>Manage Team (Assistants)</span>
+                        </button>
 
-                  <button
-                    id="menu-change-password-btn"
-                    type="button"
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      setIsChangePasswordModalOpen(true);
-                      if (typeof onChangePasswordClick === "function") {
-                        onChangePasswordClick();
-                      }
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
-                  >
-                    <KeyRound className="w-4 h-4 text-slate-400" />
-                    <span>Change Password</span>
-                  </button>
+                        <button
+                          id="menu-studio-analytics-btn"
+                          type="button"
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            setAnalyticsDefaultTab("analytics");
+                            setIsStudioAnalyticsOpen(true);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
+                        >
+                          <BarChart3 className="w-4 h-4 text-amber-400" />
+                          <span>Studio Analytics</span>
+                        </button>
+
+                        <button
+                          id="menu-automated-reminders-btn"
+                          type="button"
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            setAnalyticsDefaultTab("reminders");
+                            setIsStudioAnalyticsOpen(true);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
+                        >
+                          <BellRing className="w-4 h-4 text-amber-400" />
+                          <span>Automated Reminders</span>
+                        </button>
+
+                        <div className="my-1 border-t border-slate-800/60" />
+                      </>
+                    )}
+
+                  {user?.role !== "assistant" && (
+                    <button
+                      id="menu-profile-btn"
+                      type="button"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setIsProfileModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
+                    >
+                      <User className="w-4 h-4 text-slate-400" />
+                      <span>Studio Profile & Branding</span>
+                    </button>
+                  )}
+
+                  {/* RBAC: Change Password is restricted to Owners/Admins (hidden for assistants) */}
+                  {user?.role !== "assistant" && (
+                    <button
+                      id="menu-change-password-btn"
+                      type="button"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setIsChangePasswordModalOpen(true);
+                        if (typeof onChangePasswordClick === "function") {
+                          onChangePasswordClick();
+                        }
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
+                    >
+                      <KeyRound className="w-4 h-4 text-slate-400" />
+                      <span>Change Password</span>
+                    </button>
+                  )}
 
                   <a
                     id="menu-support-link"
@@ -260,6 +322,20 @@ export default function DashboardLayout({
       <ChangePasswordModal
         isOpen={isChangePasswordModalOpen}
         onClose={() => setIsChangePasswordModalOpen(false)}
+      />
+
+      {/* Team Management Modal (Studio Plan RBAC) */}
+      <TeamManagement
+        isOpen={isTeamModalOpen}
+        onClose={() => setIsTeamModalOpen(false)}
+        currentUser={user}
+      />
+
+      {/* Studio Analytics & Automated Reminders Modal */}
+      <StudioAnalyticsModal
+        isOpen={isStudioAnalyticsOpen}
+        onClose={() => setIsStudioAnalyticsOpen(false)}
+        defaultTab={analyticsDefaultTab}
       />
     </div>
   );

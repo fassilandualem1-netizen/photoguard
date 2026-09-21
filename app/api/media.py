@@ -50,11 +50,13 @@ async def upload_album_photo(
             detail="Album not found."
         )
 
-    # Permission check: must be owner photographer or admin
-    if current_user.role != UserRole.ADMIN and album.photographer_id != current_user.id:
+    # Permission check: must be owner photographer, authorized assistant, or admin
+    is_owner = album.photographer_id == current_user.id
+    is_assistant = current_user.role == UserRole.ASSISTANT and album.photographer_id == current_user.parent_owner_id
+    if current_user.role != UserRole.ADMIN and not (is_owner or is_assistant):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied. You do not own this album."
+            detail="Access denied. You do not own or have assistant access to this album."
         )
 
     # Cannot upload to an already submitted/locked album
@@ -199,7 +201,9 @@ def list_album_media(
     if not album:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
 
-    if current_user.role != UserRole.ADMIN and album.photographer_id != current_user.id:
+    is_owner = album.photographer_id == current_user.id
+    is_assistant = current_user.role == UserRole.ASSISTANT and album.photographer_id == current_user.parent_owner_id
+    if current_user.role != UserRole.ADMIN and not (is_owner or is_assistant):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     return album.media_items
@@ -213,10 +217,17 @@ def delete_media_item(
 ):
     """
     Deletes a media item:
-    1. Lifetime Bandwidth Quota: DO NOT decrement storage_used (preserves lifetime upload tracking).
-    2. Physical storage cleanup: Deletes actual high-res object from S3 or local storage.
-    3. Wrapped in strict try...except with db.rollback().
+    1. STRICT RBAC: Assistants cannot delete photos.
+    2. Lifetime Bandwidth Quota: DO NOT decrement storage_used (preserves lifetime upload tracking).
+    3. Physical storage cleanup: Deletes actual high-res object from S3 or local storage.
+    4. Wrapped in strict try...except with db.rollback().
     """
+    if current_user.role == UserRole.ASSISTANT:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Assistants are not permitted to delete photos."
+        )
+
     item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media item not found.")

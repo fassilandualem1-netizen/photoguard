@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, Integer, String, Enum, DateTime, Boolean, BigInteger
+from sqlalchemy import Column, Integer, String, Enum, DateTime, Boolean, BigInteger, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -7,11 +7,14 @@ from app.core.database import Base
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
     PHOTOGRAPHER = "photographer"
+    OWNER = "owner"
+    ASSISTANT = "assistant"
 
 class User(Base):
     """
     Unified User Model for PhotoGuard.
     Stores system credentials, plan monetization, quota tracking,
+    role-based access control (Admin, Photographer/Owner, Assistant),
     and studio white-labeling custom branding for Admins and Photographers.
     """
     __tablename__ = "users"
@@ -21,6 +24,10 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=False)
     role = Column(Enum(UserRole, name="user_role_enum"), default=UserRole.PHOTOGRAPHER, nullable=False)
+    
+    # RBAC Team Management:
+    # Assistants link to their parent studio owner account
+    parent_owner_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     
     # Monetization & Plan tiers: 'basic' or 'studio'
     subscription_plan = Column(String(50), default="basic", nullable=False)

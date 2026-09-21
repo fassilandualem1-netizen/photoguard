@@ -38,6 +38,11 @@ class Album(Base):
     # Download permissions toggle controlled by the photographer
     allow_download = Column(Boolean, default=False, nullable=False)
     
+    # Client Analytics & Tracking:
+    view_count = Column(Integer, default=0, nullable=False)
+    last_viewed_at = Column(DateTime(timezone=True), nullable=True)
+    reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=True)
 

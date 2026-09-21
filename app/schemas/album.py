@@ -32,6 +32,9 @@ class AlbumListItemResponse(BaseModel):
     photographer_id: int
     is_locked: bool = Field(default=False)
     allow_download: bool = Field(default=False)
+    view_count: int = Field(default=0)
+    last_viewed_at: Optional[datetime] = Field(default=None)
+    reminder_sent_at: Optional[datetime] = Field(default=None)
     created_at: Optional[datetime] = Field(default=None)
     expires_at: Optional[datetime] = Field(default=None)
     is_expired: bool = Field(default=False)
@@ -50,6 +53,9 @@ class AlbumDetailResponse(BaseModel):
     photographer_id: int
     is_locked: bool = Field(default=False)
     allow_download: bool = Field(default=False)
+    view_count: int = Field(default=0)
+    last_viewed_at: Optional[datetime] = Field(default=None)
+    reminder_sent_at: Optional[datetime] = Field(default=None)
     created_at: Optional[datetime] = Field(default=None)
     expires_at: Optional[datetime] = Field(default=None)
     is_expired: bool = Field(default=False)

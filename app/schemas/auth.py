@@ -27,6 +27,7 @@ class UserResponse(BaseModel):
     email: str
     full_name: str
     role: UserRole
+    parent_owner_id: Optional[int] = None
     storage_quota_limit: int
     storage_used: int
     telegram_chat_id: Optional[str] = None

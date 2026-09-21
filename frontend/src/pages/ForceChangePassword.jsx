@@ -35,9 +35,15 @@ export default function ForceChangePassword({ onPasswordChanged }) {
         onPasswordChanged();
       }
     } catch (err) {
-      const msg =
-        err.response?.data?.detail ||
-        "Failed to update password. Please try again.";
+      let msg = "Failed to update password. Please try again.";
+      const detail = err.response?.data?.detail ?? err.response?.data?.message ?? err.message;
+      if (typeof detail === "string") {
+        msg = detail;
+      } else if (Array.isArray(detail)) {
+        msg = detail.map((d) => (typeof d === "object" ? d.msg || JSON.stringify(d) : String(d))).join(". ");
+      } else if (detail && typeof detail === "object") {
+        msg = detail.msg || detail.message || JSON.stringify(detail);
+      }
       setError(msg);
     } finally {
       setLoading(false);
@@ -63,7 +69,7 @@ export default function ForceChangePassword({ onPasswordChanged }) {
         {error && (
           <div id="password-error-alert" className="mb-6 p-4 rounded-xl border border-red-500/20 bg-red-950/40 text-red-300 flex items-start gap-3 text-sm">
             <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-            <span>{error}</span>
+            <span>{typeof error === "string" ? error : String(error?.msg || error?.message || "Failed to update password.")}</span>
           </div>
         )}
 

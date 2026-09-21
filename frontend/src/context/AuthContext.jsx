@@ -112,9 +112,11 @@ export const AuthProvider = ({ children }) => {
   }, [refreshProfile, user]);
 
   const login = async (email, password) => {
+    const cleanIdentifier = String(email || "").trim();
     const response = await api.post("/api/auth/login", {
-      email,
-      password,
+      email: cleanIdentifier,
+      username: cleanIdentifier,
+      password: password,
     });
 
     const { access_token, user: userData } = response.data;

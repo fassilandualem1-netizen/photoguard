@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 import os
 import logging
@@ -88,11 +89,26 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     Unified Login endpoint for PhotoGuard.
     Validates credentials against PostgreSQL and generates a secure JWT
     encapsulating subject ID, email, and system role.
-    Audit finding: Guarantees string role extraction ('admin' vs 'photographer')
-    so React <AdminRoute> and <ProtectedRoute> match directly.
+    Supports email, username, and handles whitespace cleanly.
     """
-    clean_email = payload.email.strip().lower()
-    user = db.query(User).filter(User.email == clean_email).first()
+    raw_identifier = (payload.email or payload.username or "").strip()
+    if not raw_identifier:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please provide your studio email or username."
+        )
+    
+    if not payload.password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please provide your password."
+        )
+
+    clean_email = raw_identifier.lower()
+    user = db.query(User).filter(
+        (func.lower(User.email) == clean_email) | 
+        (func.lower(User.full_name) == clean_email)
+    ).first()
     
     is_pw_valid = False
     if user:

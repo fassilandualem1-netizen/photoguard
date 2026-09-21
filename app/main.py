@@ -3,6 +3,7 @@ import logging
 import traceback
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, status, Request, UploadFile, File
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -349,6 +350,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Guarantees that FastAPI validation errors return a clean human-readable string in 'detail',
+    completely preventing React Error #31 (object rendered as child) on the frontend.
+    """
+    errors = exc.errors()
+    messages = []
+    for err in errors:
+        loc_parts = [str(l) for l in err.get("loc", []) if str(l) not in ["body", "query", "path"]]
+        field = " -> ".join(loc_parts)
+        msg = err.get("msg", "Invalid value")
+        messages.append(f"{field}: {msg}" if field else msg)
+    clean_msg = "; ".join(messages) if messages else "Invalid request data."
+    logger.warning(f"[Validation Error] {request.method} {request.url.path}: {clean_msg}")
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": clean_msg, "errors": errors},
+    )
 
 # Register Core API Routers
 app.include_router(auth_router)

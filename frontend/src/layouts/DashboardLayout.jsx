@@ -13,9 +13,11 @@ import {
   ExternalLink,
   Sparkles,
   LifeBuoy,
+  Users,
 } from "lucide-react";
 import ProfileSettingsModal from "../components/ProfileSettingsModal";
 import ChangePasswordModal from "../components/ChangePasswordModal";
+import TeamManagementModal from "../components/TeamManagementModal";
 
 export default function DashboardLayout({
   children,
@@ -27,6 +29,7 @@ export default function DashboardLayout({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const menuRef = useRef(null);
 
   // Close menu when clicking outside
@@ -194,6 +197,26 @@ export default function DashboardLayout({
                   </button>
 
                   <button
+                    id="menu-team-btn"
+                    type="button"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      setIsTeamModalOpen(true);
+                    }}
+                    className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Users className="w-4 h-4 text-amber-400" />
+                      <span>Studio Assistants</span>
+                    </div>
+                    {isStudio && (
+                      <span className="text-[10px] font-semibold text-amber-400/90 bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/20">
+                        Studio
+                      </span>
+                    )}
+                  </button>
+
+                  <button
                     id="menu-change-password-btn"
                     type="button"
                     onClick={() => {
@@ -261,6 +284,12 @@ export default function DashboardLayout({
       <ChangePasswordModal
         isOpen={isChangePasswordModalOpen}
         onClose={() => setIsChangePasswordModalOpen(false)}
+      />
+
+      {/* Studio Assistants Team Management Modal */}
+      <TeamManagementModal
+        isOpen={isTeamModalOpen}
+        onClose={() => setIsTeamModalOpen(false)}
       />
     </div>
   );

@@ -10,7 +10,6 @@ import {
   AlertCircle,
   Loader2,
   Sparkles,
-  ShieldAlert,
   KeyRound
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
@@ -211,7 +210,6 @@ export default function TeamManagementModal({ isOpen, onClose }) {
                   onClick={(e) => {
                     e.preventDefault();
                     onClose();
-                    // Optional trigger for upgrade flow
                     const upgradeBtn = document.getElementById("upgrade-to-studio-btn");
                     if (upgradeBtn) upgradeBtn.click();
                   }}

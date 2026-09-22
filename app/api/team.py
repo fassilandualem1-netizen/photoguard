@@ -41,6 +41,7 @@ class AssistantCreatedResponse(BaseModel):
     created_at: Optional[str] = None
 
 
+@router.post("", response_model=AssistantCreatedResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=AssistantCreatedResponse, status_code=status.HTTP_201_CREATED)
 def add_assistant(
     payload: AssistantCreateRequest,
@@ -143,6 +144,7 @@ def add_assistant(
         )
 
 
+@router.get("", response_model=List[AssistantResponse], status_code=status.HTTP_200_OK)
 @router.get("/", response_model=List[AssistantResponse], status_code=status.HTTP_200_OK)
 def list_assistants(
     db: Session = Depends(get_db),
@@ -182,6 +184,7 @@ def list_assistants(
 
 
 @router.delete("/{assistant_id}", status_code=status.HTTP_200_OK)
+@router.delete("/{assistant_id}/", status_code=status.HTTP_200_OK)
 def remove_assistant(
     assistant_id: int,
     db: Session = Depends(get_db),

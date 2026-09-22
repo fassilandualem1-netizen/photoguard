@@ -34,6 +34,17 @@ def get_current_user(
     user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
     if user is None:
         raise credentials_exception
+
+    # Hierarchical Security Check:
+    # If the user is an assistant/staff, verify that their parent studio/photographer account is also active
+    if user.parent_id is not None:
+        parent_user = db.query(User).filter(User.id == user.parent_id).first()
+        if parent_user is None or not parent_user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Studio account has been suspended by an administrator. Please contact your studio owner.",
+            )
+
     return user
 
 def require_admin(

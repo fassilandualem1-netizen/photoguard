@@ -228,15 +228,23 @@ export default function AdminDashboard() {
     }
   };
 
-  // Toggle Suspend / Active
+  // Toggle Suspend / Active (with Instant Cascade Update for Assistants)
   const handleToggleSuspend = async (userId: number, currentActive: boolean) => {
     try {
       setActionLoadingId(userId);
       await api.put(`/api/v1/admin/users/${userId}/suspend`);
+      const nextActive = !currentActive;
       setPhotographers((prev) =>
-        prev.map((p) =>
-          p.id === userId ? { ...p, is_active: !currentActive } : p
-        )
+        prev.map((p) => {
+          if (p.id === userId) {
+            return { ...p, is_active: nextActive };
+          }
+          // Cascade update in UI if this user is a child assistant of the toggled parent
+          if (p.parent_id === userId) {
+            return { ...p, is_active: nextActive };
+          }
+          return p;
+        })
       );
       fetchAuditLogs();
     } catch (err: any) {

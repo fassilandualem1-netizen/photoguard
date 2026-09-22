@@ -160,6 +160,16 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
                 detail="Account has been deactivated. Please contact an administrator.",
             )
 
+        # Hierarchical Security Check on Login:
+        # If assistant logs in, verify that the parent photographer account is also active
+        if getattr(user, "parent_id", None) is not None:
+            parent_user = db.query(User).filter(User.id == user.parent_id).first()
+            if parent_user is None or not parent_user.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Studio account has been suspended by an administrator. Please contact your studio owner.",
+                )
+
         # Normalize role string cleanly
         raw_role = getattr(user, "role", "photographer")
         if hasattr(raw_role, "value"):

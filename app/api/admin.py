@@ -273,24 +273,38 @@ def toggle_user_suspend(
         )
 
     try:
-        target_user.is_active = not target_user.is_active
+        new_active_status = not target_user.is_active
+        target_user.is_active = new_active_status
         action_state = "ACTIVATED" if target_user.is_active else "SUSPENDED"
+
+        # CASCADE SUSPENSION:
+        # If target_user is a parent studio/photographer, cascade the new is_active status
+        # to all assistant/staff sub-accounts directly linked via parent_id.
+        cascaded_count = 0
+        if not target_user.parent_id and (target_user.role == UserRole.PHOTOGRAPHER.value or target_user.role == UserRole.PHOTOGRAPHER or target_user.role == "photographer" or target_user.role == "owner"):
+            assistants = db.query(User).filter(User.parent_id == target_user.id).all()
+            for assistant in assistants:
+                assistant.is_active = new_active_status
+                cascaded_count += 1
+
+        cascade_msg = f" (Cascade applied to {cascaded_count} assistants)" if cascaded_count > 0 else ""
         
         # Inject Security Audit Log
         audit_entry = AuditLog(
             admin_id=admin_user.id,
             action="SUSPEND_USER",
             target_user_id=target_user.id,
-            details=f"Admin {admin_user.email} changed status of user {target_user.email} (ID #{target_user.id}) to {action_state}."
+            details=f"Admin {admin_user.email} changed status of user {target_user.email} (ID #{target_user.id}) to {action_state}.{cascade_msg}"
         )
         db.add(audit_entry)
 
         db.commit()
         db.refresh(target_user)
         return {
-            "message": f"User is now {'active' if target_user.is_active else 'suspended'}",
+            "message": f"User is now {'active' if target_user.is_active else 'suspended'}{cascade_msg}",
             "user_id": target_user.id,
-            "is_active": target_user.is_active
+            "is_active": target_user.is_active,
+            "cascaded_count": cascaded_count
         }
     except SQLAlchemyError as exc:
         db.rollback()

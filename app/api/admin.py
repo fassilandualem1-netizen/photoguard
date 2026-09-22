@@ -292,8 +292,12 @@ def toggle_user_plan(
         # If toggled to studio and current quota is default basic (5GB), upgrade quota to 25GB
         if new_plan == "studio" and target_user.storage_quota_limit == 5368709120:
             target_user.storage_quota_limit = 26843545600
-        elif new_plan == "basic" and target_user.storage_quota_limit == 26843545600:
-            target_user.storage_quota_limit = 5368709120
+        elif new_plan == "basic":
+            if target_user.storage_quota_limit == 26843545600:
+                target_user.storage_quota_limit = 5368709120
+            # Strict Tier Gate: Downgrade Wipe of custom studio branding
+            target_user.studio_logo_url = None
+            target_user.brand_color = "#F59E0B"
 
         db.commit()
         db.refresh(target_user)

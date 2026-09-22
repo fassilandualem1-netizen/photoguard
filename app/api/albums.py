@@ -99,13 +99,19 @@ def create_album(
     else:
         assigned_pin = get_unique_pin(db)
 
-    # Calculate expiration lifespan (default 7 days basic, 30 days studio, or user specified)
-    now_utc = datetime.now(timezone.utc)
-    if payload.expires_in_days:
-        expires_at = now_utc + timedelta(days=payload.expires_in_days)
+    # Strict Tier Gate: Basic vs Studio Album Creation Limits
+    # If not Studio (and not admin), force allow_download = False and lifespan = 7 days
+    is_studio = (getattr(current_user, "subscription_plan", "basic") == "studio") or (current_user.role == UserRole.ADMIN)
+
+    if not is_studio:
+        final_allow_download = False
+        expires_days = 7
     else:
-        default_days = 30 if getattr(current_user, "subscription_plan", "basic") == "studio" else 7
-        expires_at = now_utc + timedelta(days=default_days)
+        final_allow_download = bool(payload.allow_download or False)
+        expires_days = payload.expires_in_days if payload.expires_in_days else 30
+
+    now_utc = datetime.now(timezone.utc)
+    expires_at = now_utc + timedelta(days=expires_days)
 
     try:
         album = Album(
@@ -113,7 +119,7 @@ def create_album(
             client_name=payload.client_name,
             pin=assigned_pin,
             photographer_id=current_user.id,
-            allow_download=bool(payload.allow_download or False),
+            allow_download=final_allow_download,
             is_locked=False,
             expires_at=expires_at,
             submitted_at=None
@@ -268,6 +274,13 @@ def extend_album_expiration(
     If the album was locked due to expiration, unlocks it if not already submitted.
     Wrapped in strict try...except with db.rollback().
     """
+    # Strict Tier Gate: Lifespan extension is exclusive to Studio Plan
+    if current_user.subscription_plan != "studio" and current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Extending album expiration lifespan is an exclusive Studio Plan feature. Please upgrade to unlock."
+        )
+
     album = db.query(Album).filter(Album.id == album_id).first()
     if not album:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")

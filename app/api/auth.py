@@ -304,7 +304,16 @@ def update_profile(
             current_user.studio_logo_url = clean_logo
 
         if payload.brand_color is not None:
-            current_user.brand_color = payload.brand_color.strip() if payload.brand_color else "#F59E0B"
+            clean_color = payload.brand_color.strip() if payload.brand_color else "#F59E0B"
+            if clean_color.upper() != "#F59E0B" and current_user.subscription_plan != "studio" and current_user.role != UserRole.ADMIN:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Custom brand color accent is an exclusive Studio Plan feature. Please upgrade to unlock."
+                )
+            if current_user.subscription_plan == "studio" or current_user.role == UserRole.ADMIN:
+                current_user.brand_color = clean_color
+            else:
+                current_user.brand_color = "#F59E0B"
 
         db.commit()
         db.refresh(current_user)

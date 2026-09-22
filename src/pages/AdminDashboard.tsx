@@ -29,7 +29,12 @@ import {
   Key,
   FileText,
   History,
+  ChevronDown,
+  ChevronRight,
+  UserCheck,
+  CornerDownRight,
 } from "lucide-react";
+
 
 
 export interface PlanConfig {
@@ -59,7 +64,9 @@ export default function AdminDashboard() {
 
   // Photographers Directory
   const [photographers, setPhotographers] = useState<any[]>([]);
+  const [expandedPhotographers, setExpandedPhotographers] = useState<Record<number, boolean>>({});
   const [loading, setLoading] = useState(true);
+
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [errorBanner, setErrorBanner] = useState("");
@@ -335,15 +342,41 @@ export default function AdminDashboard() {
   };
 
 
-  // Filtered photographers list
-  const filteredPhotographers = photographers.filter((p) => {
+  const toggleExpand = (id: number) => {
+    setExpandedPhotographers((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
+  // Group root photographers vs assistants
+  const rootPhotographers = photographers.filter(
+    (p) => !p.parent_id && p.role !== "assistant"
+  );
+
+  const getAssistantsFor = (parentId: number) => {
+    return photographers.filter(
+      (p) => p.parent_id === parentId || (p.role === "assistant" && p.parent_id === parentId)
+    );
+  };
+
+  // Filtered root photographers list (matches photographer or any of their assistants)
+  const filteredPhotographers = rootPhotographers.filter((p) => {
     const term = searchQuery.toLowerCase();
+    const assistants = getAssistantsFor(p.id);
+    const matchesAssistant = assistants.some(
+      (a) =>
+        a.full_name?.toLowerCase().includes(term) ||
+        a.email?.toLowerCase().includes(term)
+    );
     return (
       p.full_name?.toLowerCase().includes(term) ||
       p.email?.toLowerCase().includes(term) ||
-      p.subscription_plan?.toLowerCase().includes(term)
+      p.subscription_plan?.toLowerCase().includes(term) ||
+      matchesAssistant
     );
   });
+
 
   const formatBytes = (bytes: number) => {
     if (!bytes || bytes === 0) return "0.00 GB";
@@ -1208,134 +1241,291 @@ export default function AdminDashboard() {
                       Math.round((p.storage_used / (p.storage_quota_limit || 1)) * 100)
                     );
                     const isLoading = actionLoadingId === p.id;
+                    const assistants = getAssistantsFor(p.id);
+                    const hasAssistants = assistants.length > 0;
+                    const isExpanded = !!expandedPhotographers[p.id];
 
                     return (
-                      <tr key={p.id} className="hover:bg-indigo-950/20 transition-colors">
-                        {/* Name & Email */}
-                        <td className="py-3.5 px-3">
-                          <div className="font-semibold text-white">{p.full_name}</div>
-                          <div className="text-slate-400 font-mono text-[11px] flex items-center gap-1 mt-0.5">
-                            <Mail className="w-3 h-3 text-indigo-400/60" />
-                            <span>{p.email}</span>
-                          </div>
-                        </td>
+                      <React.Fragment key={p.id}>
+                        {/* Parent Photographer Row */}
+                        <tr className="hover:bg-indigo-950/20 transition-colors">
+                          {/* Name, Email, & Team Badge / Expand Toggle */}
+                          <td className="py-3.5 px-3">
+                            <div className="flex items-center gap-2">
+                              {hasAssistants ? (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpand(p.id)}
+                                  className="p-1 rounded hover:bg-slate-800 text-indigo-400 hover:text-indigo-300 transition-colors"
+                                  title={isExpanded ? "Collapse Team Assistants" : "Expand Team Assistants"}
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              ) : (
+                                <div className="w-5" />
+                              )}
 
-                        {/* Plan */}
-                        <td className="py-3.5 px-3">
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wider font-mono border ${
-                              p.subscription_plan === "studio"
-                                ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
-                                : "bg-slate-800 text-slate-300 border-slate-700"
-                            }`}
-                          >
-                            {p.subscription_plan === "studio" && (
-                              <Zap className="w-3 h-3 text-indigo-400" />
-                            )}
-                            {p.subscription_plan}
-                          </span>
-                        </td>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-white">{p.full_name}</span>
+                                  {hasAssistants && (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleExpand(p.id)}
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25 transition-all"
+                                      title="Toggle Team View"
+                                    >
+                                      <Users className="w-2.5 h-2.5" />
+                                      <span>Team: {assistants.length}</span>
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="text-slate-400 font-mono text-[11px] flex items-center gap-1 mt-0.5">
+                                  <Mail className="w-3 h-3 text-indigo-400/60" />
+                                  <span>{p.email}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
 
-                        {/* Storage */}
-                        <td className="py-3.5 px-3 min-w-[170px]">
-                          <div className="flex items-center justify-between text-[11px] text-slate-300 font-mono mb-1">
-                            <span>{formatBytes(p.storage_used)}</span>
-                            <span className="text-slate-500">/ {quotaGb} GB</span>
-                          </div>
-                          <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${
-                                usagePercent > 90
-                                  ? "bg-red-500"
-                                  : usagePercent > 70
-                                  ? "bg-amber-400"
-                                  : "bg-indigo-500"
-                              }`}
-                              style={{ width: `${usagePercent}%` }}
-                            />
-                          </div>
-                        </td>
-
-                        {/* Albums & Media */}
-                        <td className="py-3.5 px-3">
-                          <div className="text-slate-200 font-mono">
-                            <strong>{p.total_albums}</strong> albums
-                          </div>
-                          <div className="text-[11px] text-slate-500 font-mono">
-                            {p.total_media} media items
-                          </div>
-                        </td>
-
-                        {/* Status */}
-                        <td className="py-3.5 px-3">
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
-                              p.is_active
-                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                                : "bg-red-500/10 text-red-400 border-red-500/30"
-                            }`}
-                          >
+                          {/* Plan */}
+                          <td className="py-3.5 px-3">
                             <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                p.is_active ? "bg-emerald-400" : "bg-red-400"
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wider font-mono border ${
+                                p.subscription_plan === "studio"
+                                  ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
+                                  : "bg-slate-800 text-slate-300 border-slate-700"
                               }`}
-                            />
-                            {p.is_active ? "Active" : "Suspended"}
-                          </span>
-                        </td>
+                            >
+                              {p.subscription_plan === "studio" && (
+                                <Zap className="w-3 h-3 text-indigo-400" />
+                              )}
+                              {p.subscription_plan}
+                            </span>
+                          </td>
 
-                        {/* Actions */}
-                        <td className="py-3.5 px-3 text-right">
-                          <div className="inline-flex items-center gap-1.5">
-                            {/* Toggle Suspend / Active */}
-                            <button
-                              onClick={() => handleToggleSuspend(p.id, p.is_active)}
-                              disabled={isLoading}
-                              title={p.is_active ? "Suspend Photographer" : "Activate Photographer"}
-                              className={`p-2 rounded-lg text-xs font-medium border transition-colors ${
+                          {/* Storage */}
+                          <td className="py-3.5 px-3 min-w-[170px]">
+                            <div className="flex items-center justify-between text-[11px] text-slate-300 font-mono mb-1">
+                              <span>{formatBytes(p.storage_used)}</span>
+                              <span className="text-slate-500">/ {quotaGb} GB</span>
+                            </div>
+                            <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${
+                                  usagePercent > 90
+                                    ? "bg-red-500"
+                                    : usagePercent > 70
+                                    ? "bg-amber-400"
+                                    : "bg-indigo-500"
+                                }`}
+                                style={{ width: `${usagePercent}%` }}
+                              />
+                            </div>
+                          </td>
+
+                          {/* Albums & Media */}
+                          <td className="py-3.5 px-3">
+                            <div className="text-slate-200 font-mono">
+                              <strong>{p.total_albums}</strong> albums
+                            </div>
+                            <div className="text-[11px] text-slate-500 font-mono">
+                              {p.total_media} media items
+                            </div>
+                          </td>
+
+                          {/* Status */}
+                          <td className="py-3.5 px-3">
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
                                 p.is_active
-                                  ? "bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30"
-                                  : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                  : "bg-red-500/10 text-red-400 border-red-500/30"
                               }`}
                             >
-                              <Power className="w-3.5 h-3.5" />
-                            </button>
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${
+                                  p.is_active ? "bg-emerald-400" : "bg-red-400"
+                                }`}
+                              />
+                              {p.is_active ? "Active" : "Suspended"}
+                            </span>
+                          </td>
 
-                            {/* Toggle Plan */}
-                            <button
-                              onClick={() => handleTogglePlan(p.id, p.subscription_plan)}
-                              disabled={isLoading}
-                              title={`Switch to ${p.subscription_plan === "basic" ? "Studio" : "Basic"} tier`}
-                              className="p-2 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 transition-colors"
-                            >
-                              <Layers className="w-3.5 h-3.5" />
-                            </button>
+                          {/* Actions */}
+                          <td className="py-3.5 px-3 text-right">
+                            <div className="inline-flex items-center gap-1.5">
+                              {/* Toggle Suspend / Active */}
+                              <button
+                                onClick={() => handleToggleSuspend(p.id, p.is_active)}
+                                disabled={isLoading}
+                                title={p.is_active ? "Suspend Photographer" : "Activate Photographer"}
+                                className={`p-2 rounded-lg text-xs font-medium border transition-colors ${
+                                  p.is_active
+                                    ? "bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30"
+                                    : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                }`}
+                              >
+                                <Power className="w-3.5 h-3.5" />
+                              </button>
 
-                            {/* Edit Quota Limit */}
-                            <button
-                              onClick={() => handleEditQuota(p.id, p.storage_quota_limit)}
-                              disabled={isLoading}
-                              title="Edit Storage Quota (GB)"
-                              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
-                            >
-                              <Sliders className="w-3.5 h-3.5" />
-                            </button>
+                              {/* Toggle Plan */}
+                              <button
+                                onClick={() => handleTogglePlan(p.id, p.subscription_plan)}
+                                disabled={isLoading}
+                                title={`Switch to ${p.subscription_plan === "basic" ? "Studio" : "Basic"} tier`}
+                                className="p-2 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 transition-colors"
+                              >
+                                <Layers className="w-3.5 h-3.5" />
+                              </button>
 
-                            {/* Reset Password */}
-                            <button
-                              onClick={() => handleResetPassword(p.id, p.email)}
-                              disabled={isLoading}
-                              title="Generate New Temporary Password"
-                              className="p-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors"
-                            >
-                              <Key className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                              {/* Edit Quota Limit */}
+                              <button
+                                onClick={() => handleEditQuota(p.id, p.storage_quota_limit)}
+                                disabled={isLoading}
+                                title="Edit Storage Quota (GB)"
+                                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                              >
+                                <Sliders className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Reset Password */}
+                              <button
+                                onClick={() => handleResetPassword(p.id, p.email)}
+                                disabled={isLoading}
+                                title="Generate New Temporary Password"
+                                className="p-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors"
+                              >
+                                <Key className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* Sub-Rows: Branch Assistants under this Studio Parent */}
+                        {isExpanded &&
+                          assistants.map((assistant) => {
+                            const isAssistantLoading = actionLoadingId === assistant.id;
+                            return (
+                              <tr
+                                key={assistant.id}
+                                className="bg-[#090c13]/90 border-l-2 border-indigo-500/50 hover:bg-indigo-950/30 transition-colors"
+                              >
+                                {/* Name, Email with Branch Indicator */}
+                                <td className="py-2.5 px-3 pl-8">
+                                  <div className="flex items-center gap-2">
+                                    <CornerDownRight className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-medium text-slate-200 text-xs">
+                                          {assistant.full_name}
+                                        </span>
+                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-mono font-semibold uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                                          <UserCheck className="w-2.5 h-2.5" />
+                                          Studio Staff / Assistant
+                                        </span>
+                                      </div>
+                                      <div className="text-slate-400 font-mono text-[11px] flex items-center gap-1 mt-0.5">
+                                        <Mail className="w-3 h-3 text-indigo-400/60" />
+                                        <span>{assistant.email}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {/* Plan Tag (Inherited from Parent Studio) */}
+                                <td className="py-2.5 px-3">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono text-slate-400 bg-slate-900 border border-slate-800">
+                                    ↳ Inherited ({p.subscription_plan})
+                                  </span>
+                                </td>
+
+                                {/* Storage Note */}
+                                <td className="py-2.5 px-3">
+                                  <span className="text-[11px] font-mono text-slate-500 italic">
+                                    Shared Parent Storage
+                                  </span>
+                                </td>
+
+                                {/* Albums & Media */}
+                                <td className="py-2.5 px-3">
+                                  <span className="text-[11px] font-mono text-slate-500 italic">
+                                    Studio Proof Access
+                                  </span>
+                                </td>
+
+                                {/* Status */}
+                                <td className="py-2.5 px-3">
+                                  <span
+                                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                                      assistant.is_active && p.is_active
+                                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                        : "bg-red-500/10 text-red-400 border-red-500/30"
+                                    }`}
+                                  >
+                                    <span
+                                      className={`w-1.5 h-1.5 rounded-full ${
+                                        assistant.is_active && p.is_active
+                                          ? "bg-emerald-400"
+                                          : "bg-red-400"
+                                      }`}
+                                    />
+                                    {!p.is_active
+                                      ? "Parent Suspended"
+                                      : assistant.is_active
+                                      ? "Active"
+                                      : "Suspended"}
+                                  </span>
+                                </td>
+
+                                {/* Actions for Assistant (Suspend & Password Reset) */}
+                                <td className="py-2.5 px-3 text-right">
+                                  <div className="inline-flex items-center gap-1.5">
+                                    {/* Toggle Suspend / Active for Assistant */}
+                                    <button
+                                      onClick={() =>
+                                        handleToggleSuspend(assistant.id, assistant.is_active)
+                                      }
+                                      disabled={isAssistantLoading}
+                                      title={
+                                        assistant.is_active
+                                          ? "Suspend Assistant"
+                                          : "Activate Assistant"
+                                      }
+                                      className={`p-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                                        assistant.is_active
+                                          ? "bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30"
+                                          : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                      }`}
+                                    >
+                                      <Power className="w-3 h-3" />
+                                    </button>
+
+                                    {/* Reset Assistant Password */}
+                                    <button
+                                      onClick={() =>
+                                        handleResetPassword(assistant.id, assistant.email)
+                                      }
+                                      disabled={isAssistantLoading}
+                                      title="Generate New Temporary Password for Assistant"
+                                      className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors"
+                                    >
+                                      <Key className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </React.Fragment>
                     );
                   })
                 )}
+
               </tbody>
             </table>
           </div>

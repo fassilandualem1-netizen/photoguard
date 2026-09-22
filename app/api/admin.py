@@ -48,6 +48,7 @@ class PhotographerDetailResponse(BaseModel):
     email: str
     full_name: str
     role: str
+    parent_id: Optional[int] = None
     subscription_plan: str
     is_verified: bool
     is_active: bool
@@ -57,6 +58,7 @@ class PhotographerDetailResponse(BaseModel):
     total_albums: int
     total_media: int
     created_at: Optional[str] = None
+
 
 class PhotographerRegisterResponse(BaseModel):
     message: str
@@ -137,6 +139,7 @@ def get_all_photographers(
                     email=p.email,
                     full_name=p.full_name,
                     role=p.role.value if hasattr(p.role, "value") else str(p.role),
+                    parent_id=p.parent_id,
                     subscription_plan=p.subscription_plan,
                     is_verified=p.is_verified,
                     is_active=p.is_active,
@@ -147,6 +150,7 @@ def get_all_photographers(
                     total_media=total_media,
                     created_at=p.created_at.isoformat() if p.created_at else None
                 )
+
             )
 
         return results

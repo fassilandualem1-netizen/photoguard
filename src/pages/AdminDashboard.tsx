@@ -20,7 +20,25 @@ import {
   Layers,
   Mail,
   Zap,
+  Download,
+  Palette,
+  Clock,
+  Save,
+  CheckCircle,
 } from "lucide-react";
+
+export interface PlanConfig {
+  id: number;
+  plan_name: string;
+  storage_quota_bytes: number;
+  storage_quota_gb: number;
+  default_lifespan_days: number;
+  max_lifespan_days: number;
+  can_enable_downloads: boolean;
+  can_customize_branding: boolean;
+  can_extend_lifespan: boolean;
+  updated_at?: string;
+}
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth() as any;
@@ -41,6 +59,12 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [errorBanner, setErrorBanner] = useState("");
 
+  // Dynamic Plan Configurations State
+  const [planConfigs, setPlanConfigs] = useState<PlanConfig[]>([]);
+  const [savingPlan, setSavingPlan] = useState<string | null>(null);
+  const [planSuccessMsg, setPlanSuccessMsg] = useState<string>("");
+  const [editingConfigs, setEditingConfigs] = useState<Record<string, Partial<PlanConfig>>>({});
+
   // Register Photographer Form
   const [registerForm, setRegisterForm] = useState({
     full_name: "",
@@ -56,17 +80,19 @@ export default function AdminDashboard() {
   } | null>(null);
   const [hasCopiedPassword, setHasCopiedPassword] = useState(false);
 
-  // Fetch initial stats & directory
+  // Fetch initial stats, directory & dynamic plans
   const fetchData = async () => {
     try {
       setLoading(true);
       setErrorBanner("");
-      const [statsRes, usersRes] = await Promise.all([
+      const [statsRes, usersRes, plansRes] = await Promise.all([
         api.get("/api/v1/admin/stats"),
         api.get("/api/v1/admin/users"),
+        api.get("/api/v1/admin/plans"),
       ]);
       setStats(statsRes.data);
       setPhotographers(usersRes.data);
+      setPlanConfigs(plansRes.data || []);
     } catch (err: any) {
       console.error("Failed to load admin metrics:", err);
       setErrorBanner(
@@ -218,6 +244,78 @@ export default function AdminDashboard() {
     if (gb >= 1) return `${gb.toFixed(2)} GB`;
     const mb = bytes / (1024 * 1024);
     return `${mb.toFixed(1)} MB`;
+  };
+
+  // Helper to handle dynamic field changes per plan
+  const handleConfigFieldChange = (planName: string, field: keyof PlanConfig, value: any) => {
+    setEditingConfigs((prev) => {
+      const currentPlan = planConfigs.find((p) => p.plan_name === planName);
+      const existingEdits = prev[planName] || (currentPlan ? { ...currentPlan } : {});
+      return {
+        ...prev,
+        [planName]: {
+          ...existingEdits,
+          [field]: value,
+        },
+      };
+    });
+  };
+
+  const getEffectiveConfig = (plan: PlanConfig): Partial<PlanConfig> => {
+    const edits = editingConfigs[plan.plan_name];
+    return edits ? { ...plan, ...edits } : plan;
+  };
+
+  // Persist plan configuration changes to FastAPI backend
+  const handleSavePlanConfig = async (planName: string) => {
+    const currentPlan = planConfigs.find((p) => p.plan_name === planName);
+    if (!currentPlan) return;
+    const effective = getEffectiveConfig(currentPlan);
+
+    try {
+      setSavingPlan(planName);
+      setErrorBanner("");
+      setPlanSuccessMsg("");
+
+      const payload: any = {};
+      if (effective.storage_quota_gb !== undefined) {
+        payload.storage_quota_bytes = Math.round(Number(effective.storage_quota_gb) * 1024 * 1024 * 1024);
+      }
+      if (effective.default_lifespan_days !== undefined) {
+        payload.default_lifespan_days = Number(effective.default_lifespan_days);
+      }
+      if (effective.max_lifespan_days !== undefined) {
+        payload.max_lifespan_days = Number(effective.max_lifespan_days);
+      }
+      if (effective.can_enable_downloads !== undefined) {
+        payload.can_enable_downloads = Boolean(effective.can_enable_downloads);
+      }
+      if (effective.can_customize_branding !== undefined) {
+        payload.can_customize_branding = Boolean(effective.can_customize_branding);
+      }
+      if (effective.can_extend_lifespan !== undefined) {
+        payload.can_extend_lifespan = Boolean(effective.can_extend_lifespan);
+      }
+
+      const res = await api.put(`/api/v1/admin/plans/${planName}`, payload);
+      setPlanConfigs((prev) =>
+        prev.map((p) => (p.plan_name === planName ? res.data : p))
+      );
+      setEditingConfigs((prev) => {
+        const next = { ...prev };
+        delete next[planName];
+        return next;
+      });
+      setPlanSuccessMsg(`Plan "${planName.toUpperCase()}" settings dynamically updated.`);
+      setTimeout(() => setPlanSuccessMsg(""), 4000);
+    } catch (err: any) {
+      console.error("Failed to update plan configuration:", err);
+      setErrorBanner(
+        err.response?.data?.detail || `Failed to update ${planName} configuration.`
+      );
+    } finally {
+      setSavingPlan(null);
+    }
   };
 
   return (
@@ -522,6 +620,274 @@ export default function AdminDashboard() {
               </button>
             </div>
           </form>
+        </section>
+
+        {/* Section: "Dynamic Plan Manager" (Tier Limits & Gates) */}
+        <section id="dynamic-plan-manager" className="p-6 rounded-2xl bg-[#0e121b] border border-indigo-950/70 shadow-xl shadow-black/30">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-indigo-950/60">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
+                <Sliders className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+                  <span>Dynamic Plan Manager</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wide">
+                    Live Tier Gates
+                  </span>
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Configure base storage quotas, album lifespans, and tier gate privileges in real-time
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={fetchData}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 hover:text-white transition-colors"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-indigo-400" : ""}`} />
+              <span>Reload Plans</span>
+            </button>
+          </div>
+
+          {planSuccessMsg && (
+            <div className="mb-6 p-4 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-emerald-300 flex items-center gap-2.5 text-xs animate-fade-in font-medium">
+              <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              <span>{planSuccessMsg}</span>
+            </div>
+          )}
+
+          {planConfigs.length === 0 ? (
+            <div className="py-8 text-center text-xs text-slate-500">
+              Loading dynamic plan configurations...
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {planConfigs.map((plan) => {
+                const effective = getEffectiveConfig(plan);
+                const isStudio = plan.plan_name === "studio";
+                const isSaving = savingPlan === plan.plan_name;
+
+                return (
+                  <div
+                    key={plan.id || plan.plan_name}
+                    className={`p-5 rounded-xl border transition-all ${
+                      isStudio
+                        ? "bg-gradient-to-b from-[#101426] to-[#0c0e17] border-indigo-900/60 shadow-lg shadow-indigo-950/30"
+                        : "bg-[#0b0e14] border-slate-800/80"
+                    }`}
+                  >
+                    {/* Header */}
+                    <div className="flex items-center justify-between pb-4 border-b border-indigo-950/60 mb-5">
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                            isStudio
+                              ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40"
+                              : "bg-slate-800 text-slate-400 border border-slate-700"
+                          }`}
+                        >
+                          {isStudio ? <Zap className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wide">
+                              {plan.plan_name} Plan
+                            </h3>
+                            <span
+                              className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                                isStudio
+                                  ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/30"
+                                  : "bg-slate-800 text-slate-400 border-slate-700"
+                              }`}
+                            >
+                              {isStudio ? "VIP Studio Tier" : "Default Basic Tier"}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            {isStudio
+                              ? "Enterprise white-labeling & extended lifespans"
+                              : "Standard watermarked proofs & fixed retention"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Configuration Inputs */}
+                    <div className="space-y-4">
+                      {/* Storage Quota */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="sm:col-span-1">
+                          <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
+                            <HardDrive className="w-3.5 h-3.5 text-indigo-400" />
+                            <span>Storage (GB)</span>
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="1000"
+                            step="1"
+                            value={effective.storage_quota_gb ?? 5}
+                            onChange={(e) =>
+                              handleConfigFieldChange(
+                                plan.plan_name,
+                                "storage_quota_gb",
+                                parseFloat(e.target.value) || 1
+                              )
+                            }
+                            className="w-full bg-[#07090e] border border-indigo-950/80 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                          />
+                        </div>
+
+                        {/* Default Lifespan */}
+                        <div className="sm:col-span-1">
+                          <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Default Days</span>
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="365"
+                            value={effective.default_lifespan_days ?? 7}
+                            onChange={(e) =>
+                              handleConfigFieldChange(
+                                plan.plan_name,
+                                "default_lifespan_days",
+                                parseInt(e.target.value) || 1
+                              )
+                            }
+                            className="w-full bg-[#07090e] border border-indigo-950/80 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                          />
+                        </div>
+
+                        {/* Max Lifespan */}
+                        <div className="sm:col-span-1">
+                          <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                            <span>Max Days Cap</span>
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="365"
+                            value={effective.max_lifespan_days ?? 30}
+                            onChange={(e) =>
+                              handleConfigFieldChange(
+                                plan.plan_name,
+                                "max_lifespan_days",
+                                parseInt(e.target.value) || 1
+                              )
+                            }
+                            className="w-full bg-[#07090e] border border-indigo-950/80 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Feature & Security Toggles */}
+                      <div className="pt-2 border-t border-indigo-950/40 space-y-2.5">
+                        <div className="text-[11px] font-semibold uppercase font-mono text-slate-400 tracking-wider">
+                          Feature & Gate Permissions
+                        </div>
+
+                        {/* Toggle 1: Downloads */}
+                        <label className="flex items-center justify-between p-2.5 rounded-lg bg-[#07090e] border border-indigo-950/60 hover:border-indigo-900/60 transition-colors cursor-pointer">
+                          <div className="flex items-center gap-2">
+                            <Download className="w-3.5 h-3.5 text-emerald-400" />
+                            <div>
+                              <div className="text-xs text-white font-medium">Direct Gallery Downloads</div>
+                              <div className="text-[10px] text-slate-500">Allow photographer to enable downloads for clients</div>
+                            </div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(effective.can_enable_downloads)}
+                            onChange={(e) =>
+                              handleConfigFieldChange(
+                                plan.plan_name,
+                                "can_enable_downloads",
+                                e.target.checked
+                              )
+                            }
+                            className="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-700 focus:ring-indigo-500"
+                          />
+                        </label>
+
+                        {/* Toggle 2: Branding */}
+                        <label className="flex items-center justify-between p-2.5 rounded-lg bg-[#07090e] border border-indigo-950/60 hover:border-indigo-900/60 transition-colors cursor-pointer">
+                          <div className="flex items-center gap-2">
+                            <Palette className="w-3.5 h-3.5 text-pink-400" />
+                            <div>
+                              <div className="text-xs text-white font-medium">Custom White-Label Branding</div>
+                              <div className="text-[10px] text-slate-500">Allow custom studio logo & brand color accents</div>
+                            </div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(effective.can_customize_branding)}
+                            onChange={(e) =>
+                              handleConfigFieldChange(
+                                plan.plan_name,
+                                "can_customize_branding",
+                                e.target.checked
+                              )
+                            }
+                            className="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-700 focus:ring-indigo-500"
+                          />
+                        </label>
+
+                        {/* Toggle 3: Lifespan Extension */}
+                        <label className="flex items-center justify-between p-2.5 rounded-lg bg-[#07090e] border border-indigo-950/60 hover:border-indigo-900/60 transition-colors cursor-pointer">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-3.5 h-3.5 text-amber-400" />
+                            <div>
+                              <div className="text-xs text-white font-medium">Album Lifespan Extension</div>
+                              <div className="text-[10px] text-slate-500">Permit photographers to extend gallery expiration dates</div>
+                            </div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(effective.can_extend_lifespan)}
+                            onChange={(e) =>
+                              handleConfigFieldChange(
+                                plan.plan_name,
+                                "can_extend_lifespan",
+                                e.target.checked
+                              )
+                            }
+                            className="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-700 focus:ring-indigo-500"
+                          />
+                        </label>
+                      </div>
+
+                      {/* Save Button */}
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => handleSavePlanConfig(plan.plan_name)}
+                          disabled={isSaving}
+                          className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-indigo-600/20 active:scale-[0.99]"
+                        >
+                          {isSaving ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Saving Plan Limits...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-3.5 h-3.5" />
+                              <span>Save {plan.plan_name.toUpperCase()} Plan Changes</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         {/* Section 3: "Photographers Directory" Table */}

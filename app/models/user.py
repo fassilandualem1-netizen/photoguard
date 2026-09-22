@@ -1,6 +1,7 @@
 import enum
+from typing import Optional
 from sqlalchemy import Column, Integer, String, Enum, DateTime, Boolean, BigInteger, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -25,8 +26,11 @@ class User(Base):
     full_name = Column(String(255), nullable=False)
     role = Column(String(50), default="photographer", nullable=False)
     
-    # RBAC Team Management:
-    # Assistants link to their parent studio owner account
+    # Hierarchy Column for Studio Assistants:
+    # Sub-users / staff link directly to their parent photographer account
+    parent_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+
+    # Legacy column support (retained for backward compatibility with existing databases)
     parent_owner_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     
     # Monetization & Plan tiers: 'basic' or 'studio'
@@ -53,8 +57,26 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
 
+    # Hierarchical Relationship for Assistants / Staff
+    assistants = relationship(
+        "User",
+        backref=backref("parent", remote_side="User.id"),
+        foreign_keys=[parent_id]
+    )
+
     # Relationships
     albums = relationship("Album", back_populates="photographer", cascade="all, delete-orphan")
 
+    @property
+    def effective_owner_id(self) -> int:
+        """
+        Resolves the primary account entity responsible for storage quota and albums.
+        If the user is an assistant or has a parent_id, routes to the parent photographer's ID.
+        Otherwise, returns self.id.
+        """
+        if self.role == UserRole.ASSISTANT.value or self.parent_id is not None:
+            return self.parent_id if self.parent_id is not None else self.id
+        return self.id
+
     def __repr__(self):
-        return f"<User(id={self.id}, email='{self.email}', role='{self.role}', plan='{self.subscription_plan}', needs_password_change={self.needs_password_change})>"
+        return f"<User(id={self.id}, email='{self.email}', role='{self.role}', parent_id={self.parent_id}, plan='{self.subscription_plan}', needs_password_change={self.needs_password_change})>"

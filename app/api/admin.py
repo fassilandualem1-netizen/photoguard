@@ -11,6 +11,12 @@ from app.core.dependencies import require_admin
 from app.core.security import get_password_hash
 from app.models.user import User, UserRole
 from app.models.album import Album, MediaItem
+from app.models.plan_config import PlanConfiguration
+from app.services.plan_service import get_or_create_plan_config, get_all_plan_configs
+from app.schemas.admin import (
+    PlanConfigResponse,
+    PlanConfigUpdateRequest,
+)
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin Control"])
 
@@ -164,8 +170,9 @@ def register_photographer(
     if plan not in ["basic", "studio"]:
         plan = "basic"
 
-    # Default quota: 5GB for basic, 25GB for studio
-    default_quota = 26843545600 if plan == "studio" else 5368709120
+    # Dynamic plan quota from PlanConfiguration
+    plan_cfg = get_or_create_plan_config(db, plan)
+    default_quota = plan_cfg.storage_quota_bytes
 
     # Generate cryptographically secure 8-character password with letters and digits
     alphabet = string.ascii_letters + string.digits
@@ -286,16 +293,20 @@ def toggle_user_plan(
         )
 
     try:
-        new_plan = "studio" if target_user.subscription_plan == "basic" else "basic"
+        current_plan_str = target_user.subscription_plan or "basic"
+        new_plan = "studio" if current_plan_str == "basic" else "basic"
+        old_cfg = get_or_create_plan_config(db, current_plan_str)
+        new_cfg = get_or_create_plan_config(db, new_plan)
+
         target_user.subscription_plan = new_plan
         target_user.plan = new_plan
-        # If toggled to studio and current quota is default basic (5GB), upgrade quota to 25GB
-        if new_plan == "studio" and target_user.storage_quota_limit == 5368709120:
-            target_user.storage_quota_limit = 26843545600
-        elif new_plan == "basic":
-            if target_user.storage_quota_limit == 26843545600:
-                target_user.storage_quota_limit = 5368709120
-            # Strict Tier Gate: Downgrade Wipe of custom studio branding
+
+        # If photographer had the standard quota of their old plan, transition them to the new plan's dynamic quota
+        if target_user.storage_quota_limit == old_cfg.storage_quota_bytes:
+            target_user.storage_quota_limit = new_cfg.storage_quota_bytes
+
+        # Strict Dynamic Tier Gate: If new plan does not support custom branding, wipe branding assets
+        if not new_cfg.can_customize_branding:
             target_user.studio_logo_url = None
             target_user.brand_color = "#F59E0B"
 
@@ -404,5 +415,86 @@ def reset_user_password(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to reset photographer password: {str(exc)}"
+        )
+
+def format_plan_response(cfg: PlanConfiguration) -> PlanConfigResponse:
+    quota_bytes = cfg.storage_quota_bytes or 0
+    quota_gb = round(quota_bytes / (1024 * 1024 * 1024), 2)
+    return PlanConfigResponse(
+        id=cfg.id,
+        plan_name=cfg.plan_name,
+        storage_quota_bytes=quota_bytes,
+        storage_quota_gb=quota_gb,
+        default_lifespan_days=cfg.default_lifespan_days,
+        max_lifespan_days=cfg.max_lifespan_days,
+        can_enable_downloads=bool(cfg.can_enable_downloads),
+        can_customize_branding=bool(cfg.can_customize_branding),
+        can_extend_lifespan=bool(cfg.can_extend_lifespan),
+        updated_at=cfg.updated_at
+    )
+
+@router.get("/plans", response_model=List[PlanConfigResponse], status_code=status.HTTP_200_OK)
+def get_dynamic_plans(
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_admin)
+):
+    """
+    Returns the dynamic system configurations for all subscription tiers (Basic, Studio).
+    """
+    configs = get_all_plan_configs(db)
+    return [format_plan_response(c) for c in configs]
+
+@router.put("/plans/{plan_name}", response_model=PlanConfigResponse, status_code=status.HTTP_200_OK)
+def update_dynamic_plan(
+    plan_name: str,
+    payload: PlanConfigUpdateRequest,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_admin)
+):
+    """
+    Allows the Admin to dynamically reconfigure limits, lifespans, and feature flags
+    for 'basic' or 'studio' plans without code deployment.
+    """
+    normalized = plan_name.lower().strip()
+    if normalized not in ["basic", "studio"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid plan name '{plan_name}'. Must be 'basic' or 'studio'."
+        )
+
+    cfg = get_or_create_plan_config(db, normalized)
+
+    try:
+        if payload.storage_quota_bytes is not None:
+            cfg.storage_quota_bytes = payload.storage_quota_bytes
+        if payload.default_lifespan_days is not None:
+            cfg.default_lifespan_days = payload.default_lifespan_days
+        if payload.max_lifespan_days is not None:
+            cfg.max_lifespan_days = payload.max_lifespan_days
+        if payload.can_enable_downloads is not None:
+            cfg.can_enable_downloads = payload.can_enable_downloads
+        if payload.can_customize_branding is not None:
+            cfg.can_customize_branding = payload.can_customize_branding
+        if payload.can_extend_lifespan is not None:
+            cfg.can_extend_lifespan = payload.can_extend_lifespan
+
+        # Validation: default lifespan cannot exceed max lifespan
+        if cfg.default_lifespan_days > cfg.max_lifespan_days:
+            cfg.max_lifespan_days = cfg.default_lifespan_days
+
+        db.commit()
+        db.refresh(cfg)
+        return format_plan_response(cfg)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error updating plan configuration: {str(exc)}"
+        )
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update plan configuration: {str(exc)}"
         )
 

@@ -11,6 +11,7 @@ from app.core.s3_cleanup import delete_file_from_s3
 from app.core.storage import delete_file_from_cloudinary
 from app.models.user import User, UserRole
 from app.models.album import Album, MediaItem, generate_album_pin
+from app.services.plan_service import get_or_create_plan_config
 from app.schemas.album import (
     AlbumCreate,
     AlbumUpdate,
@@ -99,16 +100,24 @@ def create_album(
     else:
         assigned_pin = get_unique_pin(db)
 
-    # Strict Tier Gate: Basic vs Studio Album Creation Limits
-    # If not Studio (and not admin), force allow_download = False and lifespan = 7 days
-    is_studio = (getattr(current_user, "subscription_plan", "basic") == "studio") or (current_user.role == UserRole.ADMIN)
+    # Dynamic Tier Gate: Enforce limits based on dynamic PlanConfiguration
+    user_plan = getattr(current_user, "subscription_plan", "basic") or "basic"
+    plan_cfg = get_or_create_plan_config(db, user_plan)
+    is_admin = (current_user.role == UserRole.ADMIN)
 
-    if not is_studio:
-        final_allow_download = False
-        expires_days = 7
-    else:
+    # Dynamic download permission
+    if is_admin or plan_cfg.can_enable_downloads:
         final_allow_download = bool(payload.allow_download or False)
-        expires_days = payload.expires_in_days if payload.expires_in_days else 30
+    else:
+        final_allow_download = False
+
+    # Dynamic lifespan calculation
+    if is_admin:
+        expires_days = payload.expires_in_days if payload.expires_in_days else plan_cfg.default_lifespan_days
+    elif payload.expires_in_days:
+        expires_days = min(payload.expires_in_days, plan_cfg.max_lifespan_days)
+    else:
+        expires_days = plan_cfg.default_lifespan_days
 
     now_utc = datetime.now(timezone.utc)
     expires_at = now_utc + timedelta(days=expires_days)
@@ -274,11 +283,13 @@ def extend_album_expiration(
     If the album was locked due to expiration, unlocks it if not already submitted.
     Wrapped in strict try...except with db.rollback().
     """
-    # Strict Tier Gate: Lifespan extension is exclusive to Studio Plan
-    if current_user.subscription_plan != "studio" and current_user.role != UserRole.ADMIN:
+    # Dynamic Tier Gate: Lifespan extension checked against PlanConfiguration
+    user_plan = getattr(current_user, "subscription_plan", "basic") or "basic"
+    plan_cfg = get_or_create_plan_config(db, user_plan)
+    if current_user.role != UserRole.ADMIN and not plan_cfg.can_extend_lifespan:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Extending album expiration lifespan is an exclusive Studio Plan feature. Please upgrade to unlock."
+            detail=f"Extending album expiration lifespan is not enabled for the {user_plan.capitalize()} Plan. Please upgrade to unlock."
         )
 
     album = db.query(Album).filter(Album.id == album_id).first()

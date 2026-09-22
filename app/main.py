@@ -22,6 +22,7 @@ from app.api.client import router as client_router
 from app.api.media import router as media_router
 from app.api.admin import router as admin_router
 from app.api.telegram import router as telegram_router
+from app.api.team import router as team_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("photoguard.core")
@@ -63,6 +64,8 @@ def run_db_migrations():
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;", "users.created_at")
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE;", "users.updated_at")
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS parent_owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL;", "users.parent_owner_id")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES users(id) ON DELETE CASCADE;", "users.parent_id")
+        safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_users_parent_id ON users(parent_id);", "index users.parent_id")
 
         # Safe role type conversions if role was previously typed as enum
         safe_execute_ddl("ALTER TABLE users ALTER COLUMN role TYPE VARCHAR(50) USING role::text;", "users.role type convert")
@@ -174,6 +177,24 @@ def run_db_migrations():
         safe_execute_ddl("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending';", "payment_receipts.status")
         safe_execute_ddl("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;", "payment_receipts.created_at")
         safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_payment_receipts_transaction_ref ON payment_receipts(transaction_ref);", "index payment_receipts.transaction_ref")
+
+        # Plan configurations table creation & indexing
+        safe_execute_ddl("""
+            CREATE TABLE IF NOT EXISTS plan_configurations (
+                id SERIAL PRIMARY KEY,
+                plan_name VARCHAR(50) UNIQUE NOT NULL,
+                storage_quota_bytes BIGINT NOT NULL,
+                default_lifespan_days INTEGER NOT NULL DEFAULT 7,
+                max_lifespan_days INTEGER NOT NULL DEFAULT 30,
+                can_enable_downloads BOOLEAN NOT NULL DEFAULT FALSE,
+                can_customize_branding BOOLEAN NOT NULL DEFAULT FALSE,
+                can_extend_lifespan BOOLEAN NOT NULL DEFAULT FALSE,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        """, "create plan_configurations table")
+        safe_execute_ddl("ALTER TABLE plan_configurations ADD COLUMN IF NOT EXISTS max_lifespan_days INTEGER DEFAULT 30;", "plan_configurations.max_lifespan_days")
+        safe_execute_ddl("ALTER TABLE plan_configurations ADD COLUMN IF NOT EXISTS can_extend_lifespan BOOLEAN DEFAULT FALSE;", "plan_configurations.can_extend_lifespan")
+        safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_plan_configurations_plan_name ON plan_configurations(plan_name);", "index plan_configurations.plan_name")
         
         logger.info("[PhotoGuard DB] Schema auto-migration step finalized.")
     except Exception as exc:
@@ -326,6 +347,15 @@ async def lifespan(app: FastAPI):
             logger.info(f"[PhotoGuard Lifecycle] Seed result: {seed_result}")
         except Exception as seed_err:
             logger.warning(f"[PhotoGuard Lifecycle] seed_root_admin warning: {seed_err}")
+
+        # 4. Seed Default Plan Configurations safely
+        try:
+            with SessionLocal() as db_session:
+                from app.services.plan_service import get_all_plan_configs
+                get_all_plan_configs(db_session)
+            logger.info("[PhotoGuard Lifecycle] Dynamic Plan Configurations verified and seeded.")
+        except Exception as plan_err:
+            logger.warning(f"[PhotoGuard Lifecycle] Plan configurations seed warning: {plan_err}")
     except Exception as exc:
         logger.critical(f"[PhotoGuard Lifecycle Error] Non-fatal startup sequence error: {exc}\n{traceback.format_exc()}")
     
@@ -377,6 +407,7 @@ app.include_router(client_router)
 app.include_router(media_router)
 app.include_router(admin_router)
 app.include_router(telegram_router)
+app.include_router(team_router)
 
 # Direct alias for studio logo upload
 @app.post("/api/v1/users/upload-logo", tags=["User Profile"])

@@ -14,6 +14,7 @@ from app.core.storage import (
     generate_cdn_urls,
 )
 from app.models.user import User, UserRole
+from app.services.plan_service import get_or_create_plan_config
 from app.schemas.auth import (
     LoginRequest,
     RegisterRequest,
@@ -288,6 +289,10 @@ def update_profile(
     custom studio logo, and brand color). Guarded with transaction rollback.
     """
     try:
+        user_plan = getattr(current_user, "subscription_plan", "basic") or "basic"
+        plan_cfg = get_or_create_plan_config(db, user_plan)
+        is_admin = (current_user.role == UserRole.ADMIN)
+
         if payload.full_name is not None:
             current_user.full_name = payload.full_name.strip()
             
@@ -296,21 +301,21 @@ def update_profile(
             
         if payload.studio_logo_url is not None:
             clean_logo = payload.studio_logo_url.strip() if payload.studio_logo_url else None
-            if clean_logo and current_user.subscription_plan != "studio" and current_user.role != UserRole.ADMIN:
+            if clean_logo and not is_admin and not plan_cfg.can_customize_branding:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Custom Studio Logo white-labeling is an exclusive Studio Plan feature. Please upgrade to unlock."
+                    detail=f"Custom Studio Logo white-labeling is not enabled for the {user_plan.capitalize()} Plan. Please upgrade to unlock."
                 )
             current_user.studio_logo_url = clean_logo
 
         if payload.brand_color is not None:
             clean_color = payload.brand_color.strip() if payload.brand_color else "#F59E0B"
-            if clean_color.upper() != "#F59E0B" and current_user.subscription_plan != "studio" and current_user.role != UserRole.ADMIN:
+            if clean_color.upper() != "#F59E0B" and not is_admin and not plan_cfg.can_customize_branding:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Custom brand color accent is an exclusive Studio Plan feature. Please upgrade to unlock."
+                    detail=f"Custom brand color accent is not enabled for the {user_plan.capitalize()} Plan. Please upgrade to unlock."
                 )
-            if current_user.subscription_plan == "studio" or current_user.role == UserRole.ADMIN:
+            if is_admin or plan_cfg.can_customize_branding:
                 current_user.brand_color = clean_color
             else:
                 current_user.brand_color = "#F59E0B"
@@ -345,10 +350,12 @@ async def upload_studio_logo(
     Uploads directly to Cloudinary (or resilient fallback) and saves studio_logo_url.
     Returns: {"url": "https://res.cloudinary.com/..."}
     """
-    if current_user.subscription_plan != "studio" and current_user.role != UserRole.ADMIN:
+    user_plan = getattr(current_user, "subscription_plan", "basic") or "basic"
+    plan_cfg = get_or_create_plan_config(db, user_plan)
+    if current_user.role != UserRole.ADMIN and not plan_cfg.can_customize_branding:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Custom Studio Logo white-labeling is an exclusive Studio Plan feature. Please upgrade to unlock."
+            detail=f"Custom Studio Logo white-labeling is not enabled on the {user_plan.capitalize()} Plan. Please upgrade to unlock."
         )
 
     try:

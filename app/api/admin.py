@@ -64,7 +64,7 @@ def get_platform_stats(
     Strictly restricted to users with UserRole.ADMIN.
     """
     try:
-        total_photographers = db.query(func.count(User.id)).filter(User.role == UserRole.PHOTOGRAPHER).scalar() or 0
+        total_photographers = db.query(func.count(User.id)).filter(func.lower(User.role) != "admin").scalar() or 0
         total_storage_used_bytes = db.query(func.coalesce(func.sum(User.storage_used), 0)).scalar() or 0
         total_storage_used_gb = round(total_storage_used_bytes / (1024 * 1024 * 1024), 2)
         total_albums = db.query(func.count(Album.id)).scalar() or 0
@@ -100,7 +100,7 @@ def get_all_photographers(
     try:
         photographers = (
             db.query(User)
-            .filter(User.role == UserRole.PHOTOGRAPHER)
+            .filter(func.lower(User.role) != "admin")
             .order_by(User.id.desc())
             .all()
         )

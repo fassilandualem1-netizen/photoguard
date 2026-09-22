@@ -9,7 +9,6 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.s3_cleanup import delete_file_from_s3
 from app.core.storage import delete_file_from_cloudinary
-from app.core.telegram import send_telegram_message
 from app.models.user import User, UserRole
 from app.models.album import Album, MediaItem, generate_album_pin
 from app.schemas.album import (
@@ -108,20 +107,14 @@ def create_album(
         default_days = 30 if getattr(current_user, "subscription_plan", "basic") == "studio" else 7
         expires_at = now_utc + timedelta(days=default_days)
 
-    # Assign ownership to parent studio owner if user is an assistant
-    owner_id = current_user.parent_owner_id if current_user.role == UserRole.ASSISTANT else current_user.id
-
     try:
         album = Album(
             title=payload.title,
             client_name=payload.client_name,
             pin=assigned_pin,
-            photographer_id=owner_id,
+            photographer_id=current_user.id,
             allow_download=bool(payload.allow_download or False),
             is_locked=False,
-            view_count=0,
-            last_viewed_at=None,
-            reminder_sent_at=None,
             expires_at=expires_at,
             submitted_at=None
         )
@@ -138,9 +131,6 @@ def create_album(
             photographer_id=album.photographer_id,
             is_locked=bool(album.is_locked or False),
             allow_download=bool(album.allow_download or False),
-            view_count=0,
-            last_viewed_at=None,
-            reminder_sent_at=None,
             created_at=album.created_at,
             expires_at=album.expires_at,
             is_expired=check_is_expired(album.expires_at),
@@ -170,17 +160,14 @@ def list_albums(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Lists all albums for the logged-in photographer or assistant.
-    Assistants access albums belonging to their parent studio owner.
+    Lists all albums for the logged-in photographer.
     Administrators receive all albums across the platform.
-    Calculates exact expiration status and analytics metrics for each album.
+    Calculates exact expiration status for each album.
+    Robustly sanitizes all DB columns, converting None values to valid types.
     """
     try:
         if current_user.role == UserRole.ADMIN:
             albums = db.query(Album).order_by(Album.created_at.desc()).all()
-        elif current_user.role == UserRole.ASSISTANT:
-            effective_owner_id = current_user.parent_owner_id or current_user.id
-            albums = db.query(Album).filter(Album.photographer_id == effective_owner_id).order_by(Album.created_at.desc()).all()
         else:
             albums = db.query(Album).filter(Album.photographer_id == current_user.id).order_by(Album.created_at.desc()).all()
 
@@ -198,9 +185,6 @@ def list_albums(
                     photographer_id=alb.photographer_id,
                     is_locked=bool(alb.is_locked or False),
                     allow_download=bool(alb.allow_download or False),
-                    view_count=int(alb.view_count or 0),
-                    last_viewed_at=alb.last_viewed_at,
-                    reminder_sent_at=alb.reminder_sent_at,
                     created_at=alb.created_at,
                     expires_at=alb.expires_at,
                     is_expired=check_is_expired(alb.expires_at),
@@ -225,18 +209,17 @@ def get_album(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Fetches full album details including associated media items and analytics.
+    Fetches full album details including associated media items.
     Returns the exact expiration status (is_expired).
-    Enforces ownership permissions (photographer must own the album or be authorized assistant).
+    Enforces ownership permissions (photographer must own the album unless admin).
+    Guarantees null-safe serialization.
     """
     try:
         album = db.query(Album).filter(Album.id == album_id).first()
         if not album:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
 
-        is_owner = album.photographer_id == current_user.id
-        is_assistant = current_user.role == UserRole.ASSISTANT and album.photographer_id == current_user.parent_owner_id
-        if current_user.role != UserRole.ADMIN and not (is_owner or is_assistant):
+        if current_user.role != UserRole.ADMIN and album.photographer_id != current_user.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this album.")
 
         media_items = album.media_items or []
@@ -254,9 +237,6 @@ def get_album(
             photographer_id=album.photographer_id,
             is_locked=bool(album.is_locked or False),
             allow_download=bool(album.allow_download or False),
-            view_count=int(album.view_count or 0),
-            last_viewed_at=album.last_viewed_at,
-            reminder_sent_at=album.reminder_sent_at,
             created_at=album.created_at,
             expires_at=album.expires_at,
             is_expired=is_expired,
@@ -418,9 +398,6 @@ def update_album(
             photographer_id=album.photographer_id,
             is_locked=bool(album.is_locked or False),
             allow_download=bool(album.allow_download or False),
-            view_count=int(album.view_count or 0),
-            last_viewed_at=album.last_viewed_at,
-            reminder_sent_at=album.reminder_sent_at,
             created_at=album.created_at,
             expires_at=album.expires_at,
             is_expired=check_is_expired(album.expires_at),
@@ -453,17 +430,10 @@ def delete_album(
 ):
     """
     Deletes an album and cascades removal to all its media items:
-    1. STRICT RBAC: Assistants cannot delete albums under any circumstance.
-    2. Lifetime Bandwidth Quota: DO NOT decrement storage_used (preserves lifetime upload tracking).
-    3. Physical storage cleanup: Deletes actual media files from S3 or local storage.
-    4. Cascades removal of album and its media records from database.
+    1. Lifetime Bandwidth Quota: DO NOT decrement storage_used (preserves lifetime upload tracking).
+    2. Physical storage cleanup: Deletes actual media files from S3 or local storage.
+    3. Cascades removal of album and its media records from database.
     """
-    if current_user.role == UserRole.ASSISTANT:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden: Assistants are not permitted to delete albums."
-        )
-
     album = db.query(Album).filter(Album.id == album_id).first()
     if not album:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
@@ -495,8 +465,6 @@ def delete_album(
         db.delete(album)
         db.commit()
         return None
-    except HTTPException:
-        raise
     except SQLAlchemyError as exc:
         db.rollback()
         logger.error(f"[Albums API] Database error deleting album: {exc}", exc_info=True)
@@ -511,47 +479,3 @@ def delete_album(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error deleting album: {str(exc)}"
         )
-
-@router.post("/{album_id}/remind", status_code=status.HTTP_200_OK)
-async def send_album_reminder(
-    album_id: int,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Triggers automated reminder ping to the client and updates reminder_sent_at.
-    Sends notification via Telegram bot if configured.
-    """
-    album = db.query(Album).filter(Album.id == album_id).first()
-    if not album:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
-
-    is_owner = album.photographer_id == current_user.id
-    is_assistant = current_user.role == UserRole.ASSISTANT and album.photographer_id == current_user.parent_owner_id
-    if current_user.role != UserRole.ADMIN and not (is_owner or is_assistant):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this album.")
-
-    now_utc = datetime.now(timezone.utc)
-    album.reminder_sent_at = now_utc
-    db.commit()
-    db.refresh(album)
-
-    # Trigger Telegram reminder if chat_id exists on user or parent owner
-    owner = current_user if is_owner else db.query(User).filter(User.id == album.photographer_id).first()
-    if owner and owner.telegram_chat_id:
-        msg = (
-            f"🔔 <b>PhotoGuard Gallery Reminder Dispatched!</b>\n\n"
-            f"👤 <b>Client:</b> {album.client_name}\n"
-            f"📁 <b>Album:</b> {album.title}\n"
-            f"🔑 <b>PIN:</b> <code>{album.pin}</code>\n\n"
-            f"⚡ Automated reminder notification has been triggered for this gallery session."
-        )
-        background_tasks.add_task(send_telegram_message, owner.telegram_chat_id, msg)
-
-    return {
-        "status": "success",
-        "message": f"Selection reminder sent to {album.client_name} successfully!",
-        "reminder_sent_at": album.reminder_sent_at,
-        "album_id": album.id
-    }

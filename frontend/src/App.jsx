@@ -38,11 +38,6 @@ export function ProtectedRoute({ children }) {
     return <Navigate to="/setup-password" replace />;
   }
 
-  // Strictly prevent Admin accounts from accessing photographer /dashboard
-  if (isAdmin) {
-    return <Navigate to="/admin" replace />;
-  }
-
   return children;
 }
 

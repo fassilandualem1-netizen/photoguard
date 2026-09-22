@@ -1,10 +1,8 @@
-import React, { useState, useEffect, useMemo, Component } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import AdminDashboard from "../components/AdminDashboard";
 import CreateAlbumModal from "../components/CreateAlbumModal";
-import TeamManagement from "../components/TeamManagement";
-import StudioAnalyticsModal from "../components/StudioAnalyticsModal";
 import api from "../api/axios";
 import {
   Plus,
@@ -20,70 +18,15 @@ import {
   Search,
   User,
   CheckCircle2,
-  Users,
-  BarChart3,
-  Sparkles,
 } from "lucide-react";
 
-// Safe In-Component Error Boundary to permanently prevent React White Screen
-class DashboardErrorBoundary extends Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.error("[PhotoGuard Dashboard Error Boundary Caught]:", error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="p-8 my-8 rounded-3xl border border-red-500/30 bg-red-950/40 text-red-300 max-w-xl mx-auto text-center space-y-4">
-          <AlertCircle className="w-10 h-10 text-red-400 mx-auto stroke-[1.5]" />
-          <h2 className="text-base font-bold text-white">Dashboard Encountered a Display Issue</h2>
-          <p className="text-xs text-red-300/90 leading-relaxed">
-            A temporary component state discrepancy was safely intercepted. Click below to reload your galleries safely.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              this.setState({ hasError: false, error: null });
-              window.location.reload();
-            }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-800/80 hover:bg-red-700 text-white text-xs font-semibold transition-all"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Reload Dashboard</span>
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-function DashboardHomeContent() {
-  const { user = {}, isAdmin = false } = useAuth() || {};
+export default function DashboardHome() {
+  const { isAdmin } = useAuth();
   const navigate = useNavigate();
-
-  // Safe user property evaluation
-  const safeUser = user || {};
-  const userRole = String(safeUser?.role || "photographer").toLowerCase();
-  const subscriptionPlan = String(safeUser?.subscription_plan || safeUser?.plan || "basic").toLowerCase();
-  const isAssistant = userRole === "assistant";
-  const isStudio = subscriptionPlan === "studio" || userRole === "admin";
-
   const [albums, setAlbums] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
-  const [isAnalyticsModalOpen, setIsAnalyticsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [deletingId, setDeletingId] = useState(null);
 
@@ -95,29 +38,20 @@ function DashboardHomeContent() {
       setLoading(true);
       setError(null);
       const response = await api.get("/api/v1/albums");
-      const data = response?.data;
-      // Guarantee array data structure
-      if (Array.isArray(data)) {
-        setAlbums(data);
-      } else if (data && Array.isArray(data.albums)) {
-        setAlbums(data.albums);
-      } else {
-        setAlbums([]);
-      }
+      setAlbums(response.data || []);
     } catch (err) {
-      const rawDetail = err?.response?.data?.detail;
+      const rawDetail = err.response?.data?.detail;
       let msg = "Failed to load client albums. Please try again.";
       if (typeof rawDetail === "string" && rawDetail.trim()) {
         msg = rawDetail;
       } else if (Array.isArray(rawDetail) && rawDetail.length > 0) {
-        msg = rawDetail.map((d) => (typeof d === "object" ? d?.msg || JSON.stringify(d) : String(d))).join("; ");
-      } else if (err?.response?.status) {
+        msg = rawDetail.map((d) => (typeof d === "object" ? d.msg || JSON.stringify(d) : String(d))).join("; ");
+      } else if (err.response?.status) {
         msg = `Server Error (${err.response.status}): ${err.response.statusText || "Failed to fetch albums"}`;
-      } else if (err?.message) {
+      } else if (err.message) {
         msg = err.message;
       }
       setError(msg);
-      setAlbums([]);
     } finally {
       setLoading(false);
     }
@@ -143,23 +77,17 @@ function DashboardHomeContent() {
 
   const calculateDaysLeft = (expiresAt) => {
     if (!expiresAt) return null;
-    try {
-      const diff = new Date(expiresAt).getTime() - new Date().getTime();
-      const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-      return days > 0 ? days : 0;
-    } catch {
-      return null;
-    }
+    const expiryTime = new Date(expiresAt).getTime();
+    if (isNaN(expiryTime)) return null;
+    const diff = expiryTime - new Date().getTime();
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    return days > 0 ? days : 0;
   };
 
   const handleDeleteAlbum = async (e, albumId, albumTitle) => {
-    e?.preventDefault?.();
-    e?.stopPropagation?.();
-
-    // RBAC Rule: Assistants are strictly forbidden from deleting albums
-    if (isAssistant) {
-      alert("Permission Denied: Assistant accounts are not authorized to delete client albums.");
-      return;
+    if (e && typeof e.preventDefault === "function") {
+      e.preventDefault();
+      e.stopPropagation();
     }
 
     if (
@@ -173,30 +101,29 @@ function DashboardHomeContent() {
     try {
       setDeletingId(albumId);
       await api.delete(`/api/v1/albums/${albumId}`);
-      // Remove safely from state
+      // Remove instantly from UI
       setAlbums((prev) => (Array.isArray(prev) ? prev.filter((a) => a?.id !== albumId) : []));
     } catch (err) {
-      const msg = err?.response?.data?.detail || "Failed to delete album. Please try again.";
+      const msg = err.response?.data?.detail || "Failed to delete album. Please try again.";
       alert(msg);
     } finally {
       setDeletingId(null);
     }
   };
 
-  // Safe data filtering with defensive array checks
-  const safeAlbumsList = Array.isArray(albums) ? albums : [];
-
+  // Filter albums by search query (title, client name, or PIN)
   const filteredAlbums = useMemo(() => {
-    if (!searchQuery.trim()) return safeAlbumsList;
+    const safeAlbums = Array.isArray(albums) ? albums : [];
+    if (!searchQuery.trim()) return safeAlbums;
     const q = searchQuery.toLowerCase().trim();
-    return safeAlbumsList.filter((a) => {
+    return safeAlbums.filter((a) => {
       if (!a) return false;
-      const title = String(a.title || "").toLowerCase();
-      const client = String(a.client_name || "").toLowerCase();
-      const pin = String(a.pin || a.client_pin || "").toLowerCase();
+      const title = (a.title || "").toLowerCase();
+      const client = (a.client_name || "").toLowerCase();
+      const pin = (a.pin || a.client_pin || "").toLowerCase();
       return title.includes(q) || client.includes(q) || pin.includes(q);
     });
-  }, [safeAlbumsList, searchQuery]);
+  }, [albums, searchQuery]);
 
   if (loading) {
     return (
@@ -206,7 +133,7 @@ function DashboardHomeContent() {
       >
         <div className="w-8 h-8 rounded-full border-2 border-amber-400 border-t-transparent animate-spin mb-3" />
         <p className="text-xs font-mono uppercase tracking-wider text-slate-500">
-          Loading client proof galleries...
+          Loading client galleries...
         </p>
       </div>
     );
@@ -244,7 +171,7 @@ function DashboardHomeContent() {
               Client Proof Galleries
             </h1>
             <span className="px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-xs font-mono">
-              {(safeAlbumsList || []).length} Total
+              {albums.length} Total
             </span>
             {isAdmin && (
               <button
@@ -262,33 +189,7 @@ function DashboardHomeContent() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Studio Quick Action: Team Management (Owners only) */}
-          {!isAssistant && isStudio && (
-            <button
-              type="button"
-              onClick={() => setIsTeamModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-800/80 text-slate-300 hover:text-white text-xs font-semibold transition-colors"
-              title="Manage Assistants"
-            >
-              <Users className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden md:inline">Team</span>
-            </button>
-          )}
-
-          {/* Studio Quick Action: Client Analytics */}
-          {isStudio && (
-            <button
-              type="button"
-              onClick={() => setIsAnalyticsModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-800/80 text-slate-300 hover:text-white text-xs font-semibold transition-colors"
-              title="View Client Analytics"
-            >
-              <BarChart3 className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden md:inline">Analytics</span>
-            </button>
-          )}
-
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={fetchAlbums}
@@ -312,7 +213,7 @@ function DashboardHomeContent() {
       </div>
 
       {/* Fast Filter Bar (Scalable for 20+ albums) */}
-      {(safeAlbumsList || []).length > 0 && (
+      {albums.length > 0 && (
         <div className="flex items-center justify-between gap-4">
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -326,14 +227,14 @@ function DashboardHomeContent() {
           </div>
           {searchQuery && (
             <span className="text-xs text-slate-400 font-mono">
-              Found {(filteredAlbums || []).length} of {(safeAlbumsList || []).length}
+              Found {filteredAlbums.length} of {albums.length}
             </span>
           )}
         </div>
       )}
 
       {/* Empty State */}
-      {(safeAlbumsList || []).length === 0 ? (
+      {albums.length === 0 ? (
         <div
           id="empty-albums-state"
           className="rounded-3xl border border-slate-800/80 bg-slate-900/30 backdrop-blur-md p-12 sm:p-16 flex flex-col items-center justify-center text-center max-w-xl mx-auto my-12"
@@ -355,26 +256,26 @@ function DashboardHomeContent() {
             <span>Create Your First Album</span>
           </button>
         </div>
-      ) : (filteredAlbums || []).length === 0 ? (
+      ) : filteredAlbums.length === 0 ? (
         <div className="p-12 text-center rounded-2xl border border-slate-800 bg-slate-900/30 text-slate-400 text-xs">
           No albums match "{searchQuery}". Try a different keyword or PIN.
         </div>
       ) : (
         /* Sleek, Dense Horizontal List View (Scalable for 20+ Albums) */
         <div className="space-y-2.5" id="compact-album-list">
-          {(filteredAlbums || []).map((album) => {
-            if (!album) return null;
+          {filteredAlbums.map((album) => {
+            if (!album || !album.id) return null;
             const daysLeft = calculateDaysLeft(album.expires_at);
             const isSubmitted = album.status === "submitted" || album.is_locked;
             const isExpired = album.is_expired || daysLeft === 0;
-            const photoCount = Number(album.photo_count ?? album.media_count ?? 0);
-            const selectedCount = Number(album.selected_count ?? 0);
+            const photoCount = album.photo_count ?? album.media_count ?? 0;
+            const selectedCount = album.selected_count ?? 0;
             const pinCode = album.pin || album.client_pin;
             const isDeleting = deletingId === album.id;
 
             return (
               <div
-                key={album.id || Math.random()}
+                key={album.id}
                 id={`album-row-${album.id}`}
                 onClick={() => navigate(`/dashboard/albums/${album.id}`)}
                 className="group px-4 py-3.5 rounded-xl border border-slate-800/90 bg-slate-900/40 hover:bg-slate-900/90 hover:border-slate-700 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer shadow-sm relative overflow-hidden"
@@ -400,7 +301,7 @@ function DashboardHomeContent() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm font-semibold text-white group-hover:text-amber-400 transition-colors truncate">
-                        {album.title || "Untitled Album"}
+                        {album.title}
                       </h3>
                       {selectedCount > 0 && (
                         <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.2 rounded-full shrink-0">
@@ -453,23 +354,20 @@ function DashboardHomeContent() {
 
                   {/* Action Buttons: Delete & Open */}
                   <div className="flex items-center gap-1 shrink-0">
-                    {/* RBAC: Assistants cannot delete albums */}
-                    {!isAssistant && (
-                      <button
-                        type="button"
-                        id={`delete-album-btn-${album.id}`}
-                        onClick={(e) => handleDeleteAlbum(e, album.id, album.title)}
-                        disabled={isDeleting}
-                        title="Delete Album"
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-950/50 border border-transparent hover:border-red-800/60 transition-colors"
-                      >
-                        {isDeleting ? (
-                          <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <Trash2 className="w-4 h-4" />
-                        )}
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      id={`delete-album-btn-${album.id}`}
+                      onClick={(e) => handleDeleteAlbum(e, album.id, album.title)}
+                      disabled={isDeleting}
+                      title="Delete Album"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-950/50 border border-transparent hover:border-red-800/60 transition-colors"
+                    >
+                      {isDeleting ? (
+                        <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </button>
 
                     <span className="text-slate-600 group-hover:text-amber-400 transition-colors p-1">
                       <ChevronRight className="w-4 h-4" />
@@ -488,29 +386,6 @@ function DashboardHomeContent() {
         onClose={() => setIsCreateModalOpen(false)}
         onAlbumCreated={handleAlbumCreated}
       />
-
-      {/* Studio Team Management Modal */}
-      <TeamManagement
-        isOpen={isTeamModalOpen}
-        onClose={() => setIsTeamModalOpen(false)}
-        user={safeUser}
-      />
-
-      {/* Studio Client Analytics Modal */}
-      <StudioAnalyticsModal
-        isOpen={isAnalyticsModalOpen}
-        onClose={() => setIsAnalyticsModalOpen(false)}
-        albums={safeAlbumsList}
-        user={safeUser}
-      />
     </div>
-  );
-}
-
-export default function DashboardHome() {
-  return (
-    <DashboardErrorBoundary>
-      <DashboardHomeContent />
-    </DashboardErrorBoundary>
   );
 }

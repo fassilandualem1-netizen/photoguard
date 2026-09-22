@@ -31,12 +31,10 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import AlbumAnalytics from "../components/AlbumAnalytics";
 
 export default function AlbumDetail() {
   const { id } = useParams();
   const { user } = useAuth();
-  const isAssistant = user?.role === "assistant";
   const [album, setAlbum] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -239,10 +237,6 @@ export default function AlbumDetail() {
   };
 
   const handleDeletePhoto = async (mediaId) => {
-    if (isAssistant) {
-      alert("Permission Denied: Assistant accounts are not authorized to delete photos.");
-      return;
-    }
     if (!window.confirm("Are you sure you want to remove this photo from the album?")) {
       return;
     }
@@ -736,15 +730,6 @@ export default function AlbumDetail() {
         </div>
       )}
 
-      {/* Client Engagement Analytics Banner */}
-      {album && (
-        <AlbumAnalytics
-          album={album}
-          user={user}
-          onReminderSent={() => fetchAlbumDetail(false)}
-        />
-      )}
-
       {/* Bulk Upload Section */}
       <div
         id="bulk-upload-section"
@@ -910,7 +895,7 @@ export default function AlbumDetail() {
                       >
                         <Eye className="w-4 h-4" />
                       </a>
-                      {!isSubmitted && !isAssistant && (
+                      {!isSubmitted && (
                         <button
                           type="button"
                           onClick={() => handleDeletePhoto(item.id)}

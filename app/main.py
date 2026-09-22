@@ -22,7 +22,6 @@ from app.api.client import router as client_router
 from app.api.media import router as media_router
 from app.api.admin import router as admin_router
 from app.api.telegram import router as telegram_router
-from app.api.team import router as team_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("photoguard.core")
@@ -378,7 +377,6 @@ app.include_router(client_router)
 app.include_router(media_router)
 app.include_router(admin_router)
 app.include_router(telegram_router)
-app.include_router(team_router)
 
 # Direct alias for studio logo upload
 @app.post("/api/v1/users/upload-logo", tags=["User Profile"])

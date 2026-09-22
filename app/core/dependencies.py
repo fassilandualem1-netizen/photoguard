@@ -42,7 +42,8 @@ def require_admin(
     """
     Dependency enforcing that the authenticated user possesses the ADMIN role.
     """
-    if current_user.role != UserRole.ADMIN:
+    user_role = str(getattr(current_user, "role", "") or "").lower()
+    if user_role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access forbidden: Administrator privileges required."

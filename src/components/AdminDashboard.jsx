@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import api from "../api/axios";
 import { Users, FolderArchive, HardDrive, Image as ImageIcon, AlertCircle, RefreshCw, ShieldCheck } from "lucide-react";
 
-export default function AdminDashboard() {
+export default function AdminDashboard({ onSwitchToGalleries = null }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -86,7 +86,7 @@ export default function AdminDashboard() {
     {
       id: "stat-total-storage",
       title: "Total Storage Used",
-      value: `${formatBytesToGB(stats?.total_storage_used)} GB`,
+      value: `${stats?.total_storage_used_gb != null ? stats.total_storage_used_gb : formatBytesToGB(stats?.total_storage_used_bytes || stats?.total_storage_used)} GB`,
       icon: HardDrive,
       color: "text-emerald-400",
       bgGradient: "from-emerald-500/10 to-transparent",
@@ -121,14 +121,28 @@ export default function AdminDashboard() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={fetchStats}
-          className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-800/80 text-slate-300 hover:text-white text-xs font-medium transition-all"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Refresh Stats</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {typeof onSwitchToGalleries === "function" && (
+            <button
+              id="admin-switch-to-galleries-btn"
+              type="button"
+              onClick={onSwitchToGalleries}
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-amber-500/30 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 hover:text-white text-xs font-semibold transition-all shadow-sm"
+            >
+              <FolderArchive className="w-3.5 h-3.5 text-amber-400" />
+              <span>Switch to Client Proofs</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={fetchStats}
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-800/80 text-slate-300 hover:text-white text-xs font-medium transition-all"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Refresh Stats</span>
+          </button>
+        </div>
       </div>
 
       {/* Metrics Grid */}

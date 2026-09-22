@@ -23,6 +23,7 @@ from app.api.media import router as media_router
 from app.api.admin import router as admin_router
 from app.api.telegram import router as telegram_router
 from app.api.team import router as team_router
+from app.api.broadcasts import router as broadcasts_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("photoguard.core")
@@ -196,7 +197,37 @@ def run_db_migrations():
         safe_execute_ddl("ALTER TABLE plan_configurations ADD COLUMN IF NOT EXISTS can_extend_lifespan BOOLEAN DEFAULT FALSE;", "plan_configurations.can_extend_lifespan")
         safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_plan_configurations_plan_name ON plan_configurations(plan_name);", "index plan_configurations.plan_name")
         
+        # Broadcasts table creation & indexing
+        safe_execute_ddl("""
+            CREATE TABLE IF NOT EXISTS broadcasts (
+                id SERIAL PRIMARY KEY,
+                title VARCHAR(255) NOT NULL,
+                message TEXT NOT NULL,
+                type VARCHAR(50) NOT NULL DEFAULT 'info',
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        """, "create broadcasts table")
+        safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_broadcasts_is_active ON broadcasts(is_active);", "index broadcasts.is_active")
+
+        # Security Audit Logs table creation & indexing
+        safe_execute_ddl("""
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id SERIAL PRIMARY KEY,
+                admin_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                action VARCHAR(100) NOT NULL,
+                target_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                details VARCHAR(500) NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        """, "create audit_logs table")
+        safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_audit_logs_admin_id ON audit_logs(admin_id);", "index audit_logs.admin_id")
+        safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_audit_logs_action ON audit_logs(action);", "index audit_logs.action")
+        safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_audit_logs_target_user_id ON audit_logs(target_user_id);", "index audit_logs.target_user_id")
+        safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_audit_logs_created_at ON audit_logs(created_at);", "index audit_logs.created_at")
+
         logger.info("[PhotoGuard DB] Schema auto-migration step finalized.")
+
     except Exception as exc:
         logger.warning(f"[PhotoGuard DB] Top-level migration warning (non-fatal): {exc}")
 
@@ -408,6 +439,7 @@ app.include_router(media_router)
 app.include_router(admin_router)
 app.include_router(telegram_router)
 app.include_router(team_router)
+app.include_router(broadcasts_router)
 
 # Direct alias for studio logo upload
 @app.post("/api/v1/users/upload-logo", tags=["User Profile"])

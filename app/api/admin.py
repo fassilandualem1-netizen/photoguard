@@ -12,6 +12,7 @@ from app.core.security import get_password_hash
 from app.models.user import User, UserRole
 from app.models.album import Album, MediaItem
 from app.models.plan_config import PlanConfiguration
+from app.models.audit import AuditLog
 from app.services.plan_service import get_or_create_plan_config, get_all_plan_configs
 from app.schemas.admin import (
     PlanConfigResponse,
@@ -21,6 +22,19 @@ from app.schemas.admin import (
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin Control"])
 
 # Pydantic Schemas for Admin API requests & responses
+class AuditLogResponse(BaseModel):
+    id: int
+    admin_id: int
+    admin_email: Optional[str] = None
+    action: str
+    target_user_id: Optional[int] = None
+    target_user_email: Optional[str] = None
+    details: str
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
 class PhotographerRegisterRequest(BaseModel):
     email: EmailStr
     full_name: str
@@ -256,6 +270,17 @@ def toggle_user_suspend(
 
     try:
         target_user.is_active = not target_user.is_active
+        action_state = "ACTIVATED" if target_user.is_active else "SUSPENDED"
+        
+        # Inject Security Audit Log
+        audit_entry = AuditLog(
+            admin_id=admin_user.id,
+            action="SUSPEND_USER",
+            target_user_id=target_user.id,
+            details=f"Admin {admin_user.email} changed status of user {target_user.email} (ID #{target_user.id}) to {action_state}."
+        )
+        db.add(audit_entry)
+
         db.commit()
         db.refresh(target_user)
         return {
@@ -309,6 +334,15 @@ def toggle_user_plan(
         if not new_cfg.can_customize_branding:
             target_user.studio_logo_url = None
             target_user.brand_color = "#F59E0B"
+
+        # Inject Security Audit Log
+        audit_entry = AuditLog(
+            admin_id=admin_user.id,
+            action="TOGGLE_PLAN",
+            target_user_id=target_user.id,
+            details=f"Admin {admin_user.email} changed plan of user {target_user.email} (ID #{target_user.id}) from '{current_plan_str}' to '{new_plan}'."
+        )
+        db.add(audit_entry)
 
         db.commit()
         db.refresh(target_user)
@@ -402,6 +436,16 @@ def reset_user_password(
         target_user.hashed_password = get_password_hash(new_temp_password)
         target_user.needs_password_change = True
         target_user.is_active = True
+
+        # Inject Security Audit Log
+        audit_entry = AuditLog(
+            admin_id=admin_user.id,
+            action="RESET_PASSWORD",
+            target_user_id=target_user.id,
+            details=f"Admin {admin_user.email} initiated emergency password reset for user {target_user.email} (ID #{target_user.id})."
+        )
+        db.add(audit_entry)
+
         db.commit()
         db.refresh(target_user)
         return {
@@ -497,4 +541,59 @@ def update_dynamic_plan(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update plan configuration: {str(exc)}"
         )
+
+
+@router.get("/audit-logs", response_model=List[AuditLogResponse], status_code=status.HTTP_200_OK)
+def get_audit_logs(
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_admin)
+):
+    """
+    Returns the latest 50 security audit logs, ordered by created_at desc.
+    Enriched with admin_email and target_user_email for presentation clarity.
+    """
+    try:
+        limit_val = min(max(1, limit), 100)
+        logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit_val).all()
+        
+        # Batch gather user emails to avoid N+1 queries
+        user_ids = set()
+        for log in logs:
+            if log.admin_id:
+                user_ids.add(log.admin_id)
+            if log.target_user_id:
+                user_ids.add(log.target_user_id)
+
+        user_map = {}
+        if user_ids:
+            users = db.query(User.id, User.email).filter(User.id.in_(user_ids)).all()
+            user_map = {u[0]: u[1] for u in users}
+
+        response: List[AuditLogResponse] = []
+        for log in logs:
+            response.append(
+                AuditLogResponse(
+                    id=log.id,
+                    admin_id=log.admin_id,
+                    admin_email=user_map.get(log.admin_id),
+                    action=log.action,
+                    target_user_id=log.target_user_id,
+                    target_user_email=user_map.get(log.target_user_id) if log.target_user_id else None,
+                    details=log.details,
+                    created_at=log.created_at.isoformat() if log.created_at else ""
+                )
+            )
+        return response
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error fetching audit logs: {str(exc)}"
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error fetching audit logs: {str(exc)}"
+        )
+
 

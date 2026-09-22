@@ -25,7 +25,12 @@ import {
   Clock,
   Save,
   CheckCircle,
+  Megaphone,
+  Key,
+  FileText,
+  History,
 } from "lucide-react";
+
 
 export interface PlanConfig {
   id: number;
@@ -77,22 +82,42 @@ export default function AdminDashboard() {
     full_name: string;
     temp_password: string;
     plan: string;
+    isReset?: boolean;
   } | null>(null);
+
   const [hasCopiedPassword, setHasCopiedPassword] = useState(false);
 
-  // Fetch initial stats, directory & dynamic plans
+  // Broadcast System State
+  const [currentBroadcast, setCurrentBroadcast] = useState<any>(null);
+  const [broadcastForm, setBroadcastForm] = useState({
+    title: "",
+    message: "",
+    type: "info",
+  });
+  const [isPublishingBroadcast, setIsPublishingBroadcast] = useState(false);
+  const [broadcastSuccessMsg, setBroadcastSuccessMsg] = useState("");
+
+  // Security Audit Ledger State
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
+
+  // Fetch initial stats, directory, dynamic plans, broadcast & audit-logs
   const fetchData = async () => {
     try {
       setLoading(true);
       setErrorBanner("");
-      const [statsRes, usersRes, plansRes] = await Promise.all([
+      const [statsRes, usersRes, plansRes, broadcastRes, auditRes] = await Promise.all([
         api.get("/api/v1/admin/stats"),
         api.get("/api/v1/admin/users"),
         api.get("/api/v1/admin/plans"),
+        api.get("/api/v1/broadcasts/active").catch(() => ({ data: null })),
+        api.get("/api/v1/admin/audit-logs").catch(() => ({ data: [] })),
       ]);
       setStats(statsRes.data);
       setPhotographers(usersRes.data);
       setPlanConfigs(plansRes.data || []);
+      setCurrentBroadcast(broadcastRes.data || null);
+      setAuditLogs(auditRes.data || []);
     } catch (err: any) {
       console.error("Failed to load admin metrics:", err);
       setErrorBanner(
@@ -100,6 +125,54 @@ export default function AdminDashboard() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAuditLogs = async () => {
+    try {
+      setLoadingAuditLogs(true);
+      const res = await api.get("/api/v1/admin/audit-logs");
+      setAuditLogs(res.data || []);
+    } catch (err) {
+      console.error("Failed to refresh audit logs:", err);
+    } finally {
+      setLoadingAuditLogs(false);
+    }
+  };
+
+
+  // Broadcast Handlers
+  const handlePublishBroadcast = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!broadcastForm.title.trim() || !broadcastForm.message.trim()) return;
+
+    try {
+      setIsPublishingBroadcast(true);
+      setErrorBanner("");
+      const res = await api.post("/api/v1/admin/broadcasts", {
+        title: broadcastForm.title.trim(),
+        message: broadcastForm.message.trim(),
+        type: broadcastForm.type,
+      });
+      setCurrentBroadcast(res.data);
+      setBroadcastForm({ title: "", message: "", type: "info" });
+      setBroadcastSuccessMsg("Global broadcast announcement published successfully!");
+      setTimeout(() => setBroadcastSuccessMsg(""), 4000);
+    } catch (err: any) {
+      setErrorBanner(err.response?.data?.detail || "Failed to publish broadcast announcement.");
+    } finally {
+      setIsPublishingBroadcast(false);
+    }
+  };
+
+  const handleDeactivateBroadcast = async (broadcastId: number) => {
+    try {
+      await api.put(`/api/v1/admin/broadcasts/${broadcastId}/deactivate`);
+      setCurrentBroadcast(null);
+      setBroadcastSuccessMsg("Broadcast announcement deactivated.");
+      setTimeout(() => setBroadcastSuccessMsg(""), 4000);
+    } catch (err: any) {
+      setErrorBanner(err.response?.data?.detail || "Failed to deactivate broadcast.");
     }
   };
 
@@ -158,6 +231,7 @@ export default function AdminDashboard() {
           p.id === userId ? { ...p, is_active: !currentActive } : p
         )
       );
+      fetchAuditLogs();
     } catch (err: any) {
       alert(err.response?.data?.detail || "Failed to toggle user status.");
     } finally {
@@ -181,6 +255,7 @@ export default function AdminDashboard() {
             : p
         )
       );
+      fetchAuditLogs();
     } catch (err: any) {
       alert(err.response?.data?.detail || "Failed to update plan.");
     } finally {
@@ -222,11 +297,43 @@ export default function AdminDashboard() {
     }
   };
 
+  // Reset Photographer Password
+  const handleResetPassword = async (userId: number, userEmail: string) => {
+    if (!window.confirm(`Generate and assign a new temporary password for ${userEmail}?`)) {
+      return;
+    }
+    try {
+      setActionLoadingId(userId);
+      const res = await api.post(`/api/v1/admin/users/${userId}/reset-password`);
+
+      const targetUser = photographers.find((p) => p.id === userId);
+      const planName = targetUser?.subscription_plan || "photographer";
+      const fullName = targetUser?.full_name || userEmail;
+
+      setCreatedCredentials({
+        temp_password: res.data.temp_password,
+        email: res.data.email,
+        full_name: fullName,
+        plan: planName,
+        isReset: true,
+      });
+      setHasCopiedPassword(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+
+      fetchAuditLogs();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || "Failed to reset photographer password.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     setHasCopiedPassword(true);
     setTimeout(() => setHasCopiedPassword(false), 3000);
   };
+
 
   // Filtered photographers list
   const filteredPhotographers = photographers.filter((p) => {
@@ -473,21 +580,25 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        {/* Temporary Credentials Success Banner */}
+        {/* Temporary Credentials Success Banner (Registration & Password Reset) */}
         {createdCredentials && (
           <section className="p-5 rounded-2xl bg-indigo-950/30 border-2 border-indigo-500/60 shadow-xl shadow-indigo-950/50 animate-fade-in relative overflow-hidden">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="p-1 rounded-md bg-indigo-500/20 text-indigo-300">
-                    <Sparkles className="w-4 h-4" />
+                  <span className={`p-1 rounded-md ${createdCredentials.isReset ? "bg-amber-500/20 text-amber-300" : "bg-indigo-500/20 text-indigo-300"}`}>
+                    {createdCredentials.isReset ? <Key className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
                   </span>
                   <h3 className="text-sm font-bold text-white tracking-wide uppercase font-mono">
-                    New Photographer Provisioned Successfully!
+                    {createdCredentials.isReset
+                      ? "Password Reset Successfully — New Credentials"
+                      : "New Photographer Provisioned Successfully!"}
                   </h3>
                 </div>
                 <p className="text-xs text-slate-300">
-                  Deliver these credentials to the client. They will be forced to choose a private password on initial login.
+                  {createdCredentials.isReset
+                    ? "Copy this temporary password and deliver it directly to the user. They will be prompted to set a new permanent password on next login."
+                    : "Deliver these credentials to the client. They will be forced to choose a private password on initial login."}
                 </p>
                 <div className="pt-2 flex flex-wrap items-center gap-3 text-xs font-mono">
                   <span className="px-2.5 py-1 rounded-md bg-black/50 border border-indigo-800/60 text-slate-300">
@@ -506,7 +617,7 @@ export default function AdminDashboard() {
               <div className="flex items-center gap-2 w-full md:w-auto bg-black/70 p-2 rounded-xl border border-indigo-500/50">
                 <div className="px-3 py-1 text-center">
                   <div className="text-[10px] uppercase font-mono text-slate-400">Temporary Password</div>
-                  <div className="text-lg font-bold font-mono tracking-wider text-indigo-300">
+                  <div className="text-lg font-bold font-mono tracking-wider text-indigo-300 select-all">
                     {createdCredentials.temp_password}
                   </div>
                 </div>
@@ -530,6 +641,7 @@ export default function AdminDashboard() {
             </div>
           </section>
         )}
+
 
         {/* Section 2: "Register Photographer" Form */}
         <section className="p-6 rounded-2xl bg-[#0e121b] border border-indigo-950/70 shadow-xl shadow-black/30">
@@ -615,6 +727,156 @@ export default function AdminDashboard() {
                   <>
                     <UserPlus className="w-4 h-4" />
                     <span>Create Account</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </section>
+
+        {/* Section: "Global Broadcast Announcement Manager" */}
+        <section id="global-broadcast-manager" className="p-6 rounded-2xl bg-[#0e121b] border border-indigo-950/70 shadow-xl shadow-black/30 space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-indigo-950/60">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400 border border-amber-500/20">
+                <Megaphone className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-white tracking-tight">
+                  Global Dashboard Broadcast
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Publish real-time announcement banners to all photographers' workspaces
+                </p>
+              </div>
+            </div>
+
+            {currentBroadcast && currentBroadcast.is_active && (
+              <span className="px-3 py-1 rounded-full text-xs font-mono font-medium bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                Active Banner Live
+              </span>
+            )}
+          </div>
+
+          {/* Success Message */}
+          {broadcastSuccessMsg && (
+            <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-emerald-300 flex items-center gap-2.5 text-xs">
+              <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              <span>{broadcastSuccessMsg}</span>
+            </div>
+          )}
+
+          {/* Current Active Broadcast Card */}
+          {currentBroadcast && currentBroadcast.is_active ? (
+            <div className="p-4 rounded-xl bg-[#090c13] border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold ${
+                      currentBroadcast.type === "warning"
+                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                        : currentBroadcast.type === "promo"
+                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                        : "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+                    }`}
+                  >
+                    {currentBroadcast.type}
+                  </span>
+                  <span className="text-xs text-slate-400 font-mono">
+                    Published: {new Date(currentBroadcast.created_at).toLocaleString()}
+                  </span>
+                </div>
+                <h4 className="text-sm font-semibold text-white">
+                  {currentBroadcast.title}
+                </h4>
+                <p className="text-xs text-slate-300 max-w-2xl">
+                  {currentBroadcast.message}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleDeactivateBroadcast(currentBroadcast.id)}
+                className="px-3.5 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-semibold transition-colors flex-shrink-0"
+              >
+                Turn Off Banner
+              </button>
+            </div>
+          ) : (
+            <div className="p-3.5 rounded-xl bg-[#080a0f] border border-slate-800/80 text-slate-500 text-xs text-center">
+              No banner announcement is currently visible to photographers. Compose one below to broadcast.
+            </div>
+          )}
+
+          {/* Compose New Broadcast Form */}
+          <form onSubmit={handlePublishBroadcast} className="space-y-4 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+              <div className="sm:col-span-8 space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Announcement Title
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Scheduled System Upgrade Tonight at 2:00 AM UTC"
+                  value={broadcastForm.title}
+                  onChange={(e) =>
+                    setBroadcastForm({ ...broadcastForm, title: e.target.value })
+                  }
+                  className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 transition-colors"
+                />
+              </div>
+
+              <div className="sm:col-span-4 space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Banner Type / Color
+                </label>
+                <select
+                  value={broadcastForm.type}
+                  onChange={(e) =>
+                    setBroadcastForm({ ...broadcastForm, type: e.target.value })
+                  }
+                  className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-amber-400 transition-colors capitalize"
+                >
+                  <option value="info">Info (Sky Blue - General Updates)</option>
+                  <option value="warning">Warning (Amber Yellow - Maintenance & Alerts)</option>
+                  <option value="promo">Promo (Emerald Green - Special Deals & Upgrades)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                Broadcast Message
+              </label>
+              <textarea
+                required
+                rows={2}
+                placeholder="Write the message that all photographers will see at the top of their dashboard..."
+                value={broadcastForm.message}
+                onChange={(e) =>
+                  setBroadcastForm({ ...broadcastForm, message: e.target.value })
+                }
+                className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 transition-colors resize-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] text-slate-500">
+                Publishing automatically deactivates any existing banner.
+              </span>
+              <button
+                type="submit"
+                disabled={isPublishingBroadcast}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all active:scale-[0.98] disabled:opacity-50"
+              >
+                {isPublishingBroadcast ? (
+                  <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                ) : (
+                  <>
+                    <Megaphone className="w-4 h-4 text-slate-950" />
+                    <span>Publish Announcement Live</span>
                   </>
                 )}
               </button>
@@ -1058,6 +1320,16 @@ export default function AdminDashboard() {
                             >
                               <Sliders className="w-3.5 h-3.5" />
                             </button>
+
+                            {/* Reset Password */}
+                            <button
+                              onClick={() => handleResetPassword(p.id, p.email)}
+                              disabled={isLoading}
+                              title="Generate New Temporary Password"
+                              className="p-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors"
+                            >
+                              <Key className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1068,7 +1340,138 @@ export default function AdminDashboard() {
             </table>
           </div>
         </section>
+
+        {/* Section 4: "Security Ledger" (Audit Logs) */}
+        <section id="security-ledger" className="p-6 rounded-2xl bg-[#0e121b] border border-indigo-950/70 shadow-xl shadow-black/30">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-indigo-950/60">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center text-red-400 border border-red-500/20">
+                <Shield className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+                  <span>Security Ledger</span>
+                  <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-red-500/15 text-red-300 border border-red-500/30">
+                    {auditLogs.length} events
+                  </span>
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Immutable administrative actions audit trail & security compliance ledger
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={fetchAuditLogs}
+              disabled={loadingAuditLogs}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 hover:text-white transition-colors"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingAuditLogs ? "animate-spin text-red-400" : ""}`} />
+              <span>Refresh Ledger</span>
+            </button>
+          </div>
+
+          {/* Minimalist Dark Audit Log Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-indigo-950/80 text-slate-400 font-mono uppercase tracking-wider">
+                  <th className="pb-3 px-3">Date & Time</th>
+                  <th className="pb-3 px-3">Admin ID / Email</th>
+                  <th className="pb-3 px-3">Action</th>
+                  <th className="pb-3 px-3">Target User ID / Email</th>
+                  <th className="pb-3 px-3">Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-indigo-950/40">
+                {auditLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-slate-500">
+                      {loadingAuditLogs ? "Loading security ledger..." : "No administrative actions recorded in the audit log yet."}
+                    </td>
+                  </tr>
+                ) : (
+                  auditLogs.map((log: any) => {
+                    const formattedDate = log.created_at
+                      ? new Date(log.created_at).toLocaleString()
+                      : "—";
+
+                    // Badge color based on action type
+                    const actionBadge = (() => {
+                      switch (log.action) {
+                        case "RESET_PASSWORD":
+                          return "bg-amber-500/15 text-amber-300 border-amber-500/30";
+                        case "SUSPEND_USER":
+                          return "bg-red-500/15 text-red-300 border-red-500/30";
+                        case "TOGGLE_PLAN":
+                          return "bg-indigo-500/15 text-indigo-300 border-indigo-500/30";
+                        case "BROADCAST_PUBLISHED":
+                          return "bg-cyan-500/15 text-cyan-300 border-cyan-500/30";
+                        default:
+                          return "bg-slate-800 text-slate-300 border-slate-700";
+                      }
+                    })();
+
+                    return (
+                      <tr key={log.id} className="hover:bg-indigo-950/20 transition-colors">
+                        {/* Date & Time */}
+                        <td className="py-3 px-3 whitespace-nowrap font-mono text-[11px] text-slate-400">
+                          {formattedDate}
+                        </td>
+
+                        {/* Admin ID & Email */}
+                        <td className="py-3 px-3">
+                          <div className="font-mono text-white text-xs">
+                            ID: #{log.admin_id}
+                          </div>
+                          {log.admin_email && (
+                            <div className="text-[11px] text-slate-500 font-mono">
+                              {log.admin_email}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Action Badge */}
+                        <td className="py-3 px-3">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold font-mono tracking-wider border ${actionBadge}`}
+                          >
+                            {log.action}
+                          </span>
+                        </td>
+
+                        {/* Target User ID & Email */}
+                        <td className="py-3 px-3">
+                          {log.target_user_id ? (
+                            <div>
+                              <span className="font-mono text-slate-300 text-xs">
+                                User #{log.target_user_id}
+                              </span>
+                              {log.target_user_email && (
+                                <div className="text-[11px] text-indigo-400/80 font-mono">
+                                  {log.target_user_email}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-600 font-mono text-xs">—</span>
+                          )}
+                        </td>
+
+                        {/* Details */}
+                        <td className="py-3 px-3 text-slate-300 font-mono text-xs max-w-md">
+                          <span className="break-words">{log.details || "—"}</span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </main>
+
     </div>
   );
 }

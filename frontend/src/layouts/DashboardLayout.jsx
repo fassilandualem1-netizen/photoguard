@@ -14,6 +14,9 @@ import {
   Sparkles,
   LifeBuoy,
   Users,
+  Info,
+  AlertTriangle,
+  Megaphone,
 } from "lucide-react";
 import ProfileSettingsModal from "../components/ProfileSettingsModal";
 import ChangePasswordModal from "../components/ChangePasswordModal";
@@ -30,7 +33,38 @@ export default function DashboardLayout({
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [activeBroadcast, setActiveBroadcast] = useState(null);
+  const [isBannerDismissed, setIsBannerDismissed] = useState(false);
   const menuRef = useRef(null);
+
+  // Fetch active broadcast announcement on mount
+  useEffect(() => {
+    let isMounted = true;
+    const fetchActiveBroadcast = async () => {
+      try {
+        const response = await api.get("/api/v1/broadcasts/active");
+        if (isMounted && response.data && response.data.is_active) {
+          const dismissedId = sessionStorage.getItem(`dismissed_broadcast_${response.data.id}`);
+          if (dismissedId !== "true") {
+            setActiveBroadcast(response.data);
+          }
+        }
+      } catch (err) {
+        // Non-critical background feature; suppress error
+      }
+    };
+    fetchActiveBroadcast();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleDismissBanner = () => {
+    if (activeBroadcast?.id) {
+      sessionStorage.setItem(`dismissed_broadcast_${activeBroadcast.id}`, "true");
+    }
+    setIsBannerDismissed(true);
+  };
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -59,6 +93,59 @@ export default function DashboardLayout({
 
   return (
     <div id="dashboard-layout" className="min-h-screen bg-[#0d0f12] text-slate-100 flex flex-col selection:bg-amber-500/20 selection:text-amber-200">
+      {/* Global Broadcast Top Banner */}
+      {activeBroadcast && !isBannerDismissed && (
+        <aside
+          id="global-broadcast-banner"
+          aria-label="Platform Announcement"
+          className={`relative z-50 w-full border-b px-4 py-2.5 sm:px-6 transition-all animate-in slide-in-from-top-2 duration-300 ${
+            activeBroadcast.type === "warning"
+              ? "bg-amber-500/15 border-amber-500/30 text-amber-200"
+              : activeBroadcast.type === "promo"
+              ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-200"
+              : "bg-sky-500/15 border-sky-500/30 text-sky-200"
+          }`}
+        >
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5 overflow-hidden">
+              <span
+                className={`p-1 rounded-md flex-shrink-0 ${
+                  activeBroadcast.type === "warning"
+                    ? "bg-amber-500/20 text-amber-300"
+                    : activeBroadcast.type === "promo"
+                    ? "bg-emerald-500/20 text-emerald-300"
+                    : "bg-sky-500/20 text-sky-300"
+                }`}
+              >
+                {activeBroadcast.type === "warning" ? (
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                ) : activeBroadcast.type === "promo" ? (
+                  <Megaphone className="w-3.5 h-3.5" />
+                ) : (
+                  <Info className="w-3.5 h-3.5" />
+                )}
+              </span>
+              <p className="truncate">
+                <strong className="font-semibold text-white mr-1.5">
+                  {activeBroadcast.title}:
+                </strong>
+                <span className="opacity-95">{activeBroadcast.message}</span>
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleDismissBanner}
+              title="Dismiss announcement"
+              className="p-1 rounded-md hover:bg-black/20 text-slate-300 hover:text-white transition-colors flex-shrink-0"
+              aria-label="Dismiss banner"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </aside>
+      )}
+
       {/* Pristine Minimalist Topbar */}
       <header className="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-[#0d0f12]/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">

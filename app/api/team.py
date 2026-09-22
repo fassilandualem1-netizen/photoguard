@@ -51,7 +51,7 @@ def add_assistant(
     """
     Creates a new studio assistant sub-account under the authenticated photographer.
     Strict Studio Tier Gate: Only photographers on the 'studio' plan (or admin) can create assistants.
-    Limit Check: Maximum of 5 assistants per studio.
+    Limit Check: Maximum of 3 assistants per studio.
     Generates a secure 8-character password and marks needs_password_change=True.
     """
     user_plan = getattr(current_user, "subscription_plan", "basic") or "basic"
@@ -74,12 +74,12 @@ def add_assistant(
         )
 
     try:
-        # 2. Limit Check: Maximum 5 assistants
+        # 2. Limit Check: Maximum 3 assistants
         assistant_count = db.query(User).filter(User.parent_id == current_user.id).count()
-        if assistant_count >= 5:
+        if assistant_count >= 3:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Maximum of 5 assistants allowed per studio account."
+                detail="Maximum of 3 assistants allowed per studio account."
             )
 
         # 3. Check for email conflict across all users

@@ -290,7 +290,7 @@ export default function TeamManagementModal({ isOpen, onClose }) {
                     Add New Assistant
                   </h3>
                   <span className="text-[11px] text-slate-400">
-                    {assistants.length} of 5 slots used
+                    {assistants.length} of 3 slots used
                   </span>
                 </div>
 
@@ -305,7 +305,7 @@ export default function TeamManagementModal({ isOpen, onClose }) {
                         placeholder="e.g. Sara Jenkins"
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        disabled={isSubmitting || assistants.length >= 5}
+                        disabled={isSubmitting || assistants.length >= 3}
                         required
                         className="w-full px-3 py-2 text-xs rounded-lg bg-slate-900 border border-slate-700/80 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors disabled:opacity-50"
                       />
@@ -319,7 +319,7 @@ export default function TeamManagementModal({ isOpen, onClose }) {
                         placeholder="sara@example.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        disabled={isSubmitting || assistants.length >= 5}
+                        disabled={isSubmitting || assistants.length >= 3}
                         required
                         className="w-full px-3 py-2 text-xs rounded-lg bg-slate-900 border border-slate-700/80 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors disabled:opacity-50"
                       />
@@ -332,7 +332,7 @@ export default function TeamManagementModal({ isOpen, onClose }) {
                     </p>
                     <button
                       type="submit"
-                      disabled={isSubmitting || assistants.length >= 5}
+                      disabled={isSubmitting || assistants.length >= 3}
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-xs shadow-md shadow-amber-400/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isSubmitting ? (
@@ -367,7 +367,7 @@ export default function TeamManagementModal({ isOpen, onClose }) {
 
                 {assistants.length === 0 && !isLoading ? (
                   <div className="p-6 text-center rounded-xl bg-slate-900/50 border border-slate-800/60 text-slate-500 text-xs">
-                    No studio assistants added yet. Add up to 5 staff members above.
+                    No studio assistants added yet. Add up to 3 staff members above.
                   </div>
                 ) : (
                   <div className="space-y-2">

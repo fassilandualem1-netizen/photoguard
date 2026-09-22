@@ -162,12 +162,19 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
         # Hierarchical Security Check on Login:
         # If assistant logs in, verify that the parent photographer account is also active
+        # AND that the parent studio is on the 'studio' plan tier.
         if getattr(user, "parent_id", None) is not None:
             parent_user = db.query(User).filter(User.id == user.parent_id).first()
             if parent_user is None or not parent_user.is_active:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Studio account has been suspended by an administrator. Please contact your studio owner.",
+                )
+            parent_plan = (getattr(parent_user, "subscription_plan", "basic") or "basic").lower()
+            if parent_plan != "studio":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Studio assistant access is disabled because the parent account is on the Basic plan. Studio tier required.",
                 )
 
         # Normalize role string cleanly

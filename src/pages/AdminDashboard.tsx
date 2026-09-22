@@ -254,21 +254,32 @@ export default function AdminDashboard() {
     }
   };
 
-  // Toggle Plan (basic <-> studio)
+  // Toggle Plan (basic <-> studio) with instant Assistant cascade update
   const handleTogglePlan = async (userId: number, currentPlan: string) => {
     try {
       setActionLoadingId(userId);
       const res = await api.put(`/api/v1/admin/users/${userId}/plan`);
+      const newPlan = res.data.subscription_plan;
       setPhotographers((prev) =>
-        prev.map((p) =>
-          p.id === userId
-            ? {
-                ...p,
-                subscription_plan: res.data.subscription_plan,
-                storage_quota_limit: res.data.storage_quota_limit,
-              }
-            : p
-        )
+        prev.map((p) => {
+          if (p.id === userId) {
+            return {
+              ...p,
+              subscription_plan: newPlan,
+              storage_quota_limit: res.data.storage_quota_limit,
+            };
+          }
+          // If this user is an assistant of the changed parent:
+          if (p.parent_id === userId) {
+            return {
+              ...p,
+              // If downgraded to basic, assistants are deactivated
+              is_active: newPlan === "studio" ? p.is_active : false,
+              subscription_plan: newPlan,
+            };
+          }
+          return p;
+        })
       );
       fetchAuditLogs();
     } catch (err: any) {
@@ -1470,19 +1481,21 @@ export default function AdminDashboard() {
                                 <td className="py-2.5 px-3">
                                   <span
                                     className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-                                      assistant.is_active && p.is_active
+                                      assistant.is_active && p.is_active && p.subscription_plan === "studio"
                                         ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                                         : "bg-red-500/10 text-red-400 border-red-500/30"
                                     }`}
                                   >
                                     <span
                                       className={`w-1.5 h-1.5 rounded-full ${
-                                        assistant.is_active && p.is_active
+                                        assistant.is_active && p.is_active && p.subscription_plan === "studio"
                                           ? "bg-emerald-400"
                                           : "bg-red-400"
                                       }`}
                                     />
-                                    {!p.is_active
+                                    {p.subscription_plan !== "studio"
+                                      ? "Disabled (Basic Tier)"
+                                      : !p.is_active
                                       ? "Parent Suspended"
                                       : assistant.is_active
                                       ? "Active"

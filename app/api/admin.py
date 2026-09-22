@@ -353,12 +353,34 @@ def toggle_user_plan(
             target_user.studio_logo_url = None
             target_user.brand_color = "#F59E0B"
 
+        # CASCADE DOWNGRADE MANAGEMENT FOR ASSISTANTS:
+        # If the parent account is downgraded to 'basic', basic plans do not support studio assistants.
+        # Immediately deactivate all linked assistants. If upgraded back to 'studio', re-activate assistants if parent is active.
+        downgraded_assistants_count = 0
+        if new_plan != "studio":
+            assistants = db.query(User).filter(User.parent_id == target_user.id).all()
+            for assistant in assistants:
+                assistant.is_active = False
+                assistant.subscription_plan = "basic"
+                assistant.plan = "basic"
+                downgraded_assistants_count += 1
+        else:
+            # When upgraded back to studio and parent is active, restore active status
+            if target_user.is_active:
+                assistants = db.query(User).filter(User.parent_id == target_user.id).all()
+                for assistant in assistants:
+                    assistant.is_active = True
+                    assistant.subscription_plan = "studio"
+                    assistant.plan = "studio"
+
+        downgrade_log_info = f" (Deactivated {downgraded_assistants_count} assistants due to downgrade to basic tier)" if downgraded_assistants_count > 0 else ""
+
         # Inject Security Audit Log
         audit_entry = AuditLog(
             admin_id=admin_user.id,
             action="TOGGLE_PLAN",
             target_user_id=target_user.id,
-            details=f"Admin {admin_user.email} changed plan of user {target_user.email} (ID #{target_user.id}) from '{current_plan_str}' to '{new_plan}'."
+            details=f"Admin {admin_user.email} changed plan of user {target_user.email} (ID #{target_user.id}) from '{current_plan_str}' to '{new_plan}'.{downgrade_log_info}"
         )
         db.add(audit_entry)
 

@@ -1,6 +1,5 @@
-from typing import Optional
-from pydantic import BaseModel, Field
-from app.models.user import UserRole
+from typing import Optional, Any
+from pydantic import BaseModel, Field, field_validator
 
 class LoginRequest(BaseModel):
     email: Optional[str] = Field(None, description="Registered user email address")
@@ -26,18 +25,49 @@ class UserUpdate(BaseModel):
 class UserResponse(BaseModel):
     id: int
     email: str
-    full_name: str
-    role: UserRole
+    full_name: str = "Photographer"
+    role: str = "photographer"
     parent_owner_id: Optional[int] = None
-    storage_quota_limit: int
-    storage_used: int
+    storage_quota_limit: Optional[int] = 5368709120
+    storage_used: Optional[int] = 0
     telegram_chat_id: Optional[str] = None
     studio_logo_url: Optional[str] = None
     brand_color: Optional[str] = "#F59E0B"
-    subscription_plan: str = "basic"
-    is_verified: bool = False
-    needs_password_change: bool = True
-    is_active: bool
+    subscription_plan: Optional[str] = "basic"
+    is_verified: Optional[bool] = False
+    needs_password_change: Optional[bool] = True
+    is_active: Optional[bool] = True
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def normalize_role(cls, v: Any) -> str:
+        if hasattr(v, "value"):
+            v = v.value
+        s = str(v or "photographer").lower().replace("userrole.", "").strip()
+        return s if s in ["admin", "photographer", "owner", "assistant"] else "photographer"
+
+    @field_validator("storage_quota_limit", mode="before")
+    @classmethod
+    def normalize_quota(cls, v: Any) -> int:
+        try:
+            return int(v) if v is not None else 5368709120
+        except (ValueError, TypeError):
+            return 5368709120
+
+    @field_validator("storage_used", mode="before")
+    @classmethod
+    def normalize_used(cls, v: Any) -> int:
+        try:
+            return int(v) if v is not None else 0
+        except (ValueError, TypeError):
+            return 0
+
+    @field_validator("is_active", "is_verified", "needs_password_change", mode="before")
+    @classmethod
+    def normalize_bools(cls, v: Any) -> bool:
+        if v is None:
+            return False
+        return bool(v)
 
     class Config:
         from_attributes = True

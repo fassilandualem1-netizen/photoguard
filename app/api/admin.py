@@ -176,7 +176,7 @@ def register_photographer(
         email=clean_email,
         hashed_password=hashed_password,
         full_name=payload.full_name.strip(),
-        role=UserRole.PHOTOGRAPHER,
+        role="photographer",
         subscription_plan=plan,
         plan=plan,
         is_verified=True,
@@ -361,3 +361,44 @@ def update_user_quota(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error updating storage quota: {str(exc)}"
         )
+
+@router.post("/users/{id}/reset-password", status_code=status.HTTP_200_OK)
+def reset_user_password(
+    id: int,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_admin)
+):
+    """
+    Emergency Password Reset for a Photographer account.
+    Generates a fresh temporary password, updates the hash using PBKDF2,
+    flags needs_password_change=True, and returns the plain-text password for the admin.
+    """
+    target_user = db.query(User).filter(User.id == id).first()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with ID {id} not found."
+        )
+
+    alphabet = string.ascii_letters + string.digits
+    new_temp_password = "".join(secrets.choice(alphabet) for _ in range(8))
+    
+    try:
+        target_user.hashed_password = get_password_hash(new_temp_password)
+        target_user.needs_password_change = True
+        target_user.is_active = True
+        db.commit()
+        db.refresh(target_user)
+        return {
+            "message": f"Password for {target_user.email} successfully reset.",
+            "user_id": target_user.id,
+            "email": target_user.email,
+            "temp_password": new_temp_password
+        }
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reset photographer password: {str(exc)}"
+        )
+

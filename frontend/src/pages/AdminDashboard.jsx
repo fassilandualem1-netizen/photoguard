@@ -20,6 +20,7 @@ import {
   Layers,
   Mail,
   Zap,
+  Key,
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -186,6 +187,30 @@ export default function AdminDashboard() {
       );
     } catch (err) {
       alert(err.response?.data?.detail || "Failed to update storage quota.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Reset Photographer Password
+  const handleResetPassword = async (userId, userEmail) => {
+    if (!window.confirm(`Generate and assign a new temporary password for ${userEmail}?`)) {
+      return;
+    }
+    try {
+      setActionLoadingId(userId);
+      const res = await api.post(`/api/v1/admin/users/${userId}/reset-password`);
+      setCreatedUser({
+        temp_password: res.data.temp_password,
+        user: {
+          email: res.data.email,
+          full_name: userEmail,
+          subscription_plan: "photographer"
+        }
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      alert(err.response?.data?.detail || "Failed to reset photographer password.");
     } finally {
       setActionLoadingId(null);
     }
@@ -686,6 +711,16 @@ export default function AdminDashboard() {
                               className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
                             >
                               <Sliders className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Reset Password */}
+                            <button
+                              onClick={() => handleResetPassword(p.id, p.email)}
+                              disabled={isLoading}
+                              title="Generate New Temporary Password"
+                              className="p-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors"
+                            >
+                              <Key className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </td>

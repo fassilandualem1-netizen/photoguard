@@ -230,33 +230,32 @@ export default function AdminDashboard() {
     }
   };
 
-  // Edit Quota (Prompt for GB -> convert to bytes)
+  // Edit Quota (Prompt for GB -> API Call with new_quota_gb)
   const handleEditQuota = async (userId, currentQuotaBytes) => {
     const currentGb = (currentQuotaBytes / (1024 * 1024 * 1024)).toFixed(1);
     const inputVal = window.prompt(
-      `Enter new storage quota limit in Gigabytes (GB) for this photographer:`,
+      "Enter new storage allocation in GB (Enter 9999 for Unlimited):",
       currentGb
     );
 
     if (inputVal === null) return; // Cancelled
-    const parsedGb = parseFloat(inputVal);
+    const parsedGb = parseFloat(inputVal.trim());
     if (isNaN(parsedGb) || parsedGb <= 0) {
-      alert("Please provide a valid positive number for storage quota in GB.");
+      alert("Please provide a valid positive number for storage allocation in GB.");
       return;
     }
 
-    const newQuotaBytes = Math.round(parsedGb * 1024 * 1024 * 1024);
-
     try {
       setActionLoadingId(userId);
-      await api.put(`/api/v1/admin/users/${userId}/quota`, {
-        new_quota_bytes: newQuotaBytes,
+      const res = await api.put(`/api/v1/admin/users/${userId}/quota`, {
+        new_quota_gb: parsedGb,
       });
-      setPhotographers((prev) =>
-        prev.map((p) =>
-          p.id === userId ? { ...p, storage_quota_limit: newQuotaBytes } : p
-        )
-      );
+
+      // Show success alert
+      alert(`Storage quota updated successfully to ${res.data.quota_gb || parsedGb} GB!`);
+
+      // Refresh photographer directory to instantly update the Storage Allocation bar
+      await fetchData();
     } catch (err) {
       alert(err.response?.data?.detail || "Failed to update storage quota.");
     } finally {
@@ -917,14 +916,18 @@ export default function AdminDashboard() {
                               <KeyRound className="w-3.5 h-3.5" />
                             </button>
 
-                            {/* 4. Edit Quota Limit */}
+                            {/* 4. Edit Quota Limit Override */}
                             <button
                               onClick={() => handleEditQuota(p.id, p.storage_quota_limit)}
-                              disabled={isLoading}
-                              title="Override Storage Quota Limit (GB)"
-                              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all hover:scale-105 active:scale-95"
+                              disabled={isLoading || actionLoadingId === p.id}
+                              title="Override Storage Quota Limit (GB) (e.g. 5, 25, 50, 9999 for Unlimited)"
+                              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
                             >
-                              <Sliders className="w-3.5 h-3.5" />
+                              {actionLoadingId === p.id ? (
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                              ) : (
+                                <Sliders className="w-3.5 h-3.5" />
+                              )}
                             </button>
                           </div>
                         </td>

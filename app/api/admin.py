@@ -13,6 +13,7 @@ from app.models.user import User, UserRole
 from app.models.album import Album, MediaItem
 from app.models.plan_config import PlanConfiguration
 from app.models.audit import AuditLog
+from app.models.error_log import SystemErrorLog
 from app.services.plan_service import get_or_create_plan_config, get_all_plan_configs
 from app.schemas.admin import (
     PlanConfigResponse,
@@ -724,3 +725,98 @@ def get_audit_logs(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error fetching audit logs: {str(exc)}"
         )
+
+# ============================================================================
+# System Health & Diagnostic Endpoints (SRE / Kotlin / React Admin Portal)
+# ============================================================================
+
+class SystemErrorLogResponse(BaseModel):
+    id: int
+    timestamp: str
+    error_type: str
+    endpoint: Optional[str] = None
+    error_message: str
+    traceback_details: Optional[str] = None
+    is_resolved: bool
+    resolved_at: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+@router.get("/system-health/errors", response_model=List[SystemErrorLogResponse], tags=["Admin Control", "System Health"])
+def get_system_health_errors(
+    limit: int = 50,
+    include_resolved: bool = False,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin)
+):
+    """
+    Fetches system and database crashes logged by the Global Exception Handler,
+    ordered by newest first. Consumed by the React Admin Portal and SRE monitoring.
+    """
+    try:
+        query = db.query(SystemErrorLog)
+        if not include_resolved:
+            query = query.filter(SystemErrorLog.is_resolved == False)
+        
+        logs = query.order_by(SystemErrorLog.timestamp.desc()).limit(limit).all()
+        return [
+            SystemErrorLogResponse(
+                id=log.id,
+                timestamp=log.timestamp.isoformat() if log.timestamp else "",
+                error_type=log.error_type,
+                endpoint=log.endpoint,
+                error_message=log.error_message,
+                traceback_details=log.traceback_details,
+                is_resolved=log.is_resolved,
+                resolved_at=log.resolved_at.isoformat() if log.resolved_at else None
+            )
+            for log in logs
+        ]
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error fetching system error logs: {str(exc)}"
+        )
+
+@router.put("/system-health/errors/{error_id}/resolve", response_model=SystemErrorLogResponse, tags=["Admin Control", "System Health"])
+def resolve_system_health_error(
+    error_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin)
+):
+    """
+    Marks an unhandled system crash or database fault as resolved by an administrator.
+    """
+    try:
+        error_log = db.query(SystemErrorLog).filter(SystemErrorLog.id == error_id).first()
+        if not error_log:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"System error log with ID {error_id} not found."
+            )
+        
+        error_log.is_resolved = True
+        error_log.resolved_at = func.now()
+        db.commit()
+        db.refresh(error_log)
+
+        return SystemErrorLogResponse(
+            id=error_log.id,
+            timestamp=error_log.timestamp.isoformat() if error_log.timestamp else "",
+            error_type=error_log.error_type,
+            endpoint=error_log.endpoint,
+            error_message=error_log.error_message,
+            traceback_details=error_log.traceback_details,
+            is_resolved=error_log.is_resolved,
+            resolved_at=error_log.resolved_at.isoformat() if error_log.resolved_at else None
+        )
+    except HTTPException:
+        raise
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error resolving system error log: {str(exc)}"
+        )
+

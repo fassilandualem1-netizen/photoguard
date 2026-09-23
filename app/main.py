@@ -2,19 +2,22 @@ import os
 import logging
 import traceback
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, status, Request, UploadFile, File
+from fastapi import FastAPI, Depends, status, Request, UploadFile, File, HTTPException
 from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from app.core.database import engine, Base, get_db, SessionLocal
 from app.core.security import get_password_hash, verify_password
 from app.core.dependencies import get_current_user
 from app.models.user import User, UserRole
 from app.models.album import Album, MediaItem
 from app.models.payment import PaymentReceipt
+from app.models.error_log import SystemErrorLog
 from app.schemas.auth import UserResponse, PasswordChangeRequest
 from app.api.auth import router as auth_router
 from app.api.albums import router as albums_router
@@ -463,6 +466,77 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"detail": clean_msg, "errors": errors},
+    )
+
+@app.exception_handler(SQLAlchemyError)
+async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
+    """
+    SRE Interceptor for Database Errors:
+    Catches all database disconnects, query failures, and constraint errors,
+    records detailed traceback into SystemErrorLog, and returns a clean 500 JSON
+    to prevent client-side crashes across React and Kotlin.
+    """
+    tb = traceback.format_exc()
+    error_msg = str(exc)
+    endpoint = f"{request.method} {request.url.path}"
+    logger.error(f"[Database Error Intercepted] {endpoint}: {error_msg}\n{tb}")
+
+    # Safely persist error to database via a dedicated session
+    try:
+        with SessionLocal() as db_err:
+            log_entry = SystemErrorLog(
+                error_type="DATABASE",
+                endpoint=endpoint[:255],
+                error_message=error_msg[:1000],
+                traceback_details=tb,
+                is_resolved=False
+            )
+            db_err.add(log_entry)
+            db_err.commit()
+    except Exception as db_save_err:
+        logger.error(f"[Error Logger Fallback] Could not persist database crash log: {db_save_err}")
+
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "System encountered an error. Logged for admin review."}
+    )
+
+@app.exception_handler(Exception)
+async def global_generic_exception_handler(request: Request, exc: Exception):
+    """
+    SRE Universal Crash Interceptor:
+    Intercepts unhandled runtime exceptions, persists the error into SystemErrorLog,
+    and returns a clean 500 JSON response so Kotlin and React never experience white-screens.
+    Bypasses standard HTTPExceptions (400, 401, 403, 404) and RequestValidationErrors.
+    """
+    if isinstance(exc, HTTPException):
+        return await http_exception_handler(request, exc)
+    if isinstance(exc, RequestValidationError):
+        return await validation_exception_handler(request, exc)
+
+    tb = traceback.format_exc()
+    error_msg = str(exc) or exc.__class__.__name__
+    endpoint = f"{request.method} {request.url.path}"
+    logger.error(f"[Unhandled Runtime Crash Intercepted] {endpoint}: {error_msg}\n{tb}")
+
+    # Safely persist error to database
+    try:
+        with SessionLocal() as db_err:
+            log_entry = SystemErrorLog(
+                error_type="RUNTIME",
+                endpoint=endpoint[:255],
+                error_message=error_msg[:1000],
+                traceback_details=tb,
+                is_resolved=False
+            )
+            db_err.add(log_entry)
+            db_err.commit()
+    except Exception as db_save_err:
+        logger.error(f"[Error Logger Fallback] Could not persist runtime crash log: {db_save_err}")
+
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "System encountered an error. Logged for admin review."}
     )
 
 # Register Core API Routers

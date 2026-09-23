@@ -5,6 +5,8 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import or_
+
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.s3_cleanup import delete_file_from_s3
@@ -66,21 +68,63 @@ def serialize_media_item(m: MediaItem) -> MediaItemResponse:
         created_at=m.created_at,
     )
 
+def check_album_access(album: Album, current_user: User, db: Session) -> bool:
+    """
+    Strict Album Access Control & Data Isolation:
+    - Admin: Full access across all platform albums.
+    - Studio Assistant: Can ONLY access albums they created themselves (album.photographer_id == current_user.id).
+    - Main Photographer (Owner): Can access albums created by themselves AND any of their assistants.
+    """
+    if current_user.role == UserRole.ADMIN.value or current_user.role == UserRole.ADMIN:
+        return True
+
+    user_role = str(getattr(current_user, "role", "") or "").lower()
+    is_assistant = (
+        user_role == UserRole.ASSISTANT.value
+        or user_role == "assistant"
+        or current_user.parent_id is not None
+    )
+
+    # 1. Studio Assistant Isolation
+    if is_assistant:
+        return album.photographer_id == current_user.id
+
+    # 2. Main Photographer
+    if album.photographer_id == current_user.id:
+        return True
+
+    # Verify if album creator is an assistant linked to this photographer
+    creator = db.query(User.parent_id).filter(User.id == album.photographer_id).first()
+    if creator and creator.parent_id == current_user.id:
+        return True
+
+    return False
+
 @router.post("", response_model=AlbumDetailResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=AlbumDetailResponse, status_code=status.HTTP_201_CREATED)
 def create_album(
     payload: AlbumCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Creates a new Album belonging to the authenticated photographer.
-    Auto-generates a unique 6-digit access PIN if not explicitly supplied.
-    Sets optional initial expiration based on days or tier (7 days Basic / 30 days Studio).
+    Creates a new Album.
+    Permissions:
+    - Main Photographers, Studio Assistants, and Administrators can create albums.
+    - The album's photographer_id is set strictly to current_user.id (the actual creator).
+    - Storage quota and subscription tier routing resolve to current_user.effective_owner_id.
+    - Auto-generates a unique 6-digit access PIN if not explicitly supplied.
     """
-    if current_user.role not in [UserRole.PHOTOGRAPHER, UserRole.ADMIN]:
+    allowed_roles = [
+        UserRole.PHOTOGRAPHER.value, UserRole.PHOTOGRAPHER,
+        UserRole.ADMIN.value, UserRole.ADMIN,
+        UserRole.ASSISTANT.value, UserRole.ASSISTANT,
+        "photographer", "admin", "assistant", "owner"
+    ]
+    if current_user.role not in allowed_roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only photographers and administrators can create albums."
+            detail="You are not authorized to create albums."
         )
 
     # Validate or generate PIN
@@ -100,10 +144,21 @@ def create_album(
     else:
         assigned_pin = get_unique_pin(db)
 
-    # Dynamic Tier Gate: Enforce limits based on dynamic PlanConfiguration
-    user_plan = getattr(current_user, "subscription_plan", "basic") or "basic"
+    # SaaS Quota & Tier Check: Route via effective_owner_id (the main studio account)
+    effective_owner_id = current_user.effective_owner_id
+    owner = db.query(User).filter(User.id == effective_owner_id).first() or current_user
+
+    # Storage Quota Check on Effective Owner
+    if owner.storage_quota_limit > 0 and owner.storage_used >= owner.storage_quota_limit:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Storage quota exceeded for this studio account. Please upgrade your photographer plan."
+        )
+
+    # Dynamic Tier Gate based on effective owner's plan configuration
+    user_plan = getattr(owner, "subscription_plan", "basic") or "basic"
     plan_cfg = get_or_create_plan_config(db, user_plan)
-    is_admin = (current_user.role == UserRole.ADMIN)
+    is_admin = (current_user.role == UserRole.ADMIN.value or current_user.role == UserRole.ADMIN)
 
     # Dynamic download permission
     if is_admin or plan_cfg.can_enable_downloads:
@@ -127,7 +182,7 @@ def create_album(
             title=payload.title,
             client_name=payload.client_name,
             pin=assigned_pin,
-            photographer_id=current_user.id,
+            photographer_id=current_user.id,  # Strictly set to actual creator
             allow_download=final_allow_download,
             is_locked=False,
             expires_at=expires_at,
@@ -137,6 +192,8 @@ def create_album(
         db.add(album)
         db.commit()
         db.refresh(album)
+
+        logger.info(f"[Albums API] User #{current_user.id} ({current_user.role}) created album #{album.id} (Owner: #{effective_owner_id}).")
 
         return AlbumDetailResponse(
             id=album.id,
@@ -170,21 +227,47 @@ def create_album(
         )
 
 @router.get("", response_model=List[AlbumListItemResponse], status_code=status.HTTP_200_OK)
+@router.get("/", response_model=List[AlbumListItemResponse], status_code=status.HTTP_200_OK)
 def list_albums(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Lists all albums for the logged-in photographer.
-    Administrators receive all albums across the platform.
-    Calculates exact expiration status for each album.
-    Robustly sanitizes all DB columns, converting None values to valid types.
+    Lists albums with strict data isolation:
+    - Administrators: Receive all albums platform-wide.
+    - Studio Assistants: Strictly receive albums they created themselves (photographer_id == current_user.id).
+    - Main Photographers: Receive their own albums AND albums created by any of their studio assistants.
     """
     try:
-        if current_user.role == UserRole.ADMIN:
+        user_role = str(getattr(current_user, "role", "") or "").lower()
+        is_assistant = (
+            user_role == UserRole.ASSISTANT.value
+            or user_role == "assistant"
+            or current_user.parent_id is not None
+        )
+
+        if current_user.role == UserRole.ADMIN.value or current_user.role == UserRole.ADMIN:
             albums = db.query(Album).order_by(Album.created_at.desc()).all()
+        elif is_assistant:
+            # Studio Assistant: Strictly albums they created
+            albums = (
+                db.query(Album)
+                .filter(Album.photographer_id == current_user.id)
+                .order_by(Album.created_at.desc())
+                .all()
+            )
         else:
-            albums = db.query(Album).filter(Album.photographer_id == current_user.id).order_by(Album.created_at.desc()).all()
+            # Main Photographer: Own albums + all albums created by their assistants
+            assistant_ids = [
+                r[0] for r in db.query(User.id).filter(User.parent_id == current_user.id).all()
+            ]
+            allowed_photographer_ids = [current_user.id] + assistant_ids
+            albums = (
+                db.query(Album)
+                .filter(Album.photographer_id.in_(allowed_photographer_ids))
+                .order_by(Album.created_at.desc())
+                .all()
+            )
 
         result = []
         for alb in albums:
@@ -218,6 +301,7 @@ def list_albums(
         )
 
 @router.get("/{album_id}", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
+@router.get("/{album_id}/", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
 def get_album(
     album_id: int,
     db: Session = Depends(get_db),
@@ -225,16 +309,14 @@ def get_album(
 ):
     """
     Fetches full album details including associated media items.
-    Returns the exact expiration status (is_expired).
-    Enforces ownership permissions (photographer must own the album unless admin).
-    Guarantees null-safe serialization.
+    Enforces strict ownership & assistant data isolation permissions.
     """
     try:
         album = db.query(Album).filter(Album.id == album_id).first()
         if not album:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
 
-        if current_user.role != UserRole.ADMIN and album.photographer_id != current_user.id:
+        if not check_album_access(album, current_user, db):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this album.")
 
         media_items = album.media_items or []
@@ -271,6 +353,7 @@ def get_album(
         )
 
 @router.put("/{album_id}/extend", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
+@router.put("/{album_id}/extend/", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
 def extend_album_expiration(
     album_id: int,
     payload: AlbumExtendRequest,
@@ -278,31 +361,31 @@ def extend_album_expiration(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Allows photographers to extend expires_at by a given number of days.
-    If the album was already expired, resets expiration from current UTC time plus requested days.
-    If the album was locked due to expiration, unlocks it if not already submitted.
-    Wrapped in strict try...except with db.rollback().
+    Extends expires_at by a specified number of days.
+    Enforces strict access control and plan validation routed via effective_owner_id.
     """
-    # Dynamic Tier Gate: Lifespan extension checked against PlanConfiguration
-    user_plan = getattr(current_user, "subscription_plan", "basic") or "basic"
-    plan_cfg = get_or_create_plan_config(db, user_plan)
-    if current_user.role != UserRole.ADMIN and not plan_cfg.can_extend_lifespan:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Extending album expiration lifespan is not enabled for the {user_plan.capitalize()} Plan. Please upgrade to unlock."
-        )
-
     album = db.query(Album).filter(Album.id == album_id).first()
     if not album:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
 
-    if current_user.role != UserRole.ADMIN and album.photographer_id != current_user.id:
+    if not check_album_access(album, current_user, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this album.")
+
+    # Dynamic Tier Gate routed via Effective Owner
+    owner = db.query(User).filter(User.id == current_user.effective_owner_id).first() or current_user
+    user_plan = getattr(owner, "subscription_plan", "basic") or "basic"
+    plan_cfg = get_or_create_plan_config(db, user_plan)
+    is_admin = (current_user.role == UserRole.ADMIN.value or current_user.role == UserRole.ADMIN)
+
+    if not is_admin and not plan_cfg.can_extend_lifespan:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Extending album lifespan is not enabled for the {user_plan.capitalize()} Plan. Please upgrade to unlock."
+        )
 
     now_utc = datetime.now(timezone.utc)
 
     try:
-        # Base calculation: from current expiration or from now if already expired or null
         if album.expires_at is not None:
             current_exp_utc = (
                 album.expires_at if album.expires_at.tzinfo is not None
@@ -315,7 +398,6 @@ def extend_album_expiration(
         new_expiration = base_time + timedelta(days=payload.days)
         album.expires_at = new_expiration
 
-        # If it was locked only due to expiration (and not finalized via client submit), unlock it
         if bool(album.is_locked or False) and album.submitted_at is None:
             album.is_locked = False
 
@@ -359,6 +441,7 @@ def extend_album_expiration(
         )
 
 @router.get("/{album_id}/export", response_model=List[MediaItemResponse], status_code=status.HTTP_200_OK)
+@router.get("/{album_id}/export/", response_model=List[MediaItemResponse], status_code=status.HTTP_200_OK)
 def export_album_selections(
     album_id: int,
     db: Session = Depends(get_db),
@@ -366,13 +449,13 @@ def export_album_selections(
 ):
     """
     Exports final client photo selections (is_selected = True) for Lightroom/Photoshop workflows.
-    Enforces strict ownership access control.
+    Enforces strict ownership & assistant data isolation access control.
     """
     album = db.query(Album).filter(Album.id == album_id).first()
     if not album:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
 
-    if current_user.role != UserRole.ADMIN and album.photographer_id != current_user.id:
+    if not check_album_access(album, current_user, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this album.")
 
     media_items = album.media_items or []
@@ -380,6 +463,7 @@ def export_album_selections(
     return selected_items
 
 @router.patch("/{album_id}", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
+@router.patch("/{album_id}/", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
 def update_album(
     album_id: int,
     payload: AlbumUpdate,
@@ -388,12 +472,13 @@ def update_album(
 ):
     """
     Updates album metadata, lock status, or download permissions.
+    Enforces strict ownership & assistant data isolation access control.
     """
     album = db.query(Album).filter(Album.id == album_id).first()
     if not album:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
 
-    if current_user.role != UserRole.ADMIN and album.photographer_id != current_user.id:
+    if not check_album_access(album, current_user, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this album.")
 
     try:
@@ -446,6 +531,7 @@ def update_album(
         )
 
 @router.delete("/{album_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{album_id}/", status_code=status.HTTP_204_NO_CONTENT)
 def delete_album(
     album_id: int,
     background_tasks: BackgroundTasks,
@@ -453,20 +539,20 @@ def delete_album(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Deletes an album and cascades removal to all its media items:
-    1. Lifetime Bandwidth Quota: DO NOT decrement storage_used (preserves lifetime upload tracking).
-    2. Physical storage cleanup: Deletes actual media files from S3 or local storage.
-    3. Cascades removal of album and its media records from database.
+    Deletes an album and cascades removal to all its media items.
+    Enforces strict ownership & assistant data isolation access control:
+    - Main Photographer can delete own albums or albums created by their assistants.
+    - Assistant can strictly delete only albums they created themselves.
+    - Lifetime Bandwidth Quota: storage_used is preserved.
     """
     album = db.query(Album).filter(Album.id == album_id).first()
     if not album:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
 
-    if current_user.role != UserRole.ADMIN and album.photographer_id != current_user.id:
+    if not check_album_access(album, current_user, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this album.")
 
     try:
-        # Collect media files for physical storage cleanup prior to DB cascade
         media_items = album.media_items or []
         for item in media_items:
             item_url = item.url
@@ -485,7 +571,6 @@ def delete_album(
             else:
                 background_tasks.add_task(delete_file_from_s3, item_url)
 
-        # Note: Do NOT subtract from user's storage_used. It tracks lifetime upload bandwidth!
         db.delete(album)
         db.commit()
         return None

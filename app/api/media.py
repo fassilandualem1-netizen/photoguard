@@ -27,6 +27,35 @@ logger = logging.getLogger("photoguard.media")
 
 router = APIRouter(prefix="/api/v1/media", tags=["Media Storage & CDN"])
 
+def check_media_album_access(album: Album, current_user: User, db: Session) -> bool:
+    """
+    Strict Media Album Access Control & Data Isolation:
+    - Admin: Full access.
+    - Studio Assistant: Strictly albums they created themselves (album.photographer_id == current_user.id).
+    - Main Photographer (Owner): Albums created by themselves OR any of their assistants.
+    """
+    if current_user.role == UserRole.ADMIN.value or current_user.role == UserRole.ADMIN:
+        return True
+
+    user_role = str(getattr(current_user, "role", "") or "").lower()
+    is_assistant = (
+        user_role == UserRole.ASSISTANT.value
+        or user_role == "assistant"
+        or current_user.parent_id is not None
+    )
+
+    if is_assistant:
+        return album.photographer_id == current_user.id
+
+    if album.photographer_id == current_user.id:
+        return True
+
+    creator = db.query(User.parent_id).filter(User.id == album.photographer_id).first()
+    if creator and creator.parent_id == current_user.id:
+        return True
+
+    return False
+
 @router.post("/upload/{album_id}", response_model=MediaItemResponse, status_code=status.HTTP_201_CREATED)
 async def upload_album_photo(
     album_id: int,
@@ -50,11 +79,11 @@ async def upload_album_photo(
             detail="Album not found."
         )
 
-    # Permission check: must be owner photographer or admin
-    if current_user.role != UserRole.ADMIN and album.photographer_id != current_user.id:
+    # Permission check: must be owner photographer, creator assistant, or admin
+    if not check_media_album_access(album, current_user, db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied. You do not own this album."
+            detail="Access denied. You do not have permission to upload to this album."
         )
 
     # Cannot upload to an already submitted/locked album
@@ -80,13 +109,14 @@ async def upload_album_photo(
             detail="Uploaded file is empty."
         )
 
-    # SaaS Virtual Quota Check:
-    photographer = current_user if current_user.id == album.photographer_id else db.query(User).filter(User.id == album.photographer_id).first()
+    # SaaS Virtual Quota Check: routed through effective_owner_id
+    effective_owner_id = current_user.effective_owner_id
+    owner = db.query(User).filter(User.id == effective_owner_id).first() or current_user
     
-    if photographer and (photographer.storage_used + original_size > photographer.storage_quota_limit):
+    if owner and (owner.storage_used + original_size > owner.storage_quota_limit):
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="Storage quota exceeded. Please upgrade your photographer plan."
+            detail="Storage quota exceeded for this studio account. Please upgrade your photographer plan."
         )
 
     # Multi-Cloud Storage Upload (Primary: Cloudinary -> Secondary: S3 -> Fallback: Local Disk)
@@ -156,9 +186,9 @@ async def upload_album_photo(
     )
 
     try:
-        # Update virtual quota in database (increment only on upload)
-        if photographer:
-            photographer.storage_used += original_size
+        # Update virtual quota in database on the studio effective owner account
+        if owner:
+            owner.storage_used += original_size
 
         db.add(media_item)
         db.commit()
@@ -193,13 +223,13 @@ def list_album_media(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Lists all media items within an album for the owner photographer or admin.
+    Lists all media items within an album with strict data isolation.
     """
     album = db.query(Album).filter(Album.id == album_id).first()
     if not album:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
 
-    if current_user.role != UserRole.ADMIN and album.photographer_id != current_user.id:
+    if not check_media_album_access(album, current_user, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     return album.media_items
@@ -225,7 +255,7 @@ def delete_media_item(
     if not album:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parent album not found.")
 
-    if current_user.role != UserRole.ADMIN and album.photographer_id != current_user.id:
+    if not check_media_album_access(album, current_user, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     item_url = item.url

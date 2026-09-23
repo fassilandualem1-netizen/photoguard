@@ -583,9 +583,21 @@ export function devApiPlugin(): Plugin {
                   const authHeader = req.headers['authorization'] || '';
                   const token = authHeader.replace('Bearer ', '').trim();
                   const decoded = verifyToken(token);
-                  const q = decoded
-                    ? await client.query('SELECT * FROM albums WHERE photographer_id = $1 ORDER BY id DESC', [decoded.sub])
-                    : await client.query('SELECT * FROM albums ORDER BY id DESC');
+                  let q;
+                  if (decoded?.role === 'admin') {
+                    q = await client.query('SELECT * FROM albums ORDER BY id DESC');
+                  } else if (decoded?.role === 'assistant') {
+                    // Assistant data isolation: only their own created albums
+                    q = await client.query('SELECT * FROM albums WHERE photographer_id = $1 ORDER BY id DESC', [decoded.sub]);
+                  } else if (decoded) {
+                    // Main photographer: own albums + albums created by their studio assistants
+                    q = await client.query(
+                      'SELECT * FROM albums WHERE photographer_id = $1 OR photographer_id IN (SELECT id FROM users WHERE parent_id = $1) ORDER BY id DESC',
+                      [decoded.sub]
+                    );
+                  } else {
+                    q = await client.query('SELECT * FROM albums ORDER BY id DESC');
+                  }
                   albumsList = q.rows;
                 } catch {}
                 await client.end();

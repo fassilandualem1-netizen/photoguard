@@ -58,9 +58,14 @@ export default function AdminDashboard() {
   const [hasCopiedResetPassword, setHasCopiedResetPassword] = useState(false);
 
   // Navigation Tabs State
-  const [activeTab, setActiveTab] = useState("directory"); // "directory" | "audit_logs"
+  const [activeTab, setActiveTab] = useState("directory"); // "directory" | "audit_logs" | "system_health"
   const [auditLogs, setAuditLogs] = useState([]);
   const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
+
+  // System Health & Crash Diagnostics State
+  const [systemErrors, setSystemErrors] = useState([]);
+  const [loadingErrors, setLoadingErrors] = useState(false);
+  const [resolvingErrorId, setResolvingErrorId] = useState(null);
 
   // Fetch Audit Logs
   const fetchAuditLogs = async () => {
@@ -75,10 +80,40 @@ export default function AdminDashboard() {
     }
   };
 
+  // Fetch Unresolved System Health Crashes
+  const fetchSystemErrors = async () => {
+    try {
+      setLoadingErrors(true);
+      const res = await api.get("/api/v1/admin/system-health/errors?limit=50&include_resolved=false");
+      setSystemErrors(res.data);
+    } catch (err) {
+      console.error("Failed to load system health errors:", err);
+    } finally {
+      setLoadingErrors(false);
+    }
+  };
+
+  // Resolve System Error Callback
+  const handleResolveError = async (errorId) => {
+    try {
+      setResolvingErrorId(errorId);
+      await api.put(`/api/v1/admin/system-health/errors/${errorId}/resolve`);
+      // Instantly remove the resolved error from UI state
+      setSystemErrors((prev) => prev.filter((item) => item.id !== errorId));
+    } catch (err) {
+      console.error(`Failed to resolve system error #${errorId}:`, err);
+      alert(err.response?.data?.detail || "Failed to mark error as resolved.");
+    } finally {
+      setResolvingErrorId(null);
+    }
+  };
+
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     if (tab === "audit_logs") {
       fetchAuditLogs();
+    } else if (tab === "system_health") {
+      fetchSystemErrors();
     }
   };
 
@@ -93,6 +128,10 @@ export default function AdminDashboard() {
       ]);
       setStats(statsRes.data);
       setPhotographers(usersRes.data);
+      // Preload active crash count for badge notification
+      api.get("/api/v1/admin/system-health/errors?limit=50&include_resolved=false")
+        .then((res) => setSystemErrors(res.data))
+        .catch(() => {});
     } catch (err) {
       console.error("Failed to load admin metrics:", err);
       setErrorBanner(
@@ -539,6 +578,25 @@ export default function AdminDashboard() {
               </span>
             )}
           </button>
+
+          <button
+            type="button"
+            id="admin-system-health-tab"
+            onClick={() => handleTabChange("system_health")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+              activeTab === "system_health"
+                ? "bg-rose-600 text-white shadow-lg shadow-rose-600/25"
+                : "bg-[#0e121b] text-slate-400 hover:text-white hover:bg-slate-900 border border-indigo-950/60"
+            }`}
+          >
+            <AlertTriangle className="w-4 h-4 text-rose-400" />
+            <span>System Health & Crashes</span>
+            {systemErrors.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse">
+                {systemErrors.length}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Tab 1: Directory & Provisioning */}
@@ -924,6 +982,127 @@ export default function AdminDashboard() {
                     </td>
                     <td className="py-3 px-3 text-slate-300 text-xs font-sans max-w-md truncate" title={log.details}>
                       {log.details}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    )}
+
+    {/* Tab 3: System Health & Crash Diagnostics */}
+    {activeTab === "system_health" && (
+      <section className="p-6 rounded-2xl bg-[#0e121b] border border-rose-950/70 shadow-xl shadow-black/30">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-indigo-950/60">
+          <div>
+            <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-400" />
+              <span>System Health & Unresolved Crashes</span>
+              <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                {systemErrors.length} {systemErrors.length === 1 ? "Incident" : "Incidents"}
+              </span>
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Centralized SRE monitoring for unhandled runtime crashes, database disconnects, and API faults.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={fetchSystemErrors}
+            disabled={loadingErrors}
+            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-2 border border-slate-700/60 transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loadingErrors ? "animate-spin" : ""}`} />
+            <span>Refresh Crashes</span>
+          </button>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-indigo-950/80 bg-[#080a0f]">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-indigo-950/80 bg-indigo-950/30 text-slate-400 uppercase tracking-wider font-mono">
+                <th className="py-3 px-4">Error Type</th>
+                <th className="py-3 px-4">Timestamp</th>
+                <th className="py-3 px-4">Endpoint</th>
+                <th className="py-3 px-4">Error Message & Details</th>
+                <th className="py-3 px-4 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-indigo-950/60 text-slate-300 font-sans">
+              {loadingErrors ? (
+                <tr>
+                  <td colSpan="5" className="py-12 text-center text-slate-500">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <RefreshCw className="w-5 h-5 animate-spin text-rose-400" />
+                      <span>Scanning system error logs...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : systemErrors.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="py-12 text-center text-slate-500">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                        <Check className="w-5 h-5 stroke-[2.5]" />
+                      </div>
+                      <span className="text-sm font-semibold text-slate-300">All Systems Operational</span>
+                      <span className="text-xs text-slate-500">Zero unresolved database or runtime crashes recorded.</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                systemErrors.map((err) => (
+                  <tr key={err.id} className="hover:bg-slate-900/40 transition-colors">
+                    <td className="py-3 px-4">
+                      <span
+                        className={`px-2 py-1 rounded-md text-[10px] font-mono font-bold uppercase tracking-wider ${
+                          err.error_type === "DATABASE"
+                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                            : err.error_type === "NETWORK"
+                            ? "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+                            : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                        }`}
+                      >
+                        {err.error_type}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                      {err.timestamp ? new Date(err.timestamp).toLocaleString() : "N/A"}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-[11px] text-slate-300 whitespace-nowrap">
+                      {err.endpoint || "Global Service"}
+                    </td>
+                    <td className="py-3 px-4 max-w-md">
+                      <p className="font-medium text-rose-200 line-clamp-2" title={err.error_message}>
+                        {err.error_message}
+                      </p>
+                      {err.traceback_details && (
+                        <details className="mt-1 text-[10px] text-slate-500 font-mono cursor-pointer">
+                          <summary className="hover:text-slate-400">View Stack Trace</summary>
+                          <pre className="mt-1 p-2 rounded bg-black/60 text-slate-400 whitespace-pre-wrap max-h-36 overflow-y-auto border border-rose-950/40">
+                            {err.traceback_details}
+                          </pre>
+                        </details>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleResolveError(err.id)}
+                        disabled={resolvingErrorId === err.id}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 ml-auto transition-all disabled:opacity-50"
+                        title="Mark this system crash as resolved"
+                      >
+                        {resolvingErrorId === err.id ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                        )}
+                        <span>Mark as Resolved</span>
+                      </button>
                     </td>
                   </tr>
                 ))

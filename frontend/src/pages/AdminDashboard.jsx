@@ -20,22 +20,9 @@ import {
   Layers,
   Mail,
   Zap,
-  Key,
-  Download,
-  Palette,
-  Clock,
-  Save,
-  CheckCircle,
-  Megaphone,
-  FileText,
-  History,
-  ChevronDown,
-  ChevronRight,
-  UserCheck,
-  CornerDownRight,
+  KeyRound,
+  X,
 } from "lucide-react";
-
-
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
@@ -51,18 +38,10 @@ export default function AdminDashboard() {
 
   // Photographers Directory
   const [photographers, setPhotographers] = useState([]);
-  const [expandedPhotographers, setExpandedPhotographers] = useState({});
   const [loading, setLoading] = useState(true);
-
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [errorBanner, setErrorBanner] = useState("");
-
-  // Dynamic Plan Configurations State
-  const [planConfigs, setPlanConfigs] = useState([]);
-  const [savingPlan, setSavingPlan] = useState(null);
-  const [planSuccessMsg, setPlanSuccessMsg] = useState("");
-  const [editingConfigs, setEditingConfigs] = useState({});
 
   // Register Photographer Form
   const [registerForm, setRegisterForm] = useState({
@@ -74,39 +53,85 @@ export default function AdminDashboard() {
   const [createdCredentials, setCreatedCredentials] = useState(null);
   const [hasCopiedPassword, setHasCopiedPassword] = useState(false);
 
-  // Broadcast System State
-  const [currentBroadcast, setCurrentBroadcast] = useState(null);
-  const [broadcastForm, setBroadcastForm] = useState({
-    title: "",
-    message: "",
-    type: "info",
-  });
-  const [isPublishingBroadcast, setIsPublishingBroadcast] = useState(false);
-  const [broadcastSuccessMsg, setBroadcastSuccessMsg] = useState("");
+  // Password Reset Modal State
+  const [resetModalData, setResetModalData] = useState(null);
+  const [hasCopiedResetPassword, setHasCopiedResetPassword] = useState(false);
 
-  // Security Audit Ledger State
+  // Navigation Tabs State
+  const [activeTab, setActiveTab] = useState("directory"); // "directory" | "audit_logs" | "system_health"
   const [auditLogs, setAuditLogs] = useState([]);
   const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
-  const [activeSection, setActiveSection] = useState("all"); // 'all' | 'directory' | 'plans' | 'broadcast' | 'ledger'
 
+  // System Health & Crash Diagnostics State
+  const [systemErrors, setSystemErrors] = useState([]);
+  const [loadingErrors, setLoadingErrors] = useState(false);
+  const [resolvingErrorId, setResolvingErrorId] = useState(null);
 
-  // Fetch initial stats, directory, dynamic plans, broadcast & audit-logs
+  // Fetch Audit Logs
+  const fetchAuditLogs = async () => {
+    try {
+      setLoadingAuditLogs(true);
+      const res = await api.get("/api/v1/admin/audit-logs?limit=50");
+      setAuditLogs(res.data);
+    } catch (err) {
+      console.error("Failed to load audit logs:", err);
+    } finally {
+      setLoadingAuditLogs(false);
+    }
+  };
+
+  // Fetch Unresolved System Health Crashes
+  const fetchSystemErrors = async () => {
+    try {
+      setLoadingErrors(true);
+      const res = await api.get("/api/v1/admin/system-health/errors?limit=50&include_resolved=false");
+      setSystemErrors(res.data);
+    } catch (err) {
+      console.error("Failed to load system health errors:", err);
+    } finally {
+      setLoadingErrors(false);
+    }
+  };
+
+  // Resolve System Error Callback
+  const handleResolveError = async (errorId) => {
+    try {
+      setResolvingErrorId(errorId);
+      await api.put(`/api/v1/admin/system-health/errors/${errorId}/resolve`);
+      // Instantly remove the resolved error from UI state
+      setSystemErrors((prev) => prev.filter((item) => item.id !== errorId));
+    } catch (err) {
+      console.error(`Failed to resolve system error #${errorId}:`, err);
+      alert(err.response?.data?.detail || "Failed to mark error as resolved.");
+    } finally {
+      setResolvingErrorId(null);
+    }
+  };
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (tab === "audit_logs") {
+      fetchAuditLogs();
+    } else if (tab === "system_health") {
+      fetchSystemErrors();
+    }
+  };
+
+  // Fetch initial stats & directory
   const fetchData = async () => {
     try {
       setLoading(true);
       setErrorBanner("");
-      const [statsRes, usersRes, plansRes, broadcastRes, auditRes] = await Promise.all([
+      const [statsRes, usersRes] = await Promise.all([
         api.get("/api/v1/admin/stats"),
         api.get("/api/v1/admin/users"),
-        api.get("/api/v1/admin/plans"),
-        api.get("/api/v1/broadcasts/active").catch(() => ({ data: null })),
-        api.get("/api/v1/admin/audit-logs").catch(() => ({ data: [] })),
       ]);
       setStats(statsRes.data);
       setPhotographers(usersRes.data);
-      setPlanConfigs(plansRes.data || []);
-      setCurrentBroadcast(broadcastRes.data || null);
-      setAuditLogs(auditRes.data || []);
+      // Preload active crash count for badge notification
+      api.get("/api/v1/admin/system-health/errors?limit=50&include_resolved=false")
+        .then((res) => setSystemErrors(res.data))
+        .catch(() => {});
     } catch (err) {
       console.error("Failed to load admin metrics:", err);
       setErrorBanner(
@@ -114,54 +139,6 @@ export default function AdminDashboard() {
       );
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchAuditLogs = async () => {
-    try {
-      setLoadingAuditLogs(true);
-      const res = await api.get("/api/v1/admin/audit-logs");
-      setAuditLogs(res.data || []);
-    } catch (err) {
-      console.error("Failed to refresh audit logs:", err);
-    } finally {
-      setLoadingAuditLogs(false);
-    }
-  };
-
-
-  // Broadcast Handlers
-  const handlePublishBroadcast = async (e) => {
-    e.preventDefault();
-    if (!broadcastForm.title.trim() || !broadcastForm.message.trim()) return;
-
-    try {
-      setIsPublishingBroadcast(true);
-      setErrorBanner("");
-      const res = await api.post("/api/v1/admin/broadcasts", {
-        title: broadcastForm.title.trim(),
-        message: broadcastForm.message.trim(),
-        type: broadcastForm.type,
-      });
-      setCurrentBroadcast(res.data);
-      setBroadcastForm({ title: "", message: "", type: "info" });
-      setBroadcastSuccessMsg("Global broadcast announcement published successfully!");
-      setTimeout(() => setBroadcastSuccessMsg(""), 4000);
-    } catch (err) {
-      setErrorBanner(err.response?.data?.detail || "Failed to publish broadcast announcement.");
-    } finally {
-      setIsPublishingBroadcast(false);
-    }
-  };
-
-  const handleDeactivateBroadcast = async (broadcastId) => {
-    try {
-      await api.put(`/api/v1/admin/broadcasts/${broadcastId}/deactivate`);
-      setCurrentBroadcast(null);
-      setBroadcastSuccessMsg("Broadcast announcement deactivated.");
-      setTimeout(() => setBroadcastSuccessMsg(""), 4000);
-    } catch (err) {
-      setErrorBanner(err.response?.data?.detail || "Failed to deactivate broadcast.");
     }
   };
 
@@ -210,25 +187,16 @@ export default function AdminDashboard() {
     }
   };
 
-  // Toggle Suspend / Active (with Instant Cascade Update for Assistants)
+  // Toggle Suspend / Active
   const handleToggleSuspend = async (userId, currentActive) => {
     try {
       setActionLoadingId(userId);
       await api.put(`/api/v1/admin/users/${userId}/suspend`);
-      const nextActive = !currentActive;
       setPhotographers((prev) =>
-        prev.map((p) => {
-          if (p.id === userId) {
-            return { ...p, is_active: nextActive };
-          }
-          // Cascade update in UI if this user is a child assistant of the toggled parent
-          if (p.parent_id === userId) {
-            return { ...p, is_active: nextActive };
-          }
-          return p;
-        })
+        prev.map((p) =>
+          p.id === userId ? { ...p, is_active: !currentActive } : p
+        )
       );
-      fetchAuditLogs();
     } catch (err) {
       alert(err.response?.data?.detail || "Failed to toggle user status.");
     } finally {
@@ -236,41 +204,28 @@ export default function AdminDashboard() {
     }
   };
 
-  // Toggle Plan (basic <-> studio) with instant Assistant cascade update
+  // Toggle Plan (basic <-> studio)
   const handleTogglePlan = async (userId, currentPlan) => {
     try {
       setActionLoadingId(userId);
       const res = await api.put(`/api/v1/admin/users/${userId}/plan`);
-      const newPlan = res.data.subscription_plan;
       setPhotographers((prev) =>
-        prev.map((p) => {
-          if (p.id === userId) {
-            return {
-              ...p,
-              subscription_plan: newPlan,
-              storage_quota_limit: res.data.storage_quota_limit,
-            };
-          }
-          // If this user is an assistant of the changed parent:
-          if (p.parent_id === userId) {
-            return {
-              ...p,
-              // If downgraded to basic, assistants are deactivated
-              is_active: newPlan === "studio" ? p.is_active : false,
-              subscription_plan: newPlan,
-            };
-          }
-          return p;
-        })
+        prev.map((p) =>
+          p.id === userId
+            ? {
+                ...p,
+                subscription_plan: res.data.subscription_plan,
+                storage_quota_limit: res.data.storage_quota_limit,
+              }
+            : p
+        )
       );
-      fetchAuditLogs();
     } catch (err) {
       alert(err.response?.data?.detail || "Failed to update plan.");
     } finally {
       setActionLoadingId(null);
     }
   };
-
 
   // Edit Quota (Prompt for GB -> convert to bytes)
   const handleEditQuota = async (userId, currentQuotaBytes) => {
@@ -306,32 +261,27 @@ export default function AdminDashboard() {
     }
   };
 
-  // Reset Photographer Password
+  // Emergency Password Reset for Individual Users (Phase 2 Frontend)
   const handleResetPassword = async (userId, userEmail) => {
-    if (!window.confirm(`Generate and assign a new temporary password for ${userEmail}?`)) {
+    if (
+      !window.confirm(
+        `Are you sure you want to reset the password for this user (${userEmail})?`
+      )
+    ) {
       return;
     }
+
     try {
       setActionLoadingId(userId);
       const res = await api.post(`/api/v1/admin/users/${userId}/reset-password`);
-      
-      // Target user lookup
-      const targetUser = photographers.find((p) => p.id === userId);
-      const planName = targetUser?.subscription_plan || "photographer";
-      const fullName = targetUser?.full_name || userEmail;
+      const tempPassword = res.data.temporary_password || res.data.temp_password;
 
-      setCreatedCredentials({
-        temp_password: res.data.temp_password,
-        email: res.data.email,
-        full_name: fullName,
-        plan: planName,
-        isReset: true,
+      setResetModalData({
+        user_id: userId,
+        email: res.data.email || userEmail,
+        temporary_password: tempPassword,
       });
-      setHasCopiedPassword(false);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-
-      // Refresh audit logs immediately
-      fetchAuditLogs();
+      setHasCopiedResetPassword(false);
     } catch (err) {
       alert(err.response?.data?.detail || "Failed to reset photographer password.");
     } finally {
@@ -339,6 +289,12 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleCopyResetPassword = (text) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setHasCopiedResetPassword(true);
+    setTimeout(() => setHasCopiedResetPassword(false), 3000);
+  };
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
@@ -346,41 +302,17 @@ export default function AdminDashboard() {
     setTimeout(() => setHasCopiedPassword(false), 3000);
   };
 
-  const toggleExpand = (id) => {
-    setExpandedPhotographers((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  };
-
-  // Group root photographers vs assistants
-  const rootPhotographers = photographers.filter(
-    (p) => !p.parent_id && p.role !== "assistant"
-  );
-
-  const getAssistantsFor = (parentId) => {
-    return photographers.filter(
-      (p) => p.parent_id === parentId || (p.role === "assistant" && p.parent_id === parentId)
-    );
-  };
-
-  // Filtered root photographers list (matches photographer or any of their assistants)
-  const filteredPhotographers = rootPhotographers.filter((p) => {
-    const term = searchQuery.toLowerCase();
-    const assistants = getAssistantsFor(p.id);
-    const matchesAssistant = assistants.some(
-      (a) =>
-        a.full_name?.toLowerCase().includes(term) ||
-        a.email?.toLowerCase().includes(term)
-    );
-    return (
-      p.full_name?.toLowerCase().includes(term) ||
-      p.email?.toLowerCase().includes(term) ||
-      p.subscription_plan?.toLowerCase().includes(term) ||
-      matchesAssistant
-    );
-  });
-
+  // Filtered photographers list: strictly root photographers (no assistants as rows)
+  const filteredPhotographers = photographers
+    .filter((p) => !p.parent_id && String(p.role).toLowerCase() !== "admin")
+    .filter((p) => {
+      const term = searchQuery.toLowerCase();
+      return (
+        p.full_name?.toLowerCase().includes(term) ||
+        p.email?.toLowerCase().includes(term) ||
+        p.subscription_plan?.toLowerCase().includes(term)
+      );
+    });
 
   const formatBytes = (bytes) => {
     if (!bytes || bytes === 0) return "0.00 GB";
@@ -388,78 +320,6 @@ export default function AdminDashboard() {
     if (gb >= 1) return `${gb.toFixed(2)} GB`;
     const mb = bytes / (1024 * 1024);
     return `${mb.toFixed(1)} MB`;
-  };
-
-  // Helper to handle dynamic field changes per plan
-  const handleConfigFieldChange = (planName, field, value) => {
-    setEditingConfigs((prev) => {
-      const currentPlan = planConfigs.find((p) => p.plan_name === planName);
-      const existingEdits = prev[planName] || (currentPlan ? { ...currentPlan } : {});
-      return {
-        ...prev,
-        [planName]: {
-          ...existingEdits,
-          [field]: value,
-        },
-      };
-    });
-  };
-
-  const getEffectiveConfig = (plan) => {
-    const edits = editingConfigs[plan.plan_name];
-    return edits ? { ...plan, ...edits } : plan;
-  };
-
-  // Persist plan configuration changes to FastAPI backend
-  const handleSavePlanConfig = async (planName) => {
-    const currentPlan = planConfigs.find((p) => p.plan_name === planName);
-    if (!currentPlan) return;
-    const effective = getEffectiveConfig(currentPlan);
-
-    try {
-      setSavingPlan(planName);
-      setErrorBanner("");
-      setPlanSuccessMsg("");
-
-      const payload = {};
-      if (effective.storage_quota_gb !== undefined) {
-        payload.storage_quota_bytes = Math.round(Number(effective.storage_quota_gb) * 1024 * 1024 * 1024);
-      }
-      if (effective.default_lifespan_days !== undefined) {
-        payload.default_lifespan_days = Number(effective.default_lifespan_days);
-      }
-      if (effective.max_lifespan_days !== undefined) {
-        payload.max_lifespan_days = Number(effective.max_lifespan_days);
-      }
-      if (effective.can_enable_downloads !== undefined) {
-        payload.can_enable_downloads = Boolean(effective.can_enable_downloads);
-      }
-      if (effective.can_customize_branding !== undefined) {
-        payload.can_customize_branding = Boolean(effective.can_customize_branding);
-      }
-      if (effective.can_extend_lifespan !== undefined) {
-        payload.can_extend_lifespan = Boolean(effective.can_extend_lifespan);
-      }
-
-      const res = await api.put(`/api/v1/admin/plans/${planName}`, payload);
-      setPlanConfigs((prev) =>
-        prev.map((p) => (p.plan_name === planName ? res.data : p))
-      );
-      setEditingConfigs((prev) => {
-        const next = { ...prev };
-        delete next[planName];
-        return next;
-      });
-      setPlanSuccessMsg(`Plan "${planName.toUpperCase()}" settings dynamically updated.`);
-      setTimeout(() => setPlanSuccessMsg(""), 4000);
-    } catch (err) {
-      console.error("Failed to update plan configuration:", err);
-      setErrorBanner(
-        err.response?.data?.detail || `Failed to update ${planName} configuration.`
-      );
-    } finally {
-      setSavingPlan(null);
-    }
   };
 
   return (
@@ -617,25 +477,21 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        {/* Temporary Credentials Success Banner (Registration & Password Reset) */}
+        {/* Temporary Credentials Success Banner */}
         {createdCredentials && (
           <section className="p-5 rounded-2xl bg-indigo-950/30 border-2 border-indigo-500/60 shadow-xl shadow-indigo-950/50 animate-fade-in relative overflow-hidden">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className={`p-1 rounded-md ${createdCredentials.isReset ? "bg-amber-500/20 text-amber-300" : "bg-indigo-500/20 text-indigo-300"}`}>
-                    {createdCredentials.isReset ? <Key className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
+                  <span className="p-1 rounded-md bg-indigo-500/20 text-indigo-300">
+                    <Sparkles className="w-4 h-4" />
                   </span>
                   <h3 className="text-sm font-bold text-white tracking-wide uppercase font-mono">
-                    {createdCredentials.isReset
-                      ? "Password Reset Successfully — New Credentials"
-                      : "New Photographer Provisioned Successfully!"}
+                    New Photographer Provisioned Successfully!
                   </h3>
                 </div>
                 <p className="text-xs text-slate-300">
-                  {createdCredentials.isReset
-                    ? "Copy this temporary password and deliver it directly to the user. They will be prompted to set a new permanent password on next login."
-                    : "Deliver these credentials to the client. They will be forced to choose a private password on initial login."}
+                  Deliver these credentials to the client. They will be forced to choose a private password on initial login.
                 </p>
                 <div className="pt-2 flex flex-wrap items-center gap-3 text-xs font-mono">
                   <span className="px-2.5 py-1 rounded-md bg-black/50 border border-indigo-800/60 text-slate-300">
@@ -654,7 +510,7 @@ export default function AdminDashboard() {
               <div className="flex items-center gap-2 w-full md:w-auto bg-black/70 p-2 rounded-xl border border-indigo-500/50">
                 <div className="px-3 py-1 text-center">
                   <div className="text-[10px] uppercase font-mono text-slate-400">Temporary Password</div>
-                  <div className="text-lg font-bold font-mono tracking-wider text-indigo-300 select-all">
+                  <div className="text-lg font-bold font-mono tracking-wider text-indigo-300">
                     {createdCredentials.temp_password}
                   </div>
                 </div>
@@ -679,9 +535,75 @@ export default function AdminDashboard() {
           </section>
         )}
 
+        {/* Navigation Tab Switcher */}
+        <div className="flex items-center gap-3 border-b border-indigo-950/80 pb-4">
+          <button
+            type="button"
+            id="admin-directory-tab"
+            onClick={() => handleTabChange("directory")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+              activeTab === "directory"
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25"
+                : "bg-[#0e121b] text-slate-400 hover:text-white hover:bg-slate-900 border border-indigo-950/60"
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Photographers Directory</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
+                activeTab === "directory"
+                  ? "bg-white/20 text-white"
+                  : "bg-slate-800 text-slate-400"
+              }`}
+            >
+              {filteredPhotographers.length}
+            </span>
+          </button>
 
-        {/* Section 2: "Register Photographer" Form */}
-        <section className="p-6 rounded-2xl bg-[#0e121b] border border-indigo-950/70 shadow-xl shadow-black/30">
+          <button
+            type="button"
+            id="admin-audit-logs-tab"
+            onClick={() => handleTabChange("audit_logs")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+              activeTab === "audit_logs"
+                ? "bg-amber-600 text-white shadow-lg shadow-amber-600/25"
+                : "bg-[#0e121b] text-slate-400 hover:text-white hover:bg-slate-900 border border-indigo-950/60"
+            }`}
+          >
+            <Shield className="w-4 h-4 text-amber-400" />
+            <span>Security Ledger & Audit Logs</span>
+            {auditLogs.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                {auditLogs.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            id="admin-system-health-tab"
+            onClick={() => handleTabChange("system_health")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+              activeTab === "system_health"
+                ? "bg-rose-600 text-white shadow-lg shadow-rose-600/25"
+                : "bg-[#0e121b] text-slate-400 hover:text-white hover:bg-slate-900 border border-indigo-950/60"
+            }`}
+          >
+            <AlertTriangle className="w-4 h-4 text-rose-400" />
+            <span>System Health & Crashes</span>
+            {systemErrors.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse">
+                {systemErrors.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Tab 1: Directory & Provisioning */}
+        {activeTab === "directory" && (
+          <>
+            {/* Section 2: "Register Photographer" Form */}
+            <section className="p-6 rounded-2xl bg-[#0e121b] border border-indigo-950/70 shadow-xl shadow-black/30">
           <div className="flex items-center gap-2.5 mb-5 pb-4 border-b border-indigo-950/60">
             <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
               <UserPlus className="w-4 h-4" />
@@ -771,424 +693,6 @@ export default function AdminDashboard() {
           </form>
         </section>
 
-        {/* Section: "Global Broadcast Announcement Manager" */}
-        <section id="global-broadcast-manager" className="p-6 rounded-2xl bg-[#0e121b] border border-indigo-950/70 shadow-xl shadow-black/30 space-y-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-indigo-950/60">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400 border border-amber-500/20">
-                <Megaphone className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-white tracking-tight">
-                  Global Dashboard Broadcast
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Publish real-time announcement banners to all photographers' workspaces
-                </p>
-              </div>
-            </div>
-
-            {currentBroadcast && currentBroadcast.is_active && (
-              <span className="px-3 py-1 rounded-full text-xs font-mono font-medium bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Active Banner Live
-              </span>
-            )}
-          </div>
-
-          {/* Success Message */}
-          {broadcastSuccessMsg && (
-            <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-emerald-300 flex items-center gap-2.5 text-xs">
-              <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-              <span>{broadcastSuccessMsg}</span>
-            </div>
-          )}
-
-          {/* Current Active Broadcast Card */}
-          {currentBroadcast && currentBroadcast.is_active ? (
-            <div className="p-4 rounded-xl bg-[#090c13] border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold ${
-                      currentBroadcast.type === "warning"
-                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                        : currentBroadcast.type === "promo"
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                        : "bg-sky-500/20 text-sky-300 border border-sky-500/30"
-                    }`}
-                  >
-                    {currentBroadcast.type}
-                  </span>
-                  <span className="text-xs text-slate-400 font-mono">
-                    Published: {new Date(currentBroadcast.created_at).toLocaleString()}
-                  </span>
-                </div>
-                <h4 className="text-sm font-semibold text-white">
-                  {currentBroadcast.title}
-                </h4>
-                <p className="text-xs text-slate-300 max-w-2xl">
-                  {currentBroadcast.message}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => handleDeactivateBroadcast(currentBroadcast.id)}
-                className="px-3.5 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-semibold transition-colors flex-shrink-0"
-              >
-                Turn Off Banner
-              </button>
-            </div>
-          ) : (
-            <div className="p-3.5 rounded-xl bg-[#080a0f] border border-slate-800/80 text-slate-500 text-xs text-center">
-              No banner announcement is currently visible to photographers. Compose one below to broadcast.
-            </div>
-          )}
-
-          {/* Compose New Broadcast Form */}
-          <form onSubmit={handlePublishBroadcast} className="space-y-4 pt-2">
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
-              <div className="sm:col-span-8 space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  Announcement Title
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Scheduled System Upgrade Tonight at 2:00 AM UTC"
-                  value={broadcastForm.title}
-                  onChange={(e) =>
-                    setBroadcastForm({ ...broadcastForm, title: e.target.value })
-                  }
-                  className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 transition-colors"
-                />
-              </div>
-
-              <div className="sm:col-span-4 space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  Banner Type / Color
-                </label>
-                <select
-                  value={broadcastForm.type}
-                  onChange={(e) =>
-                    setBroadcastForm({ ...broadcastForm, type: e.target.value })
-                  }
-                  className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-amber-400 transition-colors capitalize"
-                >
-                  <option value="info">Info (Sky Blue - General Updates)</option>
-                  <option value="warning">Warning (Amber Yellow - Maintenance & Alerts)</option>
-                  <option value="promo">Promo (Emerald Green - Special Deals & Upgrades)</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                Broadcast Message
-              </label>
-              <textarea
-                required
-                rows={2}
-                placeholder="Write the message that all photographers will see at the top of their dashboard..."
-                value={broadcastForm.message}
-                onChange={(e) =>
-                  setBroadcastForm({ ...broadcastForm, message: e.target.value })
-                }
-                className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 transition-colors resize-none"
-              />
-            </div>
-
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-[11px] text-slate-500">
-                Publishing automatically deactivates any existing banner.
-              </span>
-              <button
-                type="submit"
-                disabled={isPublishingBroadcast}
-                className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition-all active:scale-[0.98] disabled:opacity-50"
-              >
-                {isPublishingBroadcast ? (
-                  <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
-                ) : (
-                  <>
-                    <Megaphone className="w-4 h-4 text-slate-950" />
-                    <span>Publish Announcement Live</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
-        </section>
-
-        {/* Section: "Dynamic Plan Manager" (Tier Limits & Gates) */}
-        <section id="dynamic-plan-manager" className="p-6 rounded-2xl bg-[#0e121b] border border-indigo-950/70 shadow-xl shadow-black/30">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-indigo-950/60">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
-                <Sliders className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-                  <span>Dynamic Plan Manager</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wide">
-                    Live Tier Gates
-                  </span>
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Configure base storage quotas, album lifespans, and tier gate privileges in real-time
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={fetchData}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 hover:text-white transition-colors"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-indigo-400" : ""}`} />
-              <span>Reload Plans</span>
-            </button>
-          </div>
-
-          {planSuccessMsg && (
-            <div className="mb-6 p-4 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-emerald-300 flex items-center gap-2.5 text-xs animate-fade-in font-medium">
-              <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-              <span>{planSuccessMsg}</span>
-            </div>
-          )}
-
-          {planConfigs.length === 0 ? (
-            <div className="py-8 text-center text-xs text-slate-500">
-              Loading dynamic plan configurations...
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {planConfigs.map((plan) => {
-                const effective = getEffectiveConfig(plan);
-                const isStudio = plan.plan_name === "studio";
-                const isSaving = savingPlan === plan.plan_name;
-
-                return (
-                  <div
-                    key={plan.id || plan.plan_name}
-                    className={`p-5 rounded-xl border transition-all ${
-                      isStudio
-                        ? "bg-gradient-to-b from-[#101426] to-[#0c0e17] border-indigo-900/60 shadow-lg shadow-indigo-950/30"
-                        : "bg-[#0b0e14] border-slate-800/80"
-                    }`}
-                  >
-                    {/* Header */}
-                    <div className="flex items-center justify-between pb-4 border-b border-indigo-950/60 mb-5">
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                            isStudio
-                              ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40"
-                              : "bg-slate-800 text-slate-400 border border-slate-700"
-                          }`}
-                        >
-                          {isStudio ? <Zap className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wide">
-                              {plan.plan_name} Plan
-                            </h3>
-                            <span
-                              className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
-                                isStudio
-                                  ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/30"
-                                  : "bg-slate-800 text-slate-400 border-slate-700"
-                              }`}
-                            >
-                              {isStudio ? "VIP Studio Tier" : "Default Basic Tier"}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 mt-0.5">
-                            {isStudio
-                              ? "Enterprise white-labeling & extended lifespans"
-                              : "Standard watermarked proofs & fixed retention"}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Configuration Inputs */}
-                    <div className="space-y-4">
-                      {/* Storage Quota */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="sm:col-span-1">
-                          <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
-                            <HardDrive className="w-3.5 h-3.5 text-indigo-400" />
-                            <span>Storage (GB)</span>
-                          </label>
-                          <input
-                            type="number"
-                            min="1"
-                            max="1000"
-                            step="1"
-                            value={effective.storage_quota_gb ?? 5}
-                            onChange={(e) =>
-                              handleConfigFieldChange(
-                                plan.plan_name,
-                                "storage_quota_gb",
-                                parseFloat(e.target.value) || 1
-                              )
-                            }
-                            className="w-full bg-[#07090e] border border-indigo-950/80 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500 transition-colors"
-                          />
-                        </div>
-
-                        {/* Default Lifespan */}
-                        <div className="sm:col-span-1">
-                          <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-amber-400" />
-                            <span>Default Days</span>
-                          </label>
-                          <input
-                            type="number"
-                            min="1"
-                            max="365"
-                            value={effective.default_lifespan_days ?? 7}
-                            onChange={(e) =>
-                              handleConfigFieldChange(
-                                plan.plan_name,
-                                "default_lifespan_days",
-                                parseInt(e.target.value) || 1
-                              )
-                            }
-                            className="w-full bg-[#07090e] border border-indigo-950/80 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500 transition-colors"
-                          />
-                        </div>
-
-                        {/* Max Lifespan */}
-                        <div className="sm:col-span-1">
-                          <label className="block text-[11px] font-semibold text-slate-300 mb-1 flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-cyan-400" />
-                            <span>Max Days Cap</span>
-                          </label>
-                          <input
-                            type="number"
-                            min="1"
-                            max="365"
-                            value={effective.max_lifespan_days ?? 30}
-                            onChange={(e) =>
-                              handleConfigFieldChange(
-                                plan.plan_name,
-                                "max_lifespan_days",
-                                parseInt(e.target.value) || 1
-                              )
-                            }
-                            className="w-full bg-[#07090e] border border-indigo-950/80 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500 transition-colors"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Feature & Security Toggles */}
-                      <div className="pt-2 border-t border-indigo-950/40 space-y-2.5">
-                        <div className="text-[11px] font-semibold uppercase font-mono text-slate-400 tracking-wider">
-                          Feature & Gate Permissions
-                        </div>
-
-                        {/* Toggle 1: Downloads */}
-                        <label className="flex items-center justify-between p-2.5 rounded-lg bg-[#07090e] border border-indigo-950/60 hover:border-indigo-900/60 transition-colors cursor-pointer">
-                          <div className="flex items-center gap-2">
-                            <Download className="w-3.5 h-3.5 text-emerald-400" />
-                            <div>
-                              <div className="text-xs text-white font-medium">Direct Gallery Downloads</div>
-                              <div className="text-[10px] text-slate-500">Allow photographer to enable downloads for clients</div>
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={Boolean(effective.can_enable_downloads)}
-                            onChange={(e) =>
-                              handleConfigFieldChange(
-                                plan.plan_name,
-                                "can_enable_downloads",
-                                e.target.checked
-                              )
-                            }
-                            className="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-700 focus:ring-indigo-500"
-                          />
-                        </label>
-
-                        {/* Toggle 2: Branding */}
-                        <label className="flex items-center justify-between p-2.5 rounded-lg bg-[#07090e] border border-indigo-950/60 hover:border-indigo-900/60 transition-colors cursor-pointer">
-                          <div className="flex items-center gap-2">
-                            <Palette className="w-3.5 h-3.5 text-pink-400" />
-                            <div>
-                              <div className="text-xs text-white font-medium">Custom White-Label Branding</div>
-                              <div className="text-[10px] text-slate-500">Allow custom studio logo & brand color accents</div>
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={Boolean(effective.can_customize_branding)}
-                            onChange={(e) =>
-                              handleConfigFieldChange(
-                                plan.plan_name,
-                                "can_customize_branding",
-                                e.target.checked
-                              )
-                            }
-                            className="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-700 focus:ring-indigo-500"
-                          />
-                        </label>
-
-                        {/* Toggle 3: Lifespan Extension */}
-                        <label className="flex items-center justify-between p-2.5 rounded-lg bg-[#07090e] border border-indigo-950/60 hover:border-indigo-900/60 transition-colors cursor-pointer">
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-3.5 h-3.5 text-amber-400" />
-                            <div>
-                              <div className="text-xs text-white font-medium">Album Lifespan Extension</div>
-                              <div className="text-[10px] text-slate-500">Permit photographers to extend gallery expiration dates</div>
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={Boolean(effective.can_extend_lifespan)}
-                            onChange={(e) =>
-                              handleConfigFieldChange(
-                                plan.plan_name,
-                                "can_extend_lifespan",
-                                e.target.checked
-                              )
-                            }
-                            className="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-700 focus:ring-indigo-500"
-                          />
-                        </label>
-                      </div>
-
-                      {/* Save Button */}
-                      <div className="pt-2">
-                        <button
-                          type="button"
-                          onClick={() => handleSavePlanConfig(plan.plan_name)}
-                          disabled={isSaving}
-                          className="w-full py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-indigo-600/20 active:scale-[0.99]"
-                        >
-                          {isSaving ? (
-                            <>
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              <span>Saving Plan Limits...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Save className="w-3.5 h-3.5" />
-                              <span>Save {plan.plan_name.toUpperCase()} Plan Changes</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
         {/* Section 3: "Photographers Directory" Table */}
         <section className="p-6 rounded-2xl bg-[#0e121b] border border-indigo-950/70 shadow-xl shadow-black/30">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-indigo-950/60">
@@ -1245,418 +749,151 @@ export default function AdminDashboard() {
                       Math.round((p.storage_used / (p.storage_quota_limit || 1)) * 100)
                     );
                     const isLoading = actionLoadingId === p.id;
-                    const assistants = getAssistantsFor(p.id);
-                    const hasAssistants = assistants.length > 0;
-                    const isExpanded = !!expandedPhotographers[p.id];
 
                     return (
-                      <React.Fragment key={p.id}>
-                        {/* Parent Photographer Row */}
-                        <tr className="hover:bg-indigo-950/20 transition-colors">
-                          {/* Name, Email, & Team Badge / Expand Toggle */}
-                          <td className="py-3.5 px-3">
-                            <div className="flex items-center gap-2">
-                              {hasAssistants ? (
-                                <button
-                                  type="button"
-                                  onClick={() => toggleExpand(p.id)}
-                                  className="p-1 rounded hover:bg-slate-800 text-indigo-400 hover:text-indigo-300 transition-colors"
-                                  title={isExpanded ? "Collapse Team Assistants" : "Expand Team Assistants"}
-                                >
-                                  {isExpanded ? (
-                                    <ChevronDown className="w-3.5 h-3.5" />
-                                  ) : (
-                                    <ChevronRight className="w-3.5 h-3.5" />
-                                  )}
-                                </button>
-                              ) : (
-                                <div className="w-5" />
-                              )}
-
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-white">{p.full_name}</span>
-                                  {hasAssistants && (
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleExpand(p.id)}
-                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25 transition-all"
-                                      title="Toggle Team View"
-                                    >
-                                      <Users className="w-2.5 h-2.5" />
-                                      <span>Team: {assistants.length}</span>
-                                    </button>
-                                  )}
-                                </div>
-                                <div className="text-slate-400 font-mono text-[11px] flex items-center gap-1 mt-0.5">
-                                  <Mail className="w-3 h-3 text-indigo-400/60" />
-                                  <span>{p.email}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Plan */}
-                          <td className="py-3.5 px-3">
-                            <span
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wider font-mono border ${
-                                p.subscription_plan === "studio"
-                                  ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
-                                  : "bg-slate-800 text-slate-300 border-slate-700"
-                              }`}
-                            >
-                              {p.subscription_plan === "studio" && (
-                                <Zap className="w-3 h-3 text-indigo-400" />
-                              )}
-                              {p.subscription_plan}
-                            </span>
-                          </td>
-
-                          {/* Storage */}
-                          <td className="py-3.5 px-3 min-w-[170px]">
-                            <div className="flex items-center justify-between text-[11px] text-slate-300 font-mono mb-1">
-                              <span>{formatBytes(p.storage_used)}</span>
-                              <span className="text-slate-500">/ {quotaGb} GB</span>
-                            </div>
-                            <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                              <div
-                                className={`h-full rounded-full transition-all ${
-                                  usagePercent > 90
-                                    ? "bg-red-500"
-                                    : usagePercent > 70
-                                    ? "bg-amber-400"
-                                    : "bg-indigo-500"
-                                }`}
-                                style={{ width: `${usagePercent}%` }}
-                              />
-                            </div>
-                          </td>
-
-                          {/* Albums & Media */}
-                          <td className="py-3.5 px-3">
-                            <div className="text-slate-200 font-mono">
-                              <strong>{p.total_albums}</strong> albums
-                            </div>
-                            <div className="text-[11px] text-slate-500 font-mono">
-                              {p.total_media} media items
-                            </div>
-                          </td>
-
-                          {/* Status */}
-                          <td className="py-3.5 px-3">
-                            <span
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
-                                p.is_active
-                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                                  : "bg-red-500/10 text-red-400 border-red-500/30"
-                              }`}
-                            >
-                              <span
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                  p.is_active ? "bg-emerald-400" : "bg-red-400"
-                                }`}
-                              />
-                              {p.is_active ? "Active" : "Suspended"}
-                            </span>
-                          </td>
-
-                          {/* Actions */}
-                          <td className="py-3.5 px-3 text-right">
-                            <div className="inline-flex items-center gap-1.5">
-                              {/* Toggle Suspend / Active */}
-                              <button
-                                onClick={() => handleToggleSuspend(p.id, p.is_active)}
-                                disabled={isLoading}
-                                title={p.is_active ? "Suspend Photographer" : "Activate Photographer"}
-                                className={`p-2 rounded-lg text-xs font-medium border transition-colors ${
-                                  p.is_active
-                                    ? "bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30"
-                                    : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                                }`}
-                              >
-                                <Power className="w-3.5 h-3.5" />
-                              </button>
-
-                              {/* Toggle Plan */}
-                              <button
-                                onClick={() => handleTogglePlan(p.id, p.subscription_plan)}
-                                disabled={isLoading}
-                                title={`Switch to ${p.subscription_plan === "basic" ? "Studio" : "Basic"} tier`}
-                                className="p-2 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 transition-colors"
-                              >
-                                <Layers className="w-3.5 h-3.5" />
-                              </button>
-
-                              {/* Edit Quota Limit */}
-                              <button
-                                onClick={() => handleEditQuota(p.id, p.storage_quota_limit)}
-                                disabled={isLoading}
-                                title="Edit Storage Quota (GB)"
-                                className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
-                              >
-                                <Sliders className="w-3.5 h-3.5" />
-                              </button>
-
-                              {/* Reset Password */}
-                              <button
-                                onClick={() => handleResetPassword(p.id, p.email)}
-                                disabled={isLoading}
-                                title="Generate New Temporary Password"
-                                className="p-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors"
-                              >
-                                <Key className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-
-                        {/* Sub-Rows: Branch Assistants under this Studio Parent */}
-                        {isExpanded &&
-                          assistants.map((assistant) => {
-                            const isAssistantLoading = actionLoadingId === assistant.id;
-                            return (
-                              <tr
-                                key={assistant.id}
-                                className="bg-[#090c13]/90 border-l-2 border-indigo-500/50 hover:bg-indigo-950/30 transition-colors"
-                              >
-                                {/* Name, Email with Branch Indicator */}
-                                <td className="py-2.5 px-3 pl-8">
-                                  <div className="flex items-center gap-2">
-                                    <CornerDownRight className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                                    <div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-medium text-slate-200 text-xs">
-                                          {assistant.full_name}
-                                        </span>
-                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-mono font-semibold uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
-                                          <UserCheck className="w-2.5 h-2.5" />
-                                          Studio Staff / Assistant
-                                        </span>
-                                      </div>
-                                      <div className="text-slate-400 font-mono text-[11px] flex items-center gap-1 mt-0.5">
-                                        <Mail className="w-3 h-3 text-indigo-400/60" />
-                                        <span>{assistant.email}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </td>
-
-                                {/* Plan Tag (Inherited from Parent Studio) */}
-                                <td className="py-2.5 px-3">
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono text-slate-400 bg-slate-900 border border-slate-800">
-                                    ↳ Inherited ({p.subscription_plan})
-                                  </span>
-                                </td>
-
-                                {/* Storage Note */}
-                                <td className="py-2.5 px-3">
-                                  <span className="text-[11px] font-mono text-slate-500 italic">
-                                    Shared Parent Storage
-                                  </span>
-                                </td>
-
-                                {/* Albums & Media */}
-                                <td className="py-2.5 px-3">
-                                  <span className="text-[11px] font-mono text-slate-500 italic">
-                                    Studio Proof Access
-                                  </span>
-                                </td>
-
-                                {/* Status */}
-                                <td className="py-2.5 px-3">
-                                  <span
-                                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-                                      assistant.is_active && p.is_active && p.subscription_plan === "studio"
-                                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                                        : "bg-red-500/10 text-red-400 border-red-500/30"
-                                    }`}
-                                  >
-                                    <span
-                                      className={`w-1.5 h-1.5 rounded-full ${
-                                        assistant.is_active && p.is_active && p.subscription_plan === "studio"
-                                          ? "bg-emerald-400"
-                                          : "bg-red-400"
-                                      }`}
-                                    />
-                                    {p.subscription_plan !== "studio"
-                                      ? "Disabled (Basic Tier)"
-                                      : !p.is_active
-                                      ? "Parent Suspended"
-                                      : assistant.is_active
-                                      ? "Active"
-                                      : "Suspended"}
-                                  </span>
-                                </td>
-
-                                {/* Actions for Assistant (Suspend & Password Reset) */}
-                                <td className="py-2.5 px-3 text-right">
-                                  <div className="inline-flex items-center gap-1.5">
-                                    {/* Toggle Suspend / Active for Assistant */}
-                                    <button
-                                      onClick={() =>
-                                        handleToggleSuspend(assistant.id, assistant.is_active)
-                                      }
-                                      disabled={isAssistantLoading}
-                                      title={
-                                        assistant.is_active
-                                          ? "Suspend Assistant"
-                                          : "Activate Assistant"
-                                      }
-                                      className={`p-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                                        assistant.is_active
-                                          ? "bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30"
-                                          : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                                      }`}
-                                    >
-                                      <Power className="w-3 h-3" />
-                                    </button>
-
-                                    {/* Reset Assistant Password */}
-                                    <button
-                                      onClick={() =>
-                                        handleResetPassword(assistant.id, assistant.email)
-                                      }
-                                      disabled={isAssistantLoading}
-                                      title="Generate New Temporary Password for Assistant"
-                                      className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors"
-                                    >
-                                      <Key className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                      </React.Fragment>
-                    );
-                  })
-                )}
-
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        {/* Section 4: "Security Ledger" (Audit Logs) */}
-        <section id="security-ledger" className="p-6 rounded-2xl bg-[#0e121b] border border-indigo-950/70 shadow-xl shadow-black/30">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-indigo-950/60">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center text-red-400 border border-red-500/20">
-                <Shield className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-                  <span>Security Ledger</span>
-                  <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-red-500/15 text-red-300 border border-red-500/30">
-                    {auditLogs.length} events
-                  </span>
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Immutable administrative actions audit trail & security compliance ledger
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={fetchAuditLogs}
-              disabled={loadingAuditLogs}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 hover:text-white transition-colors"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loadingAuditLogs ? "animate-spin text-red-400" : ""}`} />
-              <span>Refresh Ledger</span>
-            </button>
-          </div>
-
-          {/* Minimalist Dark Audit Log Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-indigo-950/80 text-slate-400 font-mono uppercase tracking-wider">
-                  <th className="pb-3 px-3">Date & Time</th>
-                  <th className="pb-3 px-3">Admin ID / Email</th>
-                  <th className="pb-3 px-3">Action</th>
-                  <th className="pb-3 px-3">Target User ID / Email</th>
-                  <th className="pb-3 px-3">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-indigo-950/40">
-                {auditLogs.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-12 text-center text-slate-500">
-                      {loadingAuditLogs ? "Loading security ledger..." : "No administrative actions recorded in the audit log yet."}
-                    </td>
-                  </tr>
-                ) : (
-                  auditLogs.map((log) => {
-                    const formattedDate = log.created_at
-                      ? new Date(log.created_at).toLocaleString()
-                      : "—";
-
-                    // Badge color based on action type
-                    const actionBadge = (() => {
-                      switch (log.action) {
-                        case "RESET_PASSWORD":
-                          return "bg-amber-500/15 text-amber-300 border-amber-500/30";
-                        case "SUSPEND_USER":
-                          return "bg-red-500/15 text-red-300 border-red-500/30";
-                        case "TOGGLE_PLAN":
-                          return "bg-indigo-500/15 text-indigo-300 border-indigo-500/30";
-                        case "BROADCAST_PUBLISHED":
-                          return "bg-cyan-500/15 text-cyan-300 border-cyan-500/30";
-                        default:
-                          return "bg-slate-800 text-slate-300 border-slate-700";
-                      }
-                    })();
-
-                    return (
-                      <tr key={log.id} className="hover:bg-indigo-950/20 transition-colors">
-                        {/* Date & Time */}
-                        <td className="py-3 px-3 whitespace-nowrap font-mono text-[11px] text-slate-400">
-                          {formattedDate}
-                        </td>
-
-                        {/* Admin ID & Email */}
-                        <td className="py-3 px-3">
-                          <div className="font-mono text-white text-xs">
-                            ID: #{log.admin_id}
+                      <tr key={p.id} className="hover:bg-indigo-950/20 transition-colors">
+                        {/* Name & Email */}
+                        <td className="py-3.5 px-3">
+                          <div className="font-semibold text-white">{p.full_name}</div>
+                          <div className="text-slate-400 font-mono text-[11px] flex items-center gap-1 mt-0.5">
+                            <Mail className="w-3 h-3 text-indigo-400/60" />
+                            <span>{p.email}</span>
                           </div>
-                          {log.admin_email && (
-                            <div className="text-[11px] text-slate-500 font-mono">
-                              {log.admin_email}
-                            </div>
-                          )}
                         </td>
 
-                        {/* Action Badge */}
-                        <td className="py-3 px-3">
+                        {/* Plan */}
+                        <td className="py-3.5 px-3">
                           <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold font-mono tracking-wider border ${actionBadge}`}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wider font-mono border ${
+                              p.subscription_plan === "studio"
+                                ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
+                                : "bg-slate-800 text-slate-300 border-slate-700"
+                            }`}
                           >
-                            {log.action}
+                            {p.subscription_plan === "studio" && (
+                              <Zap className="w-3 h-3 text-indigo-400" />
+                            )}
+                            {p.subscription_plan}
                           </span>
                         </td>
 
-                        {/* Target User ID & Email */}
-                        <td className="py-3 px-3">
-                          {log.target_user_id ? (
-                            <div>
-                              <span className="font-mono text-slate-300 text-xs">
-                                User #{log.target_user_id}
-                              </span>
-                              {log.target_user_email && (
-                                <div className="text-[11px] text-indigo-400/80 font-mono">
-                                  {log.target_user_email}
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-slate-600 font-mono text-xs">—</span>
-                          )}
+                        {/* Storage */}
+                        <td className="py-3.5 px-3 min-w-[170px]">
+                          <div className="flex items-center justify-between text-[11px] text-slate-300 font-mono mb-1">
+                            <span>{formatBytes(p.storage_used)}</span>
+                            <span className="text-slate-500">/ {quotaGb} GB</span>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                usagePercent > 90
+                                  ? "bg-red-500"
+                                  : usagePercent > 70
+                                  ? "bg-amber-400"
+                                  : "bg-indigo-500"
+                              }`}
+                              style={{ width: `${usagePercent}%` }}
+                            />
+                          </div>
                         </td>
 
-                        {/* Details */}
-                        <td className="py-3 px-3 text-slate-300 font-mono text-xs max-w-md">
-                          <span className="break-words">{log.details || "—"}</span>
+                        {/* Albums & Media (Accurate Aggregated Studio Hierarchy) */}
+                        <td className="py-3.5 px-3">
+                          <div className="text-slate-200 font-mono text-xs">
+                            <strong>{p.total_albums}</strong> <span className="text-slate-400 font-sans">albums</span>
+                            <span className="text-slate-600 mx-1">•</span>
+                            <strong>{p.total_media}</strong> <span className="text-slate-400 font-sans">media</span>
+                          </div>
+                          <div className="mt-1">
+                            {p.assistants_count > 0 ? (
+                              <span
+                                title={`Includes data aggregated from ${p.assistants_count} studio assistant(s): ${p.assistants?.map(a => a.full_name).join(', ') || ''}`}
+                                className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/25"
+                              >
+                                <Users className="w-3 h-3 text-amber-400" />
+                                <span>Root + {p.assistants_count} Assistant{p.assistants_count > 1 ? 's' : ''}</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                Root Solo Account
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3.5 px-3">
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${
+                              p.is_active
+                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                : "bg-red-500/10 text-red-400 border-red-500/30"
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                p.is_active ? "bg-emerald-400" : "bg-red-400"
+                              }`}
+                            />
+                            {p.is_active ? "Active" : "Suspended"}
+                          </span>
+                        </td>
+
+                        {/* Actions (Visually Distinct & Unambiguous) */}
+                        <td className="py-3.5 px-3 text-right">
+                          <div className="inline-flex items-center gap-1.5">
+                            {/* 1. Toggle Suspend / Active (Root + Cascading) */}
+                            <button
+                              onClick={() => handleToggleSuspend(p.id, p.is_active)}
+                              disabled={isLoading}
+                              title={
+                                p.is_active
+                                  ? "Suspend Root Account (Cascades suspension to all assistants)"
+                                  : "Activate Root Account (Re-enables studio access)"
+                              }
+                              className={`p-2 rounded-lg text-xs font-medium border transition-all ${
+                                p.is_active
+                                  ? "bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30 hover:scale-105 active:scale-95"
+                                  : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:scale-105 active:scale-95"
+                              }`}
+                            >
+                              <Power className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* 2. Toggle Plan (Basic <-> Studio) */}
+                            <button
+                              onClick={() => handleTogglePlan(p.id, p.subscription_plan)}
+                              disabled={isLoading}
+                              title={
+                                p.subscription_plan === "basic"
+                                  ? "Upgrade to Studio Tier (Unlocks assistants, custom branding & downloads)"
+                                  : "Downgrade to Basic Tier (Deactivates assistants)"
+                              }
+                              className="p-2 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 transition-all hover:scale-105 active:scale-95"
+                            >
+                              <Layers className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* 3. Emergency Reset Password for Root Account */}
+                            <button
+                              onClick={() => handleResetPassword(p.id, p.email)}
+                              disabled={isLoading}
+                              title="Reset Password for Root Account (Generates fresh temporary credentials)"
+                              className="p-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-all hover:scale-105 active:scale-95"
+                            >
+                              <KeyRound className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* 4. Edit Quota Limit */}
+                            <button
+                              onClick={() => handleEditQuota(p.id, p.storage_quota_limit)}
+                              disabled={isLoading}
+                              title="Override Storage Quota Limit (GB)"
+                              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all hover:scale-105 active:scale-95"
+                            >
+                              <Sliders className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1666,8 +903,299 @@ export default function AdminDashboard() {
             </table>
           </div>
         </section>
-      </main>
+      </>
+    )}
 
+    {/* Tab 2: Security Ledger & Audit Logs View */}
+    {activeTab === "audit_logs" && (
+      <section className="p-6 rounded-2xl bg-[#0e121b] border border-amber-950/50 shadow-xl shadow-black/30 space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-indigo-950/60">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+              <Shield className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-white tracking-tight">
+                Security & Administrative Audit Ledger
+              </h2>
+              <p className="text-xs text-slate-400 font-sans">
+                Immutable log of administrative overrides, password resets, suspensions, and quota changes
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={fetchAuditLogs}
+            disabled={loadingAuditLogs}
+            className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium flex items-center gap-1.5 transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loadingAuditLogs ? "animate-spin text-amber-400" : ""}`} />
+            <span>Refresh Ledger</span>
+          </button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-indigo-950/80 text-slate-400 font-mono uppercase tracking-wider">
+                <th className="pb-3 px-3">Timestamp</th>
+                <th className="pb-3 px-3">Action</th>
+                <th className="pb-3 px-3">Admin</th>
+                <th className="pb-3 px-3">Target User</th>
+                <th className="pb-3 px-3">Event Details</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-indigo-950/40 font-mono">
+              {auditLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-slate-500 font-sans">
+                    {loadingAuditLogs ? "Loading security audit records..." : "No audit records found."}
+                  </td>
+                </tr>
+              ) : (
+                auditLogs.map((log) => (
+                  <tr key={log.id} className="hover:bg-indigo-950/20 transition-colors">
+                    <td className="py-3 px-3 text-slate-400 text-[11px] whitespace-nowrap">
+                      {new Date(log.created_at).toLocaleString()}
+                    </td>
+                    <td className="py-3 px-3 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                        log.action.includes("RESET")
+                          ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                          : log.action.includes("SUSPEND")
+                          ? "bg-red-500/15 text-red-300 border-red-500/30"
+                          : "bg-indigo-500/15 text-indigo-300 border-indigo-500/30"
+                      }`}>
+                        {log.action}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-slate-300 text-xs font-sans whitespace-nowrap">
+                      {log.admin_email || `Admin #${log.admin_id}`}
+                    </td>
+                    <td className="py-3 px-3 text-slate-300 text-xs font-sans whitespace-nowrap">
+                      {log.target_user_email ? (
+                        <span className="text-white font-medium">{log.target_user_email}</span>
+                      ) : log.target_user_id ? (
+                        `User #${log.target_user_id}`
+                      ) : (
+                        <span className="text-slate-600">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-3 text-slate-300 text-xs font-sans max-w-md truncate" title={log.details}>
+                      {log.details}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    )}
+
+    {/* Tab 3: System Health & Crash Diagnostics */}
+    {activeTab === "system_health" && (
+      <section className="p-6 rounded-2xl bg-[#0e121b] border border-rose-950/70 shadow-xl shadow-black/30">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-indigo-950/60">
+          <div>
+            <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-400" />
+              <span>System Health & Unresolved Crashes</span>
+              <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                {systemErrors.length} {systemErrors.length === 1 ? "Incident" : "Incidents"}
+              </span>
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Centralized SRE monitoring for unhandled runtime crashes, database disconnects, and API faults.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={fetchSystemErrors}
+            disabled={loadingErrors}
+            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-2 border border-slate-700/60 transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loadingErrors ? "animate-spin" : ""}`} />
+            <span>Refresh Crashes</span>
+          </button>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-indigo-950/80 bg-[#080a0f]">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-indigo-950/80 bg-indigo-950/30 text-slate-400 uppercase tracking-wider font-mono">
+                <th className="py-3 px-4">Error Type</th>
+                <th className="py-3 px-4">Timestamp</th>
+                <th className="py-3 px-4">Endpoint</th>
+                <th className="py-3 px-4">Error Message & Details</th>
+                <th className="py-3 px-4 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-indigo-950/60 text-slate-300 font-sans">
+              {loadingErrors ? (
+                <tr>
+                  <td colSpan="5" className="py-12 text-center text-slate-500">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <RefreshCw className="w-5 h-5 animate-spin text-rose-400" />
+                      <span>Scanning system error logs...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : systemErrors.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="py-12 text-center text-slate-500">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                        <Check className="w-5 h-5 stroke-[2.5]" />
+                      </div>
+                      <span className="text-sm font-semibold text-slate-300">All Systems Operational</span>
+                      <span className="text-xs text-slate-500">Zero unresolved database or runtime crashes recorded.</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                systemErrors.map((err) => (
+                  <tr key={err.id} className="hover:bg-slate-900/40 transition-colors">
+                    <td className="py-3 px-4">
+                      <span
+                        className={`px-2 py-1 rounded-md text-[10px] font-mono font-bold uppercase tracking-wider ${
+                          err.error_type === "DATABASE"
+                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                            : err.error_type === "NETWORK"
+                            ? "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+                            : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                        }`}
+                      >
+                        {err.error_type}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                      {err.timestamp ? new Date(err.timestamp).toLocaleString() : "N/A"}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-[11px] text-slate-300 whitespace-nowrap">
+                      {err.endpoint || "Global Service"}
+                    </td>
+                    <td className="py-3 px-4 max-w-md">
+                      <p className="font-medium text-rose-200 line-clamp-2" title={err.error_message}>
+                        {err.error_message}
+                      </p>
+                      {err.traceback_details && (
+                        <details className="mt-1 text-[10px] text-slate-500 font-mono cursor-pointer">
+                          <summary className="hover:text-slate-400">View Stack Trace</summary>
+                          <pre className="mt-1 p-2 rounded bg-black/60 text-slate-400 whitespace-pre-wrap max-h-36 overflow-y-auto border border-rose-950/40">
+                            {err.traceback_details}
+                          </pre>
+                        </details>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleResolveError(err.id)}
+                        disabled={resolvingErrorId === err.id}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 ml-auto transition-all disabled:opacity-50"
+                        title="Mark this system crash as resolved"
+                      >
+                        {resolvingErrorId === err.id ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                        )}
+                        <span>Mark as Resolved</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    )}
+  </main>
+
+      {/* High-Visibility Password Reset Modal Overlay */}
+      {resetModalData && (
+        <div
+          id="password-reset-modal-overlay"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-[#0e121b] border-2 border-amber-500/60 p-6 shadow-2xl shadow-amber-950/50 space-y-5 relative">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white tracking-wide">
+                    Emergency Password Reset
+                  </h3>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">
+                    User: <span className="text-amber-300 font-medium">{resetModalData.email}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setResetModalData(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                title="Dismiss"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Temporary Password Box */}
+            <div className="space-y-2">
+              <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono">
+                New Temporary Password
+              </label>
+              <div className="flex items-center justify-between gap-3 bg-black/90 p-3.5 rounded-xl border border-amber-500/40">
+                <span className="font-mono text-xl font-bold tracking-widest text-amber-300 select-all">
+                  {resetModalData.temporary_password}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleCopyResetPassword(resetModalData.temporary_password)}
+                  className="px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/20 active:scale-95 shrink-0"
+                >
+                  {hasCopiedResetPassword ? (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-950 stroke-[3]" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 stroke-[2.5]" />
+                      <span>Copy Password</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Critical Security Warning */}
+            <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-200/90 leading-relaxed">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <p>
+                <strong className="text-amber-300 font-semibold">Security Warning:</strong> Please copy and deliver this temporary password immediately. For strict security, this password cannot be retrieved or shown again once closed. The user will be required to change their password on next sign-in.
+              </p>
+            </div>
+
+            {/* Footer Action */}
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setResetModalData(null)}
+                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
+              >
+                Done & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

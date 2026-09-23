@@ -5,6 +5,7 @@ from app.models.payment import PaymentReceipt, PaymentStatus
 from app.models.plan_config import PlanConfiguration
 from app.models.broadcast import Broadcast
 from app.models.audit import AuditLog
+from app.models.error_log import SystemErrorLog
 
 __all__ = [
     "User",
@@ -17,5 +18,6 @@ __all__ = [
     "PlanConfiguration",
     "Broadcast",
     "AuditLog",
+    "SystemErrorLog",
 ]
 

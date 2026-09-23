@@ -242,6 +242,24 @@ def run_db_migrations():
         safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_audit_logs_target_user_id ON audit_logs(target_user_id);", "index audit_logs.target_user_id")
         safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_audit_logs_created_at ON audit_logs(created_at);", "index audit_logs.created_at")
 
+        # System Error Logs table creation & indexing (SRE & Centralized Diagnostics)
+        safe_execute_ddl("""
+            CREATE TABLE IF NOT EXISTS system_error_logs (
+                id SERIAL PRIMARY KEY,
+                timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                error_type VARCHAR(50) NOT NULL,
+                endpoint VARCHAR(255),
+                error_message VARCHAR(1000) NOT NULL,
+                traceback_details TEXT,
+                is_resolved BOOLEAN DEFAULT FALSE NOT NULL,
+                resolved_at TIMESTAMP WITH TIME ZONE
+            );
+        """, "create system_error_logs table")
+        safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_system_error_logs_timestamp ON system_error_logs(timestamp);", "index system_error_logs.timestamp")
+        safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_system_error_logs_error_type ON system_error_logs(error_type);", "index system_error_logs.error_type")
+        safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_system_error_logs_is_resolved ON system_error_logs(is_resolved);", "index system_error_logs.is_resolved")
+        safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_system_error_logs_endpoint ON system_error_logs(endpoint);", "index system_error_logs.endpoint")
+
         logger.info("[PhotoGuard DB] Schema auto-migration step finalized.")
 
     except Exception as exc:

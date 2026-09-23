@@ -27,18 +27,26 @@ if "sqlite" in DATABASE_URL:
     connect_args = {"check_same_thread": False}
     engine = create_engine(
         DATABASE_URL,
+        pool_pre_ping=True,
         connect_args=connect_args
     )
 else:
     # Only enforce sslmode if not connecting to local development server
     if "sslmode" not in DATABASE_URL and "localhost" not in DATABASE_URL and "127.0.0.1" not in DATABASE_URL:
         connect_args = {"sslmode": "require"}
+    
+    # SRE Database Auto-Recovery & Connection Pool Configuration:
+    # - pool_pre_ping: emits a lightweight test SELECT 1 before checking out a connection
+    #   to automatically purge dead/stale sockets caused by Render/cloud network timeouts.
+    # - pool_recycle: recycles pooled connections every 1800s (30m) before cloud firewalls drop them.
+    # - pool_size & max_overflow: balances peak concurrency while preventing PostgreSQL max connection limits.
     engine = create_engine(
         DATABASE_URL,
         pool_size=10,
         max_overflow=20,
         pool_pre_ping=True,
-        pool_recycle=300,
+        pool_recycle=1800,
+        pool_timeout=30,
         connect_args=connect_args
     )
 

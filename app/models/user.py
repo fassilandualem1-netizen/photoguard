@@ -56,6 +56,13 @@ class User(Base):
     studio_logo_url = Column(String(1024), nullable=True)
     brand_color = Column(String(50), default="#F59E0B", nullable=True)
 
+    # Social Links (Studio Plan Feature):
+    contact_phone = Column(String(50), nullable=True)
+    tiktok_url = Column(String(255), nullable=True)
+    instagram_url = Column(String(255), nullable=True)
+    telegram_url = Column(String(255), nullable=True)
+    youtube_url = Column(String(255), nullable=True)
+
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)

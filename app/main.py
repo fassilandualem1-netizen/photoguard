@@ -29,6 +29,7 @@ from app.api.admin import router as admin_router
 from app.api.telegram import router as telegram_router
 from app.api.team import router as team_router
 from app.api.broadcasts import router as broadcasts_router
+from app.api.photographers import router as photographers_router
 from app.core.storage import delete_file_from_cloudinary
 from app.core.s3_cleanup import delete_file_from_s3
 
@@ -70,6 +71,11 @@ def run_db_migrations():
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS studio_logo_url VARCHAR(1024);", "users.studio_logo_url")
         safe_execute_ddl("ALTER TABLE users ALTER COLUMN studio_logo_url TYPE VARCHAR(1024);", "users.studio_logo_url type")
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS brand_color VARCHAR(50) DEFAULT '#F59E0B';", "users.brand_color")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(50);", "users.contact_phone")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS tiktok_url VARCHAR(255);", "users.tiktok_url")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS instagram_url VARCHAR(255);", "users.instagram_url")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_url VARCHAR(255);", "users.telegram_url")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS youtube_url VARCHAR(255);", "users.youtube_url")
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;", "users.is_active")
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;", "users.created_at")
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE;", "users.updated_at")
@@ -676,6 +682,8 @@ app.include_router(admin_router)
 app.include_router(telegram_router)
 app.include_router(team_router)
 app.include_router(broadcasts_router)
+app.include_router(photographers_router)
+app.include_router(photographers_router, prefix="/api/v1/photographer")
 
 # Direct alias for studio logo upload
 @app.post("/api/v1/users/upload-logo", tags=["User Profile"])

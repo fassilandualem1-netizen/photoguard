@@ -45,6 +45,16 @@ class AlbumListItemResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class SocialLinksResponse(BaseModel):
+    contact_phone: Optional[str] = None
+    tiktok_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    telegram_url: Optional[str] = None
+    youtube_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
 class AlbumDetailResponse(BaseModel):
     id: int
     title: Optional[str] = Field(default="Untitled Album")
@@ -63,6 +73,18 @@ class AlbumDetailResponse(BaseModel):
     media_count: int = Field(default=0)
     selected_count: int = Field(default=0)
     media_items: List[MediaItemResponse] = Field(default_factory=list)
+
+    # Social links and Studio tier branding for client visibility (Studio Plan only)
+    social_links: Optional[SocialLinksResponse] = None
+    contact_phone: Optional[str] = None
+    tiktok_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    telegram_url: Optional[str] = None
+    youtube_url: Optional[str] = None
+    studio_logo_url: Optional[str] = None
+    brand_color: Optional[str] = None
+    photographer_name: Optional[str] = None
+    subscription_plan: Optional[str] = None
 
     class Config:
         from_attributes = True

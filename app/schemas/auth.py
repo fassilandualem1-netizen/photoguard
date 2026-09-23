@@ -21,6 +21,11 @@ class UserUpdate(BaseModel):
     telegram_chat_id: Optional[str] = Field(None, max_length=50, description="Telegram chat ID for instant alerts")
     studio_logo_url: Optional[str] = Field(None, max_length=1024, description="Custom studio logo URL for client white-labeling")
     brand_color: Optional[str] = Field(None, max_length=50, description="Custom studio brand accent color (e.g. #F59E0B)")
+    contact_phone: Optional[str] = Field(None, max_length=50, description="Contact phone number")
+    tiktok_url: Optional[str] = Field(None, max_length=255, description="TikTok profile URL")
+    instagram_url: Optional[str] = Field(None, max_length=255, description="Instagram profile URL")
+    telegram_url: Optional[str] = Field(None, max_length=255, description="Telegram channel/profile URL")
+    youtube_url: Optional[str] = Field(None, max_length=255, description="YouTube channel URL")
 
 class UserResponse(BaseModel):
     id: int
@@ -33,6 +38,11 @@ class UserResponse(BaseModel):
     telegram_chat_id: Optional[str] = None
     studio_logo_url: Optional[str] = None
     brand_color: Optional[str] = "#F59E0B"
+    contact_phone: Optional[str] = None
+    tiktok_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    telegram_url: Optional[str] = None
+    youtube_url: Optional[str] = None
     subscription_plan: Optional[str] = "basic"
     is_verified: Optional[bool] = False
     needs_password_change: Optional[bool] = True

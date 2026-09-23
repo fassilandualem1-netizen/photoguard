@@ -339,6 +339,17 @@ def update_profile(
             else:
                 current_user.brand_color = "#F59E0B"
 
+        if payload.contact_phone is not None:
+            current_user.contact_phone = payload.contact_phone.strip() if payload.contact_phone.strip() else None
+        if payload.tiktok_url is not None:
+            current_user.tiktok_url = payload.tiktok_url.strip() if payload.tiktok_url.strip() else None
+        if payload.instagram_url is not None:
+            current_user.instagram_url = payload.instagram_url.strip() if payload.instagram_url.strip() else None
+        if payload.telegram_url is not None:
+            current_user.telegram_url = payload.telegram_url.strip() if payload.telegram_url.strip() else None
+        if payload.youtube_url is not None:
+            current_user.youtube_url = payload.youtube_url.strip() if payload.youtube_url.strip() else None
+
         db.commit()
         db.refresh(current_user)
         return UserResponse.model_validate(current_user)

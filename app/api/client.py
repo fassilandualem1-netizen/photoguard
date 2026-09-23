@@ -1,3 +1,4 @@
+from typing import Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request, UploadFile, File, status
 from sqlalchemy.orm import Session
@@ -14,8 +15,9 @@ from app.core.redis import (
     reset_pin_rate_limit,
 )
 from app.core.telegram import notify_photographer_submission
+from app.models.user import User
 from app.models.album import Album, MediaItem
-from app.schemas.album import AlbumDetailResponse, MediaItemResponse
+from app.schemas.album import AlbumDetailResponse, MediaItemResponse, SocialLinksResponse
 from app.schemas.client import (
     ClientVerifyRequest,
     ClientSyncResponse,
@@ -37,6 +39,106 @@ def get_client_ip(request: Request) -> str:
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
+
+def resolve_root_photographer(album: Album, db: Session) -> Optional[User]:
+    """
+    Resolves the primary root photographer account responsible for the album.
+    If the album creator is an assistant, routes directly to the parent studio owner.
+    """
+    if not album.photographer:
+        return None
+    if album.photographer.parent_id is not None or str(getattr(album.photographer, "role", "")).lower() == "assistant":
+        owner = db.query(User).filter(User.id == album.photographer.effective_owner_id).first()
+        return owner or album.photographer
+    return album.photographer
+
+def build_client_album_response(album: Album, db: Session) -> AlbumDetailResponse:
+    """
+    Builds the AlbumDetailResponse strictly enforcing Studio vs Basic Plan visibility rules:
+    - If subscription_plan == 'studio':
+        Includes social links and the actual allow_download flag.
+    - If subscription_plan == 'basic':
+        The response MUST return null for all social links and explicitly force allow_download = False.
+    """
+    media_count = len(album.media_items)
+    selected_count = sum(1 for item in album.media_items if item.is_selected)
+
+    root_photographer = resolve_root_photographer(album, db)
+    raw_plan = (
+        getattr(root_photographer, "subscription_plan", "") or
+        getattr(root_photographer, "plan", "") or
+        "basic"
+    ).lower() if root_photographer else "basic"
+    is_studio = (raw_plan == "studio")
+
+    if is_studio and root_photographer:
+        # Studio Plan: Include social links and actual photographer-configured allow_download flag
+        final_allow_download = bool(album.allow_download or False)
+        social_links_data = SocialLinksResponse(
+            contact_phone=root_photographer.contact_phone,
+            tiktok_url=root_photographer.tiktok_url,
+            instagram_url=root_photographer.instagram_url,
+            telegram_url=root_photographer.telegram_url,
+            youtube_url=root_photographer.youtube_url,
+        )
+        contact_phone = root_photographer.contact_phone
+        tiktok_url = root_photographer.tiktok_url
+        instagram_url = root_photographer.instagram_url
+        telegram_url = root_photographer.telegram_url
+        youtube_url = root_photographer.youtube_url
+        studio_logo_url = root_photographer.studio_logo_url
+        brand_color = root_photographer.brand_color or "#F59E0B"
+        photographer_name = root_photographer.full_name
+    else:
+        # Basic Plan: Strictly return null for all social links and explicitly force allow_download = False
+        final_allow_download = False
+        social_links_data = None
+        contact_phone = None
+        tiktok_url = None
+        instagram_url = None
+        telegram_url = None
+        youtube_url = None
+        studio_logo_url = None
+        brand_color = None
+        photographer_name = root_photographer.full_name if root_photographer else None
+
+    # Track view analytics safely
+    try:
+        album.view_count = (album.view_count or 0) + 1
+        album.last_viewed_at = datetime.now(timezone.utc)
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    return AlbumDetailResponse(
+        id=album.id,
+        title=album.title,
+        client_name=album.client_name,
+        pin=album.pin,
+        photographer_id=album.photographer_id,
+        is_locked=album.is_locked,
+        allow_download=final_allow_download,
+        view_count=album.view_count or 0,
+        last_viewed_at=album.last_viewed_at,
+        reminder_sent_at=album.reminder_sent_at,
+        created_at=album.created_at,
+        expires_at=album.expires_at,
+        is_expired=False,
+        submitted_at=album.submitted_at,
+        media_count=media_count,
+        selected_count=selected_count,
+        media_items=album.media_items,
+        social_links=social_links_data,
+        contact_phone=contact_phone,
+        tiktok_url=tiktok_url,
+        instagram_url=instagram_url,
+        telegram_url=telegram_url,
+        youtube_url=youtube_url,
+        studio_logo_url=studio_logo_url,
+        brand_color=brand_color,
+        photographer_name=photographer_name,
+        subscription_plan="studio" if is_studio else "basic",
+    )
 
 @router.post("/verify", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
 def verify_client_pin(
@@ -110,25 +212,74 @@ def verify_client_pin(
             detail="This album has already been submitted and locked. Selections are final."
         )
 
-    media_count = len(album.media_items)
-    selected_count = sum(1 for item in album.media_items if item.is_selected)
+    return build_client_album_response(album, db)
 
-    return AlbumDetailResponse(
-        id=album.id,
-        title=album.title,
-        client_name=album.client_name,
-        pin=album.pin,
-        photographer_id=album.photographer_id,
-        is_locked=album.is_locked,
-        allow_download=album.allow_download,
-        created_at=album.created_at,
-        expires_at=album.expires_at,
-        is_expired=False,
-        submitted_at=album.submitted_at,
-        media_count=media_count,
-        selected_count=selected_count,
-        media_items=album.media_items
-    )
+@router.get("/album/{pin}", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
+@router.get("/album/{pin}/", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
+@router.get("/{pin}", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
+def get_client_album_by_pin(
+    pin: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Fetches the album data and gallery media via 6-digit PIN.
+    Strictly enforces Studio vs Basic Plan visibility rules:
+    - Studio Plan: Returns social links, branding, and the actual allow_download flag.
+    - Basic Plan: Forces all social links to null and allow_download = False.
+    """
+    clean_pin = pin.strip()
+    client_ip = get_client_ip(request)
+
+    # 1. Rate Limiting Check (Upstash Redis)
+    is_limited, retry_after = check_pin_rate_limit(client_ip=client_ip, pin=clean_pin, max_attempts=5, window_seconds=900)
+    if is_limited:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many failed verification attempts. Please try again in {retry_after} seconds."
+        )
+
+    album = db.query(Album).filter(Album.pin == clean_pin).first()
+    if not album:
+        record_failed_pin_attempt(client_ip=client_ip, pin=clean_pin, window_seconds=900)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invalid 6-digit PIN. Album not found."
+        )
+
+    reset_pin_rate_limit(client_ip=client_ip, pin=clean_pin)
+
+    # 2. Expiration Engine Check
+    now_utc = datetime.now(timezone.utc)
+    if album.expires_at is not None:
+        album_expires_utc = (
+            album.expires_at if album.expires_at.tzinfo is not None
+            else album.expires_at.replace(tzinfo=timezone.utc)
+        )
+        if album_expires_utc < now_utc:
+            try:
+                if not album.is_locked:
+                    album.is_locked = True
+                    db.commit()
+                    db.refresh(album)
+            except Exception:
+                db.rollback()
+
+            lock_album_submit(clean_pin)
+            increment_album_version(clean_pin)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This album has expired and is no longer accessible. Access is permanently locked."
+            )
+
+    # 3. Check Lock State
+    if album.is_locked or is_album_locked(clean_pin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This album has already been submitted and locked. Selections are final."
+        )
+
+    return build_client_album_response(album, db)
 
 @router.get("/sync/{pin}", response_model=ClientSyncResponse, status_code=status.HTTP_200_OK)
 def sync_album_state(pin: str, db: Session = Depends(get_db)):
@@ -393,11 +544,18 @@ def request_client_download(
                 detail="Album has expired. High-resolution downloads are disabled."
             )
 
-    # Strict download security enforcement
-    if not album.allow_download:
+    # Strict download security and Studio Plan tier enforcement
+    root_photographer = resolve_root_photographer(album, db)
+    raw_plan = (
+        getattr(root_photographer, "subscription_plan", "") or
+        getattr(root_photographer, "plan", "") or
+        "basic"
+    ).lower() if root_photographer else "basic"
+
+    if raw_plan != "studio" or not album.allow_download:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="High-resolution downloads are disabled by the photographer for this album."
+            detail="High-resolution downloads are disabled or not permitted under the photographer's subscription plan."
         )
 
     # Record client download timestamp for 1-day delivery auto-purge countdown
@@ -450,10 +608,18 @@ def get_client_gallery_download(
                 detail="Album has expired. High-resolution downloads are disabled."
             )
 
-    if not album.allow_download:
+    # Strict download security and Studio Plan tier enforcement
+    root_photographer = resolve_root_photographer(album, db)
+    raw_plan = (
+        getattr(root_photographer, "subscription_plan", "") or
+        getattr(root_photographer, "plan", "") or
+        "basic"
+    ).lower() if root_photographer else "basic"
+
+    if raw_plan != "studio" or not album.allow_download:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="High-resolution downloads are disabled by the photographer for this album."
+            detail="High-resolution downloads are disabled or not permitted under the photographer's subscription plan."
         )
 
     # Record client download timestamp

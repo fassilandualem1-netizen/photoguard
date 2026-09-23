@@ -398,23 +398,42 @@ export function devApiPlugin(): Plugin {
             });
           }
 
-          // 6. Admin Users List
+          // 6. Admin Users List (Root Photographers only, Assistants aggregated)
           if (url.startsWith('/api/v1/admin/users') && method === 'GET') {
             let usersList: any[] = [];
             if (client) {
               await client.connect();
-              const q = await client.query('SELECT id, email, full_name, role, plan, subscription_plan, is_active, is_verified, storage_quota_limit, storage_used, created_at FROM users ORDER BY id DESC');
-              usersList = q.rows.map(u => ({
-                id: u.id,
-                email: u.email,
-                full_name: u.full_name,
-                role: String(u.role).toLowerCase(),
-                subscription_plan: u.subscription_plan || 'basic',
-                is_active: u.is_active,
-                is_verified: u.is_verified,
-                storage_quota_limit: Number(u.storage_quota_limit) || 5368709120,
-                storage_used: Number(u.storage_used) || 0,
-                created_at: u.created_at
+              // Strictly filter out assistants and admins from the root directory
+              const q = await client.query("SELECT id, email, full_name, role, plan, subscription_plan, is_active, is_verified, storage_quota_limit, storage_used, created_at FROM users WHERE LOWER(role) != 'admin' AND parent_id IS NULL ORDER BY id DESC");
+              
+              usersList = await Promise.all(q.rows.map(async u => {
+                // Fetch assistant IDs and aggregate albums
+                let totalAlbums = 0;
+                let totalMedia = 0;
+                let assistantsCount = 0;
+                try {
+                  const asstQ = await client.query('SELECT id, full_name, email, is_active FROM users WHERE parent_id = $1', [u.id]);
+                  assistantsCount = asstQ.rows.length;
+                  const allIds = [u.id, ...asstQ.rows.map(a => a.id)];
+                  const albQ = await client.query('SELECT COUNT(*) FROM albums WHERE photographer_id = ANY($1)', [allIds]);
+                  totalAlbums = parseInt(albQ.rows[0]?.count || '0', 10);
+                } catch {}
+
+                return {
+                  id: u.id,
+                  email: u.email,
+                  full_name: u.full_name,
+                  role: String(u.role).toLowerCase(),
+                  subscription_plan: u.subscription_plan || 'basic',
+                  is_active: u.is_active,
+                  is_verified: u.is_verified,
+                  storage_quota_limit: Number(u.storage_quota_limit) || 5368709120,
+                  storage_used: Number(u.storage_used) || 0,
+                  total_albums: totalAlbums,
+                  total_media: totalMedia,
+                  assistants_count: assistantsCount,
+                  created_at: u.created_at
+                };
               }));
               await client.end();
             }

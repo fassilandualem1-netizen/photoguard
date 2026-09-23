@@ -43,6 +43,15 @@ class PhotographerRegisterRequest(BaseModel):
 class QuotaUpdateRequest(BaseModel):
     new_quota_bytes: int
 
+class AssistantSummary(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
 class PhotographerDetailResponse(BaseModel):
     id: int
     email: str
@@ -57,8 +66,9 @@ class PhotographerDetailResponse(BaseModel):
     needs_password_change: bool
     total_albums: int
     total_media: int
+    assistants_count: int = 0
+    assistants: List[AssistantSummary] = []
     created_at: Optional[str] = None
-
 
 class PhotographerRegisterResponse(BaseModel):
     message: str
@@ -79,15 +89,32 @@ def get_platform_stats(
 ):
     """
     Returns global platform metrics:
-    - Total Photographers
-    - Total Storage Used (sum of storage_used in bytes and GB)
-    - Total Albums created
-    - Total Photos/Media items uploaded
+    - Total Photographers: Root studio accounts only (assistants are strictly aggregated under their parent).
+    - Total Storage Used: Aggregated storage from root studio accounts (where parent_id IS NULL).
+    - Total Albums created across all studios.
+    - Total Photos/Media items uploaded.
     Strictly restricted to users with UserRole.ADMIN.
     """
     try:
-        total_photographers = db.query(func.count(User.id)).filter(func.lower(User.role) != "admin").scalar() or 0
-        total_storage_used_bytes = db.query(func.coalesce(func.sum(User.storage_used), 0)).scalar() or 0
+        # Total photographers: ONLY root accounts (parent_id IS NULL and not admin)
+        total_photographers = (
+            db.query(func.count(User.id))
+            .filter(
+                func.lower(User.role) != "admin",
+                User.parent_id.is_(None)
+            )
+            .scalar() or 0
+        )
+
+        # Total storage used: sum storage_used on root accounts where parent_id IS NULL and role != 'admin'
+        total_storage_used_bytes = (
+            db.query(func.coalesce(func.sum(User.storage_used), 0))
+            .filter(
+                func.lower(User.role) != "admin",
+                User.parent_id.is_(None)
+            )
+            .scalar() or 0
+        )
         total_storage_used_gb = round(total_storage_used_bytes / (1024 * 1024 * 1024), 2)
         total_albums = db.query(func.count(Album.id)).scalar() or 0
         total_photos = db.query(func.count(MediaItem.id)).scalar() or 0
@@ -116,22 +143,65 @@ def get_all_photographers(
     admin_user: User = Depends(require_admin)
 ):
     """
-    Fetch all users with UserRole.PHOTOGRAPHER along with their album count
-    and media storage statistics.
+    Fetch all root photographers (assistants are strictly excluded as independent rows).
+    Hierarchical Data Aggregation:
+    - total_albums: Aggregates albums created by the root photographer AND all their assistants.
+    - total_media: Aggregates media items within all albums belonging to the studio hierarchy.
+    - storage_used: Root studio storage used.
+    - assistants_count & assistants: Sub-account hierarchy assets clearly visible for admin management.
     """
     try:
+        # Strictly filter query to ONLY return root photographers (parent_id IS NULL and role != admin)
         photographers = (
             db.query(User)
-            .filter(func.lower(User.role) != "admin")
+            .filter(
+                func.lower(User.role) != "admin",
+                User.parent_id.is_(None)
+            )
             .order_by(User.id.desc())
             .all()
         )
 
         results = []
         for p in photographers:
-            total_albums = db.query(func.count(Album.id)).filter(Album.photographer_id == p.id).scalar() or 0
-            album_ids = db.query(Album.id).filter(Album.photographer_id == p.id).subquery()
-            total_media = db.query(func.count(MediaItem.id)).filter(MediaItem.album_id.in_(album_ids)).scalar() or 0
+            # Query all assistants belonging to this root photographer
+            assistants = (
+                db.query(User)
+                .filter(User.parent_id == p.id)
+                .order_by(User.created_at.desc())
+                .all()
+            )
+            assistant_ids = [asst.id for asst in assistants]
+            all_studio_user_ids = [p.id] + assistant_ids
+
+            # Aggregated Album Count: root photographer ID OR any assistant ID
+            total_albums = (
+                db.query(func.count(Album.id))
+                .filter(Album.photographer_id.in_(all_studio_user_ids))
+                .scalar() or 0
+            )
+
+            # Aggregated Media Count across all albums in the studio hierarchy
+            album_ids_subquery = (
+                db.query(Album.id)
+                .filter(Album.photographer_id.in_(all_studio_user_ids))
+                .subquery()
+            )
+            total_media = (
+                db.query(func.count(MediaItem.id))
+                .filter(MediaItem.album_id.in_(album_ids_subquery))
+                .scalar() or 0
+            )
+
+            assistants_summary = [
+                AssistantSummary(
+                    id=asst.id,
+                    full_name=asst.full_name,
+                    email=asst.email,
+                    is_active=asst.is_active
+                )
+                for asst in assistants
+            ]
 
             results.append(
                 PhotographerDetailResponse(
@@ -148,9 +218,10 @@ def get_all_photographers(
                     needs_password_change=p.needs_password_change,
                     total_albums=total_albums,
                     total_media=total_media,
+                    assistants_count=len(assistants),
+                    assistants=assistants_summary,
                     created_at=p.created_at.isoformat() if p.created_at else None
                 )
-
             )
 
         return results
@@ -202,6 +273,7 @@ def register_photographer(
         hashed_password=hashed_password,
         full_name=payload.full_name.strip(),
         role="photographer",
+        parent_id=None,
         subscription_plan=plan,
         plan=plan,
         is_verified=True,
@@ -221,6 +293,7 @@ def register_photographer(
             email=new_user.email,
             full_name=new_user.full_name,
             role=new_user.role.value if hasattr(new_user.role, "value") else str(new_user.role),
+            parent_id=new_user.parent_id,
             subscription_plan=new_user.subscription_plan,
             is_verified=new_user.is_verified,
             is_active=new_user.is_active,
@@ -229,6 +302,8 @@ def register_photographer(
             needs_password_change=new_user.needs_password_change,
             total_albums=0,
             total_media=0,
+            assistants_count=0,
+            assistants=[],
             created_at=new_user.created_at.isoformat() if new_user.created_at else None
         )
 
@@ -257,7 +332,7 @@ def toggle_user_suspend(
     admin_user: User = Depends(require_admin)
 ):
     """
-    Toggles is_active status of a photographer account.
+    Toggles is_active status of a photographer account and cascades status to linked assistants.
     """
     target_user = db.query(User).filter(User.id == id).first()
     if not target_user:
@@ -281,7 +356,12 @@ def toggle_user_suspend(
         # If target_user is a parent studio/photographer, cascade the new is_active status
         # to all assistant/staff sub-accounts directly linked via parent_id.
         cascaded_count = 0
-        if not target_user.parent_id and (target_user.role == UserRole.PHOTOGRAPHER.value or target_user.role == UserRole.PHOTOGRAPHER or target_user.role == "photographer" or target_user.role == "owner"):
+        if not target_user.parent_id and (
+            target_user.role == UserRole.PHOTOGRAPHER.value
+            or target_user.role == UserRole.PHOTOGRAPHER
+            or target_user.role == "photographer"
+            or target_user.role == "owner"
+        ):
             assistants = db.query(User).filter(User.parent_id == target_user.id).all()
             for assistant in assistants:
                 assistant.is_active = new_active_status
@@ -327,6 +407,7 @@ def toggle_user_plan(
 ):
     """
     Toggles photographer's subscription_plan between 'basic' and 'studio'.
+    Cascades plan changes and assistant activation/deactivation.
     """
     target_user = db.query(User).filter(User.id == id).first()
     if not target_user:
@@ -344,18 +425,16 @@ def toggle_user_plan(
         target_user.subscription_plan = new_plan
         target_user.plan = new_plan
 
-        # If photographer had the standard quota of their old plan, transition them to the new plan's dynamic quota
+        # Transition quota to new tier default if currently aligned
         if target_user.storage_quota_limit == old_cfg.storage_quota_bytes:
             target_user.storage_quota_limit = new_cfg.storage_quota_bytes
 
-        # Strict Dynamic Tier Gate: If new plan does not support custom branding, wipe branding assets
+        # Clear custom branding if downgraded
         if not new_cfg.can_customize_branding:
             target_user.studio_logo_url = None
             target_user.brand_color = "#F59E0B"
 
         # CASCADE DOWNGRADE MANAGEMENT FOR ASSISTANTS:
-        # If the parent account is downgraded to 'basic', basic plans do not support studio assistants.
-        # Immediately deactivate all linked assistants. If upgraded back to 'studio', re-activate assistants if parent is active.
         downgraded_assistants_count = 0
         if new_plan != "studio":
             assistants = db.query(User).filter(User.parent_id == target_user.id).all()
@@ -365,7 +444,6 @@ def toggle_user_plan(
                 assistant.plan = "basic"
                 downgraded_assistants_count += 1
         else:
-            # When upgraded back to studio and parent is active, restore active status
             if target_user.is_active:
                 assistants = db.query(User).filter(User.parent_id == target_user.id).all()
                 for assistant in assistants:
@@ -582,7 +660,6 @@ def update_dynamic_plan(
             detail=f"Failed to update plan configuration: {str(exc)}"
         )
 
-
 @router.get("/audit-logs", response_model=List[AuditLogResponse], status_code=status.HTTP_200_OK)
 def get_audit_logs(
     limit: int = 50,
@@ -597,7 +674,6 @@ def get_audit_logs(
         limit_val = min(max(1, limit), 100)
         logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit_val).all()
         
-        # Batch gather user emails to avoid N+1 queries
         user_ids = set()
         for log in logs:
             if log.admin_id:
@@ -635,5 +711,3 @@ def get_audit_logs(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error fetching audit logs: {str(exc)}"
         )
-
-

@@ -57,6 +57,8 @@ def run_db_migrations():
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS storage_quota_limit BIGINT DEFAULT 5368709120;", "users.storage_quota_limit")
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS storage_used BIGINT DEFAULT 0;", "users.storage_used")
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS needs_password_change BOOLEAN DEFAULT TRUE;", "users.needs_password_change")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER DEFAULT 1;", "users.token_version")
+        safe_execute_ddl("UPDATE users SET token_version = 1 WHERE token_version IS NULL;", "users.token_version null check")
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(50);", "users.telegram_chat_id")
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS studio_logo_url VARCHAR(1024);", "users.studio_logo_url")
         safe_execute_ddl("ALTER TABLE users ALTER COLUMN studio_logo_url TYPE VARCHAR(1024);", "users.studio_logo_url type")

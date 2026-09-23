@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 import enum
 from sqlalchemy import Column, Integer, String, Float, DateTime, Enum, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -21,4 +21,9 @@ class PaymentReceipt(Base):
     status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    photographer = relationship("User", backref="payment_receipts")
+    photographer = relationship(
+        "User", 
+        backref=backref("payment_receipts", passive_deletes=True),
+        foreign_keys=[photographer_id],
+        passive_deletes=True
+    )

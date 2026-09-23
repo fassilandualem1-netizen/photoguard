@@ -172,6 +172,20 @@ def run_db_migrations():
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
             );
         """, "create payment_receipts table")
+        # Ensure photographer_id column exists (in case table was created with user_id or legacy column)
+        safe_execute_ddl("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS photographer_id INTEGER REFERENCES users(id) ON DELETE CASCADE;", "payment_receipts.photographer_id")
+        # If legacy user_id exists in payment_receipts, sync it to photographer_id
+        safe_execute_ddl("""
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'payment_receipts' AND column_name = 'user_id'
+                ) THEN
+                    UPDATE payment_receipts SET photographer_id = user_id WHERE photographer_id IS NULL;
+                END IF;
+            END $$;
+        """, "sync payment_receipts legacy user_id to photographer_id")
         safe_execute_ddl("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS transaction_ref VARCHAR(100);", "payment_receipts.transaction_ref")
         safe_execute_ddl("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS amount DOUBLE PRECISION;", "payment_receipts.amount")
         safe_execute_ddl("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT 'telebirr';", "payment_receipts.payment_method")

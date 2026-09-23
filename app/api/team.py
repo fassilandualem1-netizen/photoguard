@@ -193,7 +193,7 @@ def remove_assistant(
     """
     Removes an assistant from the photographer's team.
     Ensures the target assistant strictly belongs to the current photographer (parent_id == current_user.id).
-    Hard-deletes the assistant record safely.
+    Hard-deletes the assistant record cleanly.
     """
     try:
         assistant = (
@@ -209,7 +209,11 @@ def remove_assistant(
             )
 
         deleted_email = assistant.email
-        db.delete(assistant)
+
+        # If any payment_receipts table exists with missing columns or dependencies, 
+        # ensure child assistant deletion performs a clean SQL deletion on users
+        # without triggering cascade errors on unrelated payment tables
+        db.query(User).filter(User.id == assistant_id).delete(synchronize_session=False)
         db.commit()
 
         logger.info(f"[Team Management] Photographer #{current_user.id} removed assistant #{assistant_id} ({deleted_email}).")

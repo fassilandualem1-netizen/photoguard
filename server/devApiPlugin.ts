@@ -488,6 +488,87 @@ export function devApiPlugin(): Plugin {
             });
           }
 
+          // 7b. Team Management API
+          if (url.startsWith('/api/v1/team')) {
+            const authHeader = req.headers['authorization'] || '';
+            const token = authHeader.replace('Bearer ', '').trim();
+            const decoded = verifyToken(token);
+            if (!decoded) {
+              return sendJson(res, 401, { detail: 'Unauthorized' });
+            }
+
+            // GET list
+            if (method === 'GET') {
+              let teamList: any[] = [];
+              if (client) {
+                await client.connect();
+                try {
+                  const q = await client.query(
+                    'SELECT id, full_name, email, is_active, created_at FROM users WHERE parent_id = $1 ORDER BY id DESC',
+                    [decoded.sub]
+                  );
+                  teamList = q.rows;
+                } catch {}
+                await client.end();
+              }
+              return sendJson(res, 200, teamList);
+            }
+
+            // POST create
+            if (method === 'POST') {
+              const body = await parseJsonBody(req);
+              let createdAssistant: any = null;
+              if (client) {
+                await client.connect();
+                try {
+                  // Check limit (max 3)
+                  const countQ = await client.query('SELECT COUNT(*) FROM users WHERE parent_id = $1', [decoded.sub]);
+                  if (parseInt(countQ.rows[0]?.count || '0', 10) >= 3) {
+                    await client.end();
+                    return sendJson(res, 400, { detail: 'Maximum of 3 assistants allowed per studio account.' });
+                  }
+
+                  const salt = crypto.randomBytes(16).toString('hex');
+                  const derived = crypto.pbkdf2Sync('Temp1234', Buffer.from(salt, 'utf-8'), 100000, 32, 'sha256').toString('hex');
+                  const hash = `pbkdf2_sha256$100000$${salt}$${derived}`;
+
+                  const insertQ = await client.query(
+                    `INSERT INTO users (email, full_name, hashed_password, role, subscription_plan, plan, is_active, is_verified, needs_password_change, parent_id)
+                     VALUES ($1, $2, $3, 'assistant', 'studio', 'studio', true, true, true, $4) RETURNING id, full_name, email, is_active, created_at`,
+                    [body.email, body.full_name, hash, decoded.sub]
+                  );
+                  createdAssistant = insertQ.rows[0];
+                } catch (err: any) {
+                  await client.end();
+                  return sendJson(res, 400, { detail: err.message || 'Error creating assistant' });
+                }
+                await client.end();
+              }
+              return sendJson(res, 201, {
+                assistant: createdAssistant,
+                temporary_password: 'Temp' + Math.floor(1000 + Math.random() * 9000),
+                message: 'Assistant created successfully.'
+              });
+            }
+
+            // DELETE assistant
+            if (method === 'DELETE') {
+              const parts = url.split('/');
+              const assistantId = parseInt(parts[parts.length - 1] || parts[parts.length - 2], 10);
+              if (client && assistantId) {
+                await client.connect();
+                try {
+                  await client.query('DELETE FROM users WHERE id = $1 AND parent_id = $2', [assistantId, decoded.sub]);
+                } catch (err: any) {
+                  await client.end();
+                  return sendJson(res, 500, { detail: err.message || 'Error deleting assistant' });
+                }
+                await client.end();
+              }
+              return sendJson(res, 200, { detail: 'Assistant successfully removed.' });
+            }
+          }
+
           // 8. Albums API
           if (url.startsWith('/api/v1/albums')) {
             if (method === 'GET') {

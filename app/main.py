@@ -1,6 +1,8 @@
 import os
+import asyncio
 import logging
 import traceback
+from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, status, Request, UploadFile, File, HTTPException
 from fastapi.exceptions import RequestValidationError
@@ -27,6 +29,8 @@ from app.api.admin import router as admin_router
 from app.api.telegram import router as telegram_router
 from app.api.team import router as team_router
 from app.api.broadcasts import router as broadcasts_router
+from app.core.storage import delete_file_from_cloudinary
+from app.core.s3_cleanup import delete_file_from_s3
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("photoguard.core")
@@ -138,6 +142,8 @@ def run_db_migrations():
         safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0;", "albums.view_count")
         safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS last_viewed_at TIMESTAMP WITH TIME ZONE;", "albums.last_viewed_at")
         safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP WITH TIME ZONE;", "albums.reminder_sent_at")
+        safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS photographer_downloaded_at TIMESTAMP WITH TIME ZONE;", "albums.photographer_downloaded_at")
+        safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS client_downloaded_at TIMESTAMP WITH TIME ZONE;", "albums.client_downloaded_at")
 
         # Sanitize existing NULLs in albums
         safe_execute_ddl("UPDATE albums SET title = 'Untitled Album' WHERE title IS NULL;", "sanitize albums.title")
@@ -387,6 +393,118 @@ def seed_root_admin():
     finally:
         db.close()
 
+def purge_download_triggered_assets():
+    """
+    Download-Triggered Auto-Purge Worker.
+    Scans the database and aggressively purges original high-res assets from Cloudinary/S3
+    while strictly preserving thumbnails/previews indefinitely so album UI never breaks.
+
+    Purge Rule 1 (Selection Albums):
+      Albums where photographer_downloaded_at is older than 2 days -> Purge high-res originals.
+    Purge Rule 2 (Delivery Albums):
+      Albums where allow_download == True AND client_downloaded_at is older than 1 day -> Purge high-res originals.
+
+    Thumbnail Preservation:
+      - Deletes the high-res file from Cloudinary/S3 only if item.url != item.thumbnail_url.
+      - Re-points item.url to item.thumbnail_url so all gallery UIs continue to render seamlessly.
+      - storage_used is NOT decremented (lifetime bandwidth quota preserved).
+    """
+    db = SessionLocal()
+    try:
+        now_utc = datetime.now(timezone.utc)
+        two_days_ago = now_utc - timedelta(days=2)
+        one_day_ago = now_utc - timedelta(days=1)
+
+        # 1. Selection Albums: photographer_downloaded_at <= 2 days ago
+        selection_albums = db.query(Album).filter(
+            Album.photographer_downloaded_at.isnot(None),
+            Album.photographer_downloaded_at <= two_days_ago
+        ).all()
+
+        # 2. Delivery Albums: allow_download is True AND client_downloaded_at <= 1 day ago
+        delivery_albums = db.query(Album).filter(
+            Album.allow_download == True,
+            Album.client_downloaded_at.isnot(None),
+            Album.client_downloaded_at <= one_day_ago
+        ).all()
+
+        target_map = {a.id: a for a in (selection_albums + delivery_albums)}
+        target_albums = list(target_map.values())
+
+        if not target_albums:
+            logger.info("[Auto-Purge] No albums currently match download-triggered auto-purge criteria.")
+            return
+
+        logger.info(f"[Auto-Purge] Found {len(target_albums)} album(s) qualifying for high-res asset cleanup.")
+        purged_count = 0
+
+        for album in target_albums:
+            media_items = album.media_items or []
+            album_modified = False
+
+            for item in media_items:
+                # If high-res URL is empty or already replaced with thumbnail, already purged
+                if not item.url:
+                    continue
+                if item.thumbnail_url and item.url == item.thumbnail_url:
+                    continue
+
+                high_res_url = item.url
+                thumb_url = item.thumbnail_url or item.url
+
+                # Target ONLY the original high-res asset in the cloud provider
+                try:
+                    if "res.cloudinary.com" in high_res_url:
+                        delete_file_from_cloudinary(high_res_url)
+                    elif high_res_url.startswith("/uploads/"):
+                        clean_fn = os.path.basename(high_res_url)
+                        local_f = os.path.join(os.getcwd(), "uploads", clean_fn)
+                        if os.path.exists(local_f):
+                            os.remove(local_f)
+                    else:
+                        delete_file_from_s3(high_res_url)
+                except Exception as del_err:
+                    logger.warning(f"[Auto-Purge Warning] Cloud deletion error for item {item.id} ({high_res_url}): {del_err}")
+
+                # THUMBNAIL PRESERVATION:
+                # Update item.url to thumbnail_url so client and admin dashboards render without missing images
+                item.url = thumb_url
+                album_modified = True
+                purged_count += 1
+
+            if album_modified:
+                db.commit()
+
+        logger.info(f"[Auto-Purge Complete] Purged {purged_count} original high-res asset(s) across {len(target_albums)} album(s). Thumbnails preserved.")
+    except Exception as exc:
+        db.rollback()
+        logger.error(f"[Auto-Purge Error] Error executing auto-purge scan: {exc}\n{traceback.format_exc()}")
+    finally:
+        db.close()
+
+async def run_auto_purge_loop():
+    """
+    Background worker loop executed inside FastAPI lifespan.
+    Runs every 12 hours to trigger the download-triggered auto-purge logic.
+    """
+    logger.info("[Auto-Purge Worker] Background auto-purge task started (12-hour cycle).")
+    # Small initial delay on startup so database initialization completes smoothly
+    await asyncio.sleep(5)
+    while True:
+        try:
+            purge_download_triggered_assets()
+        except asyncio.CancelledError:
+            logger.info("[Auto-Purge Worker] Background loop cancelled.")
+            break
+        except Exception as exc:
+            logger.error(f"[Auto-Purge Worker Error] Unexpected error in auto-purge loop: {exc}")
+
+        try:
+            await asyncio.sleep(12 * 3600)  # 12 hours
+        except asyncio.CancelledError:
+            logger.info("[Auto-Purge Worker] Sleep interrupted by shutdown.")
+            break
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -427,7 +545,17 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.critical(f"[PhotoGuard Lifecycle Error] Non-fatal startup sequence error: {exc}\n{traceback.format_exc()}")
     
+    # 5. Start intelligent Download-Triggered Auto-Purge background loop
+    auto_purge_task = asyncio.create_task(run_auto_purge_loop())
+
     yield
+
+    # Clean shutdown of auto-purge loop
+    auto_purge_task.cancel()
+    try:
+        await auto_purge_task
+    except asyncio.CancelledError:
+        pass
     logger.info("[PhotoGuard Lifecycle] Application shutting down.")
 
 app = FastAPI(

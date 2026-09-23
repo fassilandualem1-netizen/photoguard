@@ -370,6 +370,7 @@ def request_client_download(
     Verifies that the photographer has explicitly enabled download permissions (album.allow_download == True).
     If allow_download is False, rejects request with HTTP 403 Forbidden.
     Verifies expiration and returns high-resolution download URLs for selected photos.
+    Sets client_downloaded_at = func.now() to trigger the 1-day Delivery Album auto-purge countdown.
     """
     pin = payload.pin.strip()
     album = db.query(Album).filter(Album.pin == pin).first()
@@ -399,6 +400,13 @@ def request_client_download(
             detail="High-resolution downloads are disabled by the photographer for this album."
         )
 
+    # Record client download timestamp for 1-day delivery auto-purge countdown
+    try:
+        album.client_downloaded_at = func.now()
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+
     # Return download URLs for selected media items (or all items if none specifically tagged)
     selected_items = [m for m in album.media_items if m.is_selected]
     if not selected_items:
@@ -408,6 +416,61 @@ def request_client_download(
 
     return ClientDownloadResponse(
         pin=pin,
+        allow_download=True,
+        download_urls=urls
+    )
+
+@router.get("/{pin}/download", response_model=ClientDownloadResponse, status_code=status.HTTP_200_OK)
+@router.get("/{pin}/download/", response_model=ClientDownloadResponse, status_code=status.HTTP_200_OK)
+def get_client_gallery_download(
+    pin: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Direct client gallery download endpoint.
+    Sets client_downloaded_at = func.now() to trigger the 1-day Delivery Album auto-purge countdown.
+    """
+    clean_pin = pin.strip()
+    album = db.query(Album).filter(Album.pin == clean_pin).first()
+    if not album:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invalid album PIN."
+        )
+
+    now_utc = datetime.now(timezone.utc)
+    if album.expires_at is not None:
+        album_expires_utc = (
+            album.expires_at if album.expires_at.tzinfo is not None
+            else album.expires_at.replace(tzinfo=timezone.utc)
+        )
+        if album_expires_utc < now_utc:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Album has expired. High-resolution downloads are disabled."
+            )
+
+    if not album.allow_download:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="High-resolution downloads are disabled by the photographer for this album."
+        )
+
+    # Record client download timestamp
+    try:
+        album.client_downloaded_at = func.now()
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+
+    selected_items = [m for m in album.media_items if m.is_selected]
+    if not selected_items:
+        selected_items = album.media_items
+
+    urls = [m.url for m in selected_items]
+
+    return ClientDownloadResponse(
+        pin=clean_pin,
         allow_download=True,
         download_urls=urls
     )

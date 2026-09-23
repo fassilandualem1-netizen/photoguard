@@ -37,6 +37,10 @@ class Album(Base):
     
     # Download permissions toggle controlled by the photographer
     allow_download = Column(Boolean, default=False, nullable=False)
+
+    # Download-Triggered Auto-Purge Timestamps:
+    photographer_downloaded_at = Column(DateTime(timezone=True), nullable=True)
+    client_downloaded_at = Column(DateTime(timezone=True), nullable=True)
     
     # Client Analytics & Tracking:
     view_count = Column(Integer, default=0, nullable=False)

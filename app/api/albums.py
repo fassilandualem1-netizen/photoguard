@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
@@ -450,6 +450,7 @@ def export_album_selections(
     """
     Exports final client photo selections (is_selected = True) for Lightroom/Photoshop workflows.
     Enforces strict ownership & assistant data isolation access control.
+    Sets photographer_downloaded_at = func.now() to trigger the 2-day auto-purge countdown.
     """
     album = db.query(Album).filter(Album.id == album_id).first()
     if not album:
@@ -458,8 +459,49 @@ def export_album_selections(
     if not check_album_access(album, current_user, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this album.")
 
+    # Record photographer download timestamp for selection auto-purge countdown
+    try:
+        album.photographer_downloaded_at = func.now()
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.warning(f"Could not record photographer_downloaded_at: {exc}")
+
     media_items = album.media_items or []
     selected_items = [serialize_media_item(item) for item in media_items if bool(item.is_selected or False)]
+    return selected_items
+
+@router.get("/{album_id}/download", response_model=List[MediaItemResponse], status_code=status.HTTP_200_OK)
+@router.get("/{album_id}/download/", response_model=List[MediaItemResponse], status_code=status.HTTP_200_OK)
+def download_album_selections(
+    album_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Photographer high-res download endpoint.
+    Sets photographer_downloaded_at = func.now() to start the 2-day auto-purge countdown for Selection Albums.
+    """
+    album = db.query(Album).filter(Album.id == album_id).first()
+    if not album:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
+
+    if not check_album_access(album, current_user, db):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this album.")
+
+    # Record photographer download timestamp
+    try:
+        album.photographer_downloaded_at = func.now()
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.warning(f"Could not record photographer_downloaded_at: {exc}")
+
+    media_items = album.media_items or []
+    selected_items = [serialize_media_item(item) for item in media_items if bool(item.is_selected or False)]
+    if not selected_items:
+        selected_items = [serialize_media_item(item) for item in media_items]
+
     return selected_items
 
 @router.patch("/{album_id}", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)

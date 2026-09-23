@@ -20,6 +20,7 @@ import {
   Layers,
   Mail,
   Zap,
+  KeyRound,
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -191,21 +192,51 @@ export default function AdminDashboard() {
     }
   };
 
+  // Emergency Password Reset for Root Account
+  const handleResetPassword = async (userId, userEmail) => {
+    if (
+      !window.confirm(
+        `Generate an emergency temporary password for root photographer "${userEmail}"?\n\nThey will be forced to create a new password on their next sign-in.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setActionLoadingId(userId);
+      const res = await api.post(`/api/v1/admin/users/${userId}/reset-password`);
+      setCreatedCredentials({
+        email: res.data.email,
+        full_name: userEmail,
+        temp_password: res.data.temp_password,
+        plan: "Password Reset",
+      });
+      setHasCopiedPassword(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      alert(err.response?.data?.detail || "Failed to reset photographer password.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     setHasCopiedPassword(true);
     setTimeout(() => setHasCopiedPassword(false), 3000);
   };
 
-  // Filtered photographers list
-  const filteredPhotographers = photographers.filter((p) => {
-    const term = searchQuery.toLowerCase();
-    return (
-      p.full_name?.toLowerCase().includes(term) ||
-      p.email?.toLowerCase().includes(term) ||
-      p.subscription_plan?.toLowerCase().includes(term)
-    );
-  });
+  // Filtered photographers list: strictly root photographers (no assistants as rows)
+  const filteredPhotographers = photographers
+    .filter((p) => !p.parent_id && String(p.role).toLowerCase() !== "admin")
+    .filter((p) => {
+      const term = searchQuery.toLowerCase();
+      return (
+        p.full_name?.toLowerCase().includes(term) ||
+        p.email?.toLowerCase().includes(term) ||
+        p.subscription_plan?.toLowerCase().includes(term)
+      );
+    });
 
   const formatBytes = (bytes) => {
     if (!bytes || bytes === 0) return "0.00 GB";
@@ -623,13 +654,27 @@ export default function AdminDashboard() {
                           </div>
                         </td>
 
-                        {/* Albums & Media */}
+                        {/* Albums & Media (Accurate Aggregated Studio Hierarchy) */}
                         <td className="py-3.5 px-3">
-                          <div className="text-slate-200 font-mono">
-                            <strong>{p.total_albums}</strong> albums
+                          <div className="text-slate-200 font-mono text-xs">
+                            <strong>{p.total_albums}</strong> <span className="text-slate-400 font-sans">albums</span>
+                            <span className="text-slate-600 mx-1">•</span>
+                            <strong>{p.total_media}</strong> <span className="text-slate-400 font-sans">media</span>
                           </div>
-                          <div className="text-[11px] text-slate-500 font-mono">
-                            {p.total_media} media items
+                          <div className="mt-1">
+                            {p.assistants_count > 0 ? (
+                              <span
+                                title={`Includes data aggregated from ${p.assistants_count} studio assistant(s): ${p.assistants?.map(a => a.full_name).join(', ') || ''}`}
+                                className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/25"
+                              >
+                                <Users className="w-3 h-3 text-amber-400" />
+                                <span>Root + {p.assistants_count} Assistant{p.assistants_count > 1 ? 's' : ''}</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                Root Solo Account
+                              </span>
+                            )}
                           </div>
                         </td>
 
@@ -651,39 +696,57 @@ export default function AdminDashboard() {
                           </span>
                         </td>
 
-                        {/* Actions */}
+                        {/* Actions (Visually Distinct & Unambiguous) */}
                         <td className="py-3.5 px-3 text-right">
                           <div className="inline-flex items-center gap-1.5">
-                            {/* Toggle Suspend / Active */}
+                            {/* 1. Toggle Suspend / Active (Root + Cascading) */}
                             <button
                               onClick={() => handleToggleSuspend(p.id, p.is_active)}
                               disabled={isLoading}
-                              title={p.is_active ? "Suspend Photographer" : "Activate Photographer"}
-                              className={`p-2 rounded-lg text-xs font-medium border transition-colors ${
+                              title={
                                 p.is_active
-                                  ? "bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30"
-                                  : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                  ? "Suspend Root Account (Cascades suspension to all assistants)"
+                                  : "Activate Root Account (Re-enables studio access)"
+                              }
+                              className={`p-2 rounded-lg text-xs font-medium border transition-all ${
+                                p.is_active
+                                  ? "bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30 hover:scale-105 active:scale-95"
+                                  : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:scale-105 active:scale-95"
                               }`}
                             >
                               <Power className="w-3.5 h-3.5" />
                             </button>
 
-                            {/* Toggle Plan */}
+                            {/* 2. Toggle Plan (Basic <-> Studio) */}
                             <button
                               onClick={() => handleTogglePlan(p.id, p.subscription_plan)}
                               disabled={isLoading}
-                              title={`Switch to ${p.subscription_plan === "basic" ? "Studio" : "Basic"} tier`}
-                              className="p-2 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 transition-colors"
+                              title={
+                                p.subscription_plan === "basic"
+                                  ? "Upgrade to Studio Tier (Unlocks assistants, custom branding & downloads)"
+                                  : "Downgrade to Basic Tier (Deactivates assistants)"
+                              }
+                              className="p-2 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 transition-all hover:scale-105 active:scale-95"
                             >
                               <Layers className="w-3.5 h-3.5" />
                             </button>
 
-                            {/* Edit Quota Limit */}
+                            {/* 3. Emergency Reset Password for Root Account */}
+                            <button
+                              onClick={() => handleResetPassword(p.id, p.email)}
+                              disabled={isLoading}
+                              title="Reset Password for Root Account (Generates fresh temporary credentials)"
+                              className="p-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-all hover:scale-105 active:scale-95"
+                            >
+                              <KeyRound className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* 4. Edit Quota Limit */}
                             <button
                               onClick={() => handleEditQuota(p.id, p.storage_quota_limit)}
                               disabled={isLoading}
-                              title="Edit Storage Quota (GB)"
-                              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                              title="Override Storage Quota Limit (GB)"
+                              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all hover:scale-105 active:scale-95"
                             >
                               <Sliders className="w-3.5 h-3.5" />
                             </button>

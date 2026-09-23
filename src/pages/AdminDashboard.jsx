@@ -57,6 +57,31 @@ export default function AdminDashboard() {
   const [resetModalData, setResetModalData] = useState(null);
   const [hasCopiedResetPassword, setHasCopiedResetPassword] = useState(false);
 
+  // Navigation Tabs State
+  const [activeTab, setActiveTab] = useState("directory"); // "directory" | "audit_logs"
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
+
+  // Fetch Audit Logs
+  const fetchAuditLogs = async () => {
+    try {
+      setLoadingAuditLogs(true);
+      const res = await api.get("/api/v1/admin/audit-logs?limit=50");
+      setAuditLogs(res.data);
+    } catch (err) {
+      console.error("Failed to load audit logs:", err);
+    } finally {
+      setLoadingAuditLogs(false);
+    }
+  };
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (tab === "audit_logs") {
+      fetchAuditLogs();
+    }
+  };
+
   // Fetch initial stats & directory
   const fetchData = async () => {
     try {
@@ -471,8 +496,56 @@ export default function AdminDashboard() {
           </section>
         )}
 
-        {/* Section 2: "Register Photographer" Form */}
-        <section className="p-6 rounded-2xl bg-[#0e121b] border border-indigo-950/70 shadow-xl shadow-black/30">
+        {/* Navigation Tab Switcher */}
+        <div className="flex items-center gap-3 border-b border-indigo-950/80 pb-4">
+          <button
+            type="button"
+            id="admin-directory-tab"
+            onClick={() => handleTabChange("directory")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+              activeTab === "directory"
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25"
+                : "bg-[#0e121b] text-slate-400 hover:text-white hover:bg-slate-900 border border-indigo-950/60"
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Photographers Directory</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
+                activeTab === "directory"
+                  ? "bg-white/20 text-white"
+                  : "bg-slate-800 text-slate-400"
+              }`}
+            >
+              {filteredPhotographers.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            id="admin-audit-logs-tab"
+            onClick={() => handleTabChange("audit_logs")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+              activeTab === "audit_logs"
+                ? "bg-amber-600 text-white shadow-lg shadow-amber-600/25"
+                : "bg-[#0e121b] text-slate-400 hover:text-white hover:bg-slate-900 border border-indigo-950/60"
+            }`}
+          >
+            <Shield className="w-4 h-4 text-amber-400" />
+            <span>Security Ledger & Audit Logs</span>
+            {auditLogs.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                {auditLogs.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Tab 1: Directory & Provisioning */}
+        {activeTab === "directory" && (
+          <>
+            {/* Section 2: "Register Photographer" Form */}
+            <section className="p-6 rounded-2xl bg-[#0e121b] border border-indigo-950/70 shadow-xl shadow-black/30">
           <div className="flex items-center gap-2.5 mb-5 pb-4 border-b border-indigo-950/60">
             <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
               <UserPlus className="w-4 h-4" />
@@ -772,7 +845,95 @@ export default function AdminDashboard() {
             </table>
           </div>
         </section>
-      </main>
+      </>
+    )}
+
+    {/* Tab 2: Security Ledger & Audit Logs View */}
+    {activeTab === "audit_logs" && (
+      <section className="p-6 rounded-2xl bg-[#0e121b] border border-amber-950/50 shadow-xl shadow-black/30 space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-indigo-950/60">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+              <Shield className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-white tracking-tight">
+                Security & Administrative Audit Ledger
+              </h2>
+              <p className="text-xs text-slate-400 font-sans">
+                Immutable log of administrative overrides, password resets, suspensions, and quota changes
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={fetchAuditLogs}
+            disabled={loadingAuditLogs}
+            className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium flex items-center gap-1.5 transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loadingAuditLogs ? "animate-spin text-amber-400" : ""}`} />
+            <span>Refresh Ledger</span>
+          </button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-indigo-950/80 text-slate-400 font-mono uppercase tracking-wider">
+                <th className="pb-3 px-3">Timestamp</th>
+                <th className="pb-3 px-3">Action</th>
+                <th className="pb-3 px-3">Admin</th>
+                <th className="pb-3 px-3">Target User</th>
+                <th className="pb-3 px-3">Event Details</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-indigo-950/40 font-mono">
+              {auditLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-slate-500 font-sans">
+                    {loadingAuditLogs ? "Loading security audit records..." : "No audit records found."}
+                  </td>
+                </tr>
+              ) : (
+                auditLogs.map((log) => (
+                  <tr key={log.id} className="hover:bg-indigo-950/20 transition-colors">
+                    <td className="py-3 px-3 text-slate-400 text-[11px] whitespace-nowrap">
+                      {new Date(log.created_at).toLocaleString()}
+                    </td>
+                    <td className="py-3 px-3 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                        log.action.includes("RESET")
+                          ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                          : log.action.includes("SUSPEND")
+                          ? "bg-red-500/15 text-red-300 border-red-500/30"
+                          : "bg-indigo-500/15 text-indigo-300 border-indigo-500/30"
+                      }`}>
+                        {log.action}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-slate-300 text-xs font-sans whitespace-nowrap">
+                      {log.admin_email || `Admin #${log.admin_id}`}
+                    </td>
+                    <td className="py-3 px-3 text-slate-300 text-xs font-sans whitespace-nowrap">
+                      {log.target_user_email ? (
+                        <span className="text-white font-medium">{log.target_user_email}</span>
+                      ) : log.target_user_id ? (
+                        `User #${log.target_user_id}`
+                      ) : (
+                        <span className="text-slate-600">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-3 text-slate-300 text-xs font-sans max-w-md truncate" title={log.details}>
+                      {log.details}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    )}
+  </main>
 
       {/* High-Visibility Password Reset Modal Overlay */}
       {resetModalData && (

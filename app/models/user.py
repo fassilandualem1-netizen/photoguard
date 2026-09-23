@@ -46,6 +46,9 @@ class User(Base):
     # Enterprise Auth Flow: Force password change on first login for admin-created accounts
     needs_password_change = Column(Boolean, default=True, nullable=False)
     
+    # Session Invalidation: Immediate JWT revocation on password reset, update, or account suspension
+    token_version = Column(Integer, default=1, nullable=False)
+    
     # Telegram Bot integration for instant submission alerts
     telegram_chat_id = Column(String(50), nullable=True, index=True)
     

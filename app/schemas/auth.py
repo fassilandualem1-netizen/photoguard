@@ -36,6 +36,7 @@ class UserResponse(BaseModel):
     subscription_plan: Optional[str] = "basic"
     is_verified: Optional[bool] = False
     needs_password_change: Optional[bool] = True
+    token_version: Optional[int] = 1
     is_active: Optional[bool] = True
 
     @field_validator("role", mode="before")

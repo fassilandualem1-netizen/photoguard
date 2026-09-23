@@ -90,6 +90,7 @@ def get_password_hash(password: str) -> str:
 def create_access_token(data: dict[str, Any], expires_delta: Union[timedelta, None] = None) -> str:
     """
     Encodes payload claims into a cryptographically signed JWT access token.
+    Includes the user's current token_version for immediate session invalidation support.
     """
     to_encode = data.copy()
     if expires_delta:
@@ -97,6 +98,10 @@ def create_access_token(data: dict[str, Any], expires_delta: Union[timedelta, No
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     
+    # Ensure token_version is populated in payload
+    if "token_version" not in to_encode:
+        to_encode["token_version"] = 1
+
     to_encode.update({
         "exp": expire,
         "iat": datetime.now(timezone.utc)

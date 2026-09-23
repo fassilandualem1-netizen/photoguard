@@ -22,18 +22,30 @@ def get_current_user(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    revoked_token_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Session has been revoked. Please sign in again.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id_raw = payload.get("sub")
         if user_id_raw is None:
             raise credentials_exception
         user_id = int(user_id_raw)
+        token_version = payload.get("token_version")
     except (JWTError, ValueError):
         raise credentials_exception
 
     user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
     if user is None:
         raise credentials_exception
+
+    # Immediate Session Revocation Check:
+    # Verify that the token's token_version exactly matches the user's current token_version in the database.
+    user_token_version = getattr(user, "token_version", 1) or 1
+    if token_version is not None and token_version != user_token_version:
+        raise revoked_token_exception
 
     # Hierarchical Security Check:
     # If the user is an assistant/staff, verify that their parent studio/photographer account is also active

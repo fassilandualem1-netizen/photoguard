@@ -350,6 +350,8 @@ def toggle_user_suspend(
     try:
         new_active_status = not target_user.is_active
         target_user.is_active = new_active_status
+        # Instant session revocation: invalidate all active JWT sessions for target user
+        target_user.token_version = (getattr(target_user, "token_version", 1) or 1) + 1
         action_state = "ACTIVATED" if target_user.is_active else "SUSPENDED"
 
         # CASCADE SUSPENSION:
@@ -365,6 +367,7 @@ def toggle_user_suspend(
             assistants = db.query(User).filter(User.parent_id == target_user.id).all()
             for assistant in assistants:
                 assistant.is_active = new_active_status
+                assistant.token_version = (getattr(assistant, "token_version", 1) or 1) + 1
                 cascaded_count += 1
 
         cascade_msg = f" (Cascade applied to {cascaded_count} assistants)" if cascaded_count > 0 else ""
@@ -560,6 +563,8 @@ def reset_user_password(
         target_user.hashed_password = get_password_hash(temporary_password)
         target_user.needs_password_change = True
         target_user.is_active = True
+        # Instant session revocation: invalidate all active JWT sessions for target user
+        target_user.token_version = (getattr(target_user, "token_version", 1) or 1) + 1
 
         # Security Audit Log
         audit_entry = AuditLog(

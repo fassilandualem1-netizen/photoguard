@@ -187,7 +187,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         token_payload = {
             "sub": str(user.id),
             "email": user.email,
-            "role": role_str
+            "role": role_str,
+            "token_version": getattr(user, "token_version", 1) or 1
         }
         
         access_token = create_access_token(data=token_payload)
@@ -270,6 +271,7 @@ def change_password(
     try:
         current_user.hashed_password = get_password_hash(new_pw)
         current_user.needs_password_change = False
+        current_user.token_version = (getattr(current_user, "token_version", 1) or 1) + 1
 
         db.commit()
         db.refresh(current_user)

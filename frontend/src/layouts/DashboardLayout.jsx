@@ -89,7 +89,8 @@ export default function DashboardLayout({
   const storageQuota = Number(user?.storage_quota_limit) > 0 ? Number(user.storage_quota_limit) : 5368709120;
   const storagePercentage = Math.min(100, Math.max(0, Math.round((storageUsed / storageQuota) * 100)));
   const userPlan = String(user?.subscription_plan || "").toLowerCase();
-  const isStudio = userPlan === "studio" || Boolean(isAdmin);
+  const isAssistant = user?.role === "assistant" || Boolean(user?.parent_id);
+  const isStudio = !isAssistant && (userPlan === "studio" || Boolean(isAdmin));
 
   return (
     <div id="dashboard-layout" className="min-h-screen bg-[#0d0f12] text-slate-100 flex flex-col selection:bg-amber-500/20 selection:text-amber-200">
@@ -176,7 +177,7 @@ export default function DashboardLayout({
                 {user?.studio_logo_url && isStudio ? user.full_name : "PhotoGuard"}
               </span>
               <span className="hidden sm:inline-block text-[11px] px-2 py-0.5 rounded-full border border-slate-700/80 bg-slate-800/60 text-slate-300 font-medium capitalize">
-                {user?.subscription_plan || "Basic"}
+                {isAssistant ? "Studio Assistant" : (user?.subscription_plan || "Basic")}
               </span>
             </div>
           </div>
@@ -239,8 +240,10 @@ export default function DashboardLayout({
                   <p className="text-xs font-medium text-white truncate">{user?.full_name}</p>
                   <p className="text-[11px] text-slate-400 truncate">{user?.email}</p>
                   <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
-                    <span className="capitalize">{user?.role}</span>
-                    <span className="text-amber-400/90 font-medium capitalize">{user?.subscription_plan} Tier</span>
+                    <span className="capitalize">{isAssistant ? "Studio Assistant" : (user?.role || "Photographer")}</span>
+                    {!isAssistant && (
+                      <span className="text-amber-400/90 font-medium capitalize">{user?.subscription_plan} Tier</span>
+                    )}
                   </div>
                 </div>
 
@@ -260,7 +263,7 @@ export default function DashboardLayout({
 
                 {/* Menu Items */}
                 <div className="py-1">
-                  {isAdmin && (
+                  {isAdmin && !isAssistant && (
                     <Link
                       to="/admin"
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-indigo-300 hover:text-white hover:bg-indigo-950/40 transition-colors text-left"
@@ -270,38 +273,42 @@ export default function DashboardLayout({
                     </Link>
                   )}
 
-                  <button
-                    id="menu-profile-btn"
-                    type="button"
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      setIsProfileModalOpen(true);
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
-                  >
-                    <User className="w-4 h-4 text-slate-400" />
-                    <span>Studio Profile & Branding</span>
-                  </button>
+                  {!isAssistant && (
+                    <button
+                      id="menu-profile-btn"
+                      type="button"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setIsProfileModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
+                    >
+                      <User className="w-4 h-4 text-slate-400" />
+                      <span>Studio Profile & Branding</span>
+                    </button>
+                  )}
 
-                  <button
-                    id="menu-team-btn"
-                    type="button"
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      setIsTeamModalOpen(true);
-                    }}
-                    className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Users className="w-4 h-4 text-amber-400" />
-                      <span>Studio Assistants</span>
-                    </div>
-                    {isStudio && (
-                      <span className="text-[10px] font-semibold text-amber-400/90 bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/20">
-                        Studio
-                      </span>
-                    )}
-                  </button>
+                  {!isAssistant && (
+                    <button
+                      id="menu-team-btn"
+                      type="button"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setIsTeamModalOpen(true);
+                      }}
+                      className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Users className="w-4 h-4 text-amber-400" />
+                        <span>Studio Assistants & Staff</span>
+                      </div>
+                      {isStudio && (
+                        <span className="text-[10px] font-semibold text-amber-400/90 bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/20">
+                          Studio
+                        </span>
+                      )}
+                    </button>
+                  )}
 
                   <button
                     id="menu-change-password-btn"
@@ -329,7 +336,7 @@ export default function DashboardLayout({
                   >
                     <div className="flex items-center gap-3">
                       <LifeBuoy className="w-4 h-4 text-sky-400" />
-                      <span>Support</span>
+                      <span>Support / Help</span>
                     </div>
                     <ExternalLink className="w-3.5 h-3.5 text-slate-500 group-hover:text-sky-400 transition-colors" />
                   </a>
@@ -362,10 +369,12 @@ export default function DashboardLayout({
       </main>
 
       {/* Studio Profile & Telegram Settings Modal */}
-      <ProfileSettingsModal
-        isOpen={isProfileModalOpen}
-        onClose={() => setIsProfileModalOpen(false)}
-      />
+      {!isAssistant && (
+        <ProfileSettingsModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+        />
+      )}
 
       {/* Change Password Modal */}
       <ChangePasswordModal
@@ -374,10 +383,12 @@ export default function DashboardLayout({
       />
 
       {/* Studio Assistants Team Management Modal */}
-      <TeamManagementModal
-        isOpen={isTeamModalOpen}
-        onClose={() => setIsTeamModalOpen(false)}
-      />
+      {!isAssistant && (
+        <TeamManagementModal
+          isOpen={isTeamModalOpen}
+          onClose={() => setIsTeamModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

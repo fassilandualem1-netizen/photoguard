@@ -497,6 +497,10 @@ export function devApiPlugin(): Plugin {
               return sendJson(res, 401, { detail: 'Unauthorized' });
             }
 
+            if (decoded.role === 'assistant' || decoded.parent_id) {
+              return sendJson(res, 403, { detail: 'Assistants are not authorized to manage team members.' });
+            }
+
             // GET list
             if (method === 'GET') {
               let teamList: any[] = [];

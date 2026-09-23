@@ -54,6 +54,12 @@ def add_assistant(
     Limit Check: Maximum of 3 assistants per studio.
     Generates a secure 8-character password and marks needs_password_change=True.
     """
+    if getattr(current_user, "role", "") == "assistant" or current_user.parent_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Assistants are not authorized to manage team members."
+        )
+
     user_plan = getattr(current_user, "subscription_plan", "basic") or "basic"
     is_admin = (current_user.role == UserRole.ADMIN.value or current_user.role == UserRole.ADMIN)
 
@@ -154,6 +160,12 @@ def list_assistants(
     Returns the list of all assistants belonging to the current photographer's studio.
     Password hashes are omitted.
     """
+    if getattr(current_user, "role", "") == "assistant" or current_user.parent_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Assistants are not authorized to manage team members."
+        )
+
     try:
         assistants = (
             db.query(User)
@@ -195,6 +207,12 @@ def remove_assistant(
     Ensures the target assistant strictly belongs to the current photographer (parent_id == current_user.id).
     Hard-deletes the assistant record cleanly.
     """
+    if getattr(current_user, "role", "") == "assistant" or current_user.parent_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Assistants are not authorized to manage team members."
+        )
+
     try:
         assistant = (
             db.query(User)

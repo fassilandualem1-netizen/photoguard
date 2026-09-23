@@ -71,6 +71,15 @@ class User(Base):
     albums = relationship("Album", back_populates="photographer", cascade="all, delete-orphan")
 
     @property
+    def storage_quota_bytes(self) -> int:
+        """Alias for storage_quota_limit to support both naming standards."""
+        return self.storage_quota_limit
+
+    @storage_quota_bytes.setter
+    def storage_quota_bytes(self, value: int):
+        self.storage_quota_limit = value
+
+    @property
     def effective_owner_id(self) -> int:
         """
         Resolves the primary account entity responsible for storage quota and albums.

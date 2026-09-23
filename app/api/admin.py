@@ -40,9 +40,11 @@ class PhotographerRegisterRequest(BaseModel):
     email: EmailStr
     full_name: str
     subscription_plan: Optional[str] = "basic"
+    custom_quota_gb: Optional[float] = None
 
 class QuotaUpdateRequest(BaseModel):
-    new_quota_bytes: int
+    new_quota_bytes: Optional[int] = None
+    new_quota_gb: Optional[float] = None
 
 class AssistantSummary(BaseModel):
     id: int
@@ -244,9 +246,12 @@ def register_photographer(
     admin_user: User = Depends(require_admin)
 ):
     """
-    Register a new photographer account.
+    Register a new photographer account with decoupled Plan Tier and Storage Allocation.
+    If custom_quota_gb is provided, allocates custom storage (custom_quota_gb * 1024^3).
+    Otherwise, falls back to tier defaults (Basic = 5GB, Studio = 25GB).
     Generates a secure 8-character password using secrets, hashes it,
-    saves the user with needs_password_change=True, and returns the raw temporary password.
+    saves the user with needs_password_change=True, logs the action in AuditLog,
+    and returns the raw temporary password.
     """
     clean_email = payload.email.strip().lower()
     existing_user = db.query(User).filter(User.email == clean_email).first()
@@ -260,9 +265,18 @@ def register_photographer(
     if plan not in ["basic", "studio"]:
         plan = "basic"
 
-    # Dynamic plan quota from PlanConfiguration
-    plan_cfg = get_or_create_plan_config(db, plan)
-    default_quota = plan_cfg.storage_quota_bytes
+    # Decouple Plan Tier from Storage Allocation
+    if payload.custom_quota_gb is not None:
+        if payload.custom_quota_gb < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Custom storage quota cannot be negative."
+            )
+        assigned_quota = int(payload.custom_quota_gb * (1024 ** 3))
+    else:
+        # Fallback to tier defaults via dynamic PlanConfiguration
+        plan_cfg = get_or_create_plan_config(db, plan)
+        assigned_quota = plan_cfg.storage_quota_bytes
 
     # Generate cryptographically secure 8-character password with letters and digits
     alphabet = string.ascii_letters + string.digits
@@ -279,7 +293,7 @@ def register_photographer(
         plan=plan,
         is_verified=True,
         is_active=True,
-        storage_quota_limit=default_quota,
+        storage_quota_limit=assigned_quota,
         storage_used=0,
         needs_password_change=True
     )
@@ -288,6 +302,17 @@ def register_photographer(
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
+
+        # AuditLog entry for account creation and quota assignment
+        quota_gb_disp = round(new_user.storage_quota_limit / (1024 ** 3), 2)
+        audit_entry = AuditLog(
+            admin_id=admin_user.id,
+            action="CREATE_USER",
+            target_user_id=new_user.id,
+            details=f"Admin {admin_user.email} created account for {new_user.email} (ID #{new_user.id}) on '{plan}' plan with {quota_gb_disp} GB storage allocation."
+        )
+        db.add(audit_entry)
+        db.commit()
 
         user_response = PhotographerDetailResponse(
             id=new_user.id,
@@ -495,14 +520,10 @@ def update_user_quota(
     admin_user: User = Depends(require_admin)
 ):
     """
-    Accepts new_quota_bytes and updates photographer's storage_quota_limit.
+    Decoupled Quota Override:
+    Accepts new_quota_gb: float (e.g. 10.5, 100, 1000) or new_quota_bytes: int,
+    updates photographer's storage_quota_limit, and records the change in AuditLog.
     """
-    if payload.new_quota_bytes < 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Storage quota cannot be negative."
-        )
-
     target_user = db.query(User).filter(User.id == id).first()
     if not target_user:
         raise HTTPException(
@@ -510,15 +531,49 @@ def update_user_quota(
             detail=f"User with ID {id} not found."
         )
 
+    # Determine bytes from new_quota_gb or new_quota_bytes
+    if payload.new_quota_gb is not None:
+        if payload.new_quota_gb < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Storage quota cannot be negative."
+            )
+        target_bytes = int(payload.new_quota_gb * (1024 ** 3))
+        quota_gb_disp = payload.new_quota_gb
+    elif payload.new_quota_bytes is not None:
+        if payload.new_quota_bytes < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Storage quota cannot be negative."
+            )
+        target_bytes = payload.new_quota_bytes
+        quota_gb_disp = round(target_bytes / (1024 ** 3), 2)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Either 'new_quota_gb' or 'new_quota_bytes' must be provided."
+        )
+
     try:
-        target_user.storage_quota_limit = payload.new_quota_bytes
+        old_quota_gb = round(target_user.storage_quota_limit / (1024 ** 3), 2)
+        target_user.storage_quota_limit = target_bytes
+
+        # Inject Security Audit Log entry
+        audit_entry = AuditLog(
+            admin_id=admin_user.id,
+            action="UPDATE_QUOTA",
+            target_user_id=target_user.id,
+            details=f"Admin {admin_user.email} updated storage quota from {old_quota_gb:.2f} GB to {quota_gb_disp:.2f} GB ({target_bytes} bytes) for user {target_user.email} (ID #{target_user.id})."
+        )
+        db.add(audit_entry)
+
         db.commit()
         db.refresh(target_user)
         return {
             "message": "Storage quota updated successfully",
             "user_id": target_user.id,
             "new_quota_bytes": target_user.storage_quota_limit,
-            "quota_gb": round(target_user.storage_quota_limit / (1024 * 1024 * 1024), 2)
+            "quota_gb": round(target_user.storage_quota_limit / (1024 ** 3), 2)
         }
     except SQLAlchemyError as exc:
         db.rollback()

@@ -21,6 +21,7 @@ import {
   Mail,
   Zap,
   KeyRound,
+  X,
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -51,6 +52,10 @@ export default function AdminDashboard() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [createdCredentials, setCreatedCredentials] = useState(null);
   const [hasCopiedPassword, setHasCopiedPassword] = useState(false);
+
+  // Password Reset Modal State
+  const [resetModalData, setResetModalData] = useState(null);
+  const [hasCopiedResetPassword, setHasCopiedResetPassword] = useState(false);
 
   // Fetch initial stats & directory
   const fetchData = async () => {
@@ -192,11 +197,11 @@ export default function AdminDashboard() {
     }
   };
 
-  // Emergency Password Reset for Root Account
+  // Emergency Password Reset for Individual Users (Phase 2 Frontend)
   const handleResetPassword = async (userId, userEmail) => {
     if (
       !window.confirm(
-        `Generate an emergency temporary password for root photographer "${userEmail}"?\n\nThey will be forced to create a new password on their next sign-in.`
+        `Are you sure you want to reset the password for this user (${userEmail})?`
       )
     ) {
       return;
@@ -205,19 +210,26 @@ export default function AdminDashboard() {
     try {
       setActionLoadingId(userId);
       const res = await api.post(`/api/v1/admin/users/${userId}/reset-password`);
-      setCreatedCredentials({
-        email: res.data.email,
-        full_name: userEmail,
-        temp_password: res.data.temp_password,
-        plan: "Password Reset",
+      const tempPassword = res.data.temporary_password || res.data.temp_password;
+
+      setResetModalData({
+        user_id: userId,
+        email: res.data.email || userEmail,
+        temporary_password: tempPassword,
       });
-      setHasCopiedPassword(false);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      setHasCopiedResetPassword(false);
     } catch (err) {
       alert(err.response?.data?.detail || "Failed to reset photographer password.");
     } finally {
       setActionLoadingId(null);
     }
+  };
+
+  const handleCopyResetPassword = (text) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setHasCopiedResetPassword(true);
+    setTimeout(() => setHasCopiedResetPassword(false), 3000);
   };
 
   const copyToClipboard = (text) => {
@@ -761,6 +773,89 @@ export default function AdminDashboard() {
           </div>
         </section>
       </main>
+
+      {/* High-Visibility Password Reset Modal Overlay */}
+      {resetModalData && (
+        <div
+          id="password-reset-modal-overlay"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-[#0e121b] border-2 border-amber-500/60 p-6 shadow-2xl shadow-amber-950/50 space-y-5 relative">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white tracking-wide">
+                    Emergency Password Reset
+                  </h3>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">
+                    User: <span className="text-amber-300 font-medium">{resetModalData.email}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setResetModalData(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                title="Dismiss"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Temporary Password Box */}
+            <div className="space-y-2">
+              <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono">
+                New Temporary Password
+              </label>
+              <div className="flex items-center justify-between gap-3 bg-black/90 p-3.5 rounded-xl border border-amber-500/40">
+                <span className="font-mono text-xl font-bold tracking-widest text-amber-300 select-all">
+                  {resetModalData.temporary_password}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleCopyResetPassword(resetModalData.temporary_password)}
+                  className="px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/20 active:scale-95 shrink-0"
+                >
+                  {hasCopiedResetPassword ? (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-950 stroke-[3]" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 stroke-[2.5]" />
+                      <span>Copy Password</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Critical Security Warning */}
+            <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-200/90 leading-relaxed">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <p>
+                <strong className="text-amber-300 font-semibold">Security Warning:</strong> Please copy and deliver this temporary password immediately. For strict security, this password cannot be retrieved or shown again once closed. The user will be required to change their password on next sign-in.
+              </p>
+            </div>
+
+            {/* Footer Action */}
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setResetModalData(null)}
+                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
+              >
+                Done & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

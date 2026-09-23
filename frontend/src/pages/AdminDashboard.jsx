@@ -49,6 +49,7 @@ export default function AdminDashboard() {
     email: "",
     subscription_plan: "basic",
   });
+  const [customQuotaGB, setCustomQuotaGB] = useState(5);
   const [isRegistering, setIsRegistering] = useState(false);
   const [createdCredentials, setCreatedCredentials] = useState(null);
   const [hasCopiedPassword, setHasCopiedPassword] = useState(false);
@@ -158,6 +159,7 @@ export default function AdminDashboard() {
         full_name: registerForm.full_name,
         email: registerForm.email,
         subscription_plan: registerForm.subscription_plan,
+        custom_quota_gb: parseFloat(customQuotaGB) || (registerForm.subscription_plan === "studio" ? 25 : 5),
       });
 
       // Show temporary password banner
@@ -175,6 +177,7 @@ export default function AdminDashboard() {
         email: "",
         subscription_plan: "basic",
       });
+      setCustomQuotaGB(5);
 
       // Refresh list
       fetchData();
@@ -619,7 +622,7 @@ export default function AdminDashboard() {
           </div>
 
           <form onSubmit={handleRegisterSubmit} className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end">
-            <div className="sm:col-span-4 space-y-1.5">
+            <div className="sm:col-span-3 space-y-1.5">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
                 Full Name / Studio
               </label>
@@ -637,7 +640,7 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            <div className="sm:col-span-4 space-y-1.5">
+            <div className="sm:col-span-3 space-y-1.5">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
                 Email Address
               </label>
@@ -661,17 +664,47 @@ export default function AdminDashboard() {
               </label>
               <select
                 value={registerForm.subscription_plan}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const selectedPlan = e.target.value;
                   setRegisterForm({
                     ...registerForm,
-                    subscription_plan: e.target.value,
-                  })
-                }
+                    subscription_plan: selectedPlan,
+                  });
+                  // Dynamic auto-fill: 5 for Basic, 25 for Studio
+                  if (selectedPlan === "studio") {
+                    setCustomQuotaGB(25);
+                  } else {
+                    setCustomQuotaGB(5);
+                  }
+                }}
                 className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
               >
-                <option value="basic">Basic (5 GB)</option>
-                <option value="studio">Studio (25 GB)</option>
+                <option value="basic">Basic (Default: 5 GB)</option>
+                <option value="studio">Studio (Default: 25 GB)</option>
               </select>
+            </div>
+
+            <div className="sm:col-span-2 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Storage (GB)
+                </label>
+              </div>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0.1"
+                  step="0.5"
+                  required
+                  placeholder="5"
+                  value={customQuotaGB}
+                  onChange={(e) => setCustomQuotaGB(e.target.value)}
+                  className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors font-mono"
+                />
+              </div>
+              <p className="text-[10px] text-slate-500 font-mono">
+                (Enter 9999 for Unlimited)
+              </p>
             </div>
 
             <div className="sm:col-span-2">

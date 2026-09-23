@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
+import SocialLinksSettings from "./SocialLinksSettings";
 
 // Standard brand color presets for studio photographers
 const BRAND_COLOR_PRESETS = [
@@ -508,7 +509,12 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
           </div>
 
           {/* ========================================================= */}
-          {/* SECTION 2: TELEGRAM INTEGRATION (DEEP-LINKING WORKFLOW)   */}
+          {/* SECTION 2: SOCIAL & CONTACT LINKS SETTINGS FORM           */}
+          {/* ========================================================= */}
+          <SocialLinksSettings />
+
+          {/* ========================================================= */}
+          {/* SECTION 3: TELEGRAM INTEGRATION (DEEP-LINKING WORKFLOW)   */}
           {/* ========================================================= */}
           <div className="p-4 rounded-xl bg-slate-950/70 border border-sky-500/30 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">

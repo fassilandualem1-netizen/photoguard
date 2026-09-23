@@ -684,6 +684,7 @@ app.include_router(team_router)
 app.include_router(broadcasts_router)
 app.include_router(photographers_router)
 app.include_router(photographers_router, prefix="/api/v1/photographer")
+app.include_router(photographers_router, prefix="/api/photographers")
 
 # Direct alias for studio logo upload
 @app.post("/api/v1/users/upload-logo", tags=["User Profile"])

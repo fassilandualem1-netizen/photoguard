@@ -110,24 +110,46 @@ def create_album(
     """
     Creates a new Album.
     Permissions:
-    - Main Photographers, Studio Assistants, and Administrators can create albums.
-    - The album's photographer_id is set strictly to current_user.id (the actual creator).
-    - Storage quota and subscription tier routing resolve to current_user.effective_owner_id.
-    - Auto-generates a unique 6-digit access PIN if not explicitly supplied.
+    - Main Photographers (Owners), Studio Assistants, and Administrators can create albums.
+    - If current_user.role == "photographer", they are the owner, using their own ID
+      as the root photographer_id for the album and quota checks.
+    - If current_user.role == "assistant", routes quota checks to their parent photographer.
+    - Generates or assigns a unique 6-digit access PIN.
     """
-    allowed_roles = [
-        UserRole.PHOTOGRAPHER.value, UserRole.PHOTOGRAPHER,
-        UserRole.ADMIN.value, UserRole.ADMIN,
-        UserRole.ASSISTANT.value, UserRole.ASSISTANT,
-        "photographer", "admin", "assistant", "owner"
-    ]
-    if current_user.role not in allowed_roles:
+    # 1. Normalize and validate role check (Explicitly allow photographer and assistant)
+    user_role = str(getattr(current_user, "role", "") or "").lower().strip()
+    allowed_roles = {"photographer", "assistant", "admin", "owner"}
+
+    if user_role not in allowed_roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not authorized to create albums."
         )
 
-    # Validate or generate PIN
+    # 2. Owner Resolution & Root Photographer ID Assignment
+    # If current_user.role == "photographer" (or "owner"), they are the owner directly
+    if user_role in ("photographer", "owner"):
+        root_photographer_id = current_user.id
+        owner = current_user
+    elif user_role == "assistant":
+        # For assistants, quota and subscription plan belong to the parent photographer account
+        root_photographer_id = current_user.parent_id if current_user.parent_id is not None else current_user.id
+        owner = db.query(User).filter(User.id == root_photographer_id).first() or current_user
+    elif user_role == "admin":
+        root_photographer_id = current_user.id
+        owner = current_user
+    else:
+        root_photographer_id = current_user.id
+        owner = current_user
+
+    # Storage Quota Check on Owner
+    if owner.storage_quota_limit > 0 and owner.storage_used >= owner.storage_quota_limit:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Storage quota exceeded for this studio account. Please upgrade your photographer plan."
+        )
+
+    # Validate or generate unique 6-digit PIN
     if payload.pin:
         if len(payload.pin) != 6 or not payload.pin.isdigit():
             raise HTTPException(
@@ -144,21 +166,10 @@ def create_album(
     else:
         assigned_pin = get_unique_pin(db)
 
-    # SaaS Quota & Tier Check: Route via effective_owner_id (the main studio account)
-    effective_owner_id = current_user.effective_owner_id
-    owner = db.query(User).filter(User.id == effective_owner_id).first() or current_user
-
-    # Storage Quota Check on Effective Owner
-    if owner.storage_quota_limit > 0 and owner.storage_used >= owner.storage_quota_limit:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="Storage quota exceeded for this studio account. Please upgrade your photographer plan."
-        )
-
-    # Dynamic Tier Gate based on effective owner's plan configuration
+    # Dynamic Tier Gate based on owner's plan configuration
     user_plan = getattr(owner, "subscription_plan", "basic") or "basic"
     plan_cfg = get_or_create_plan_config(db, user_plan)
-    is_admin = (current_user.role == UserRole.ADMIN.value or current_user.role == UserRole.ADMIN)
+    is_admin = (user_role == "admin")
 
     # Dynamic download permission
     if is_admin or plan_cfg.can_enable_downloads:
@@ -182,7 +193,7 @@ def create_album(
             title=payload.title,
             client_name=payload.client_name,
             pin=assigned_pin,
-            photographer_id=current_user.id,  # Strictly set to actual creator
+            photographer_id=current_user.id,  # Set to current user (owner or assistant)
             allow_download=final_allow_download,
             is_locked=False,
             expires_at=expires_at,
@@ -193,7 +204,7 @@ def create_album(
         db.commit()
         db.refresh(album)
 
-        logger.info(f"[Albums API] User #{current_user.id} ({current_user.role}) created album #{album.id} (Owner: #{effective_owner_id}).")
+        logger.info(f"[Albums API] User #{current_user.id} ({user_role}) created album #{album.id} (Owner: #{root_photographer_id}).")
 
         return AlbumDetailResponse(
             id=album.id,

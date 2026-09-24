@@ -13,6 +13,62 @@ data class ClientVerifyRequest(
 )
 
 /**
+ * Lightweight polling response for collaborative Smart Polling without WebSockets.
+ * Returned by GET /api/v1/client/sync/{pin}.
+ */
+@Serializable
+data class ClientSyncResponse(
+    @SerialName("pin")
+    val pin: String = "",
+    @SerialName("version")
+    val version: Int = 1,
+    @SerialName("is_locked")
+    val isLocked: Boolean = false
+)
+
+/**
+ * Client photo selection and retouching notes payload.
+ * Submitted to PATCH /api/v1/client/media/{media_id}.
+ */
+@Serializable
+data class ClientMediaUpdateRequest(
+    @SerialName("pin")
+    val pin: String,
+    @SerialName("is_selected")
+    val isSelected: Boolean? = null,
+    @SerialName("client_notes")
+    val clientNotes: String? = null
+)
+
+/**
+ * Final submission confirmation response.
+ * Returned by POST /api/v1/client/submit/{pin}.
+ */
+@Serializable
+data class ClientSubmitResponse(
+    @SerialName("message")
+    val message: String = "",
+    @SerialName("pin")
+    val pin: String = "",
+    @SerialName("is_locked")
+    val isLocked: Boolean = true
+)
+
+/**
+ * Direct gallery high-res download response.
+ * Returned by GET /api/v1/client/{pin}/download.
+ */
+@Serializable
+data class ClientDownloadResponse(
+    @SerialName("pin")
+    val pin: String = "",
+    @SerialName("allow_download")
+    val allowDownload: Boolean = false,
+    @SerialName("download_urls")
+    val downloadUrls: List<String> = emptyList()
+)
+
+/**
  * Social links and Studio tier branding for client visibility (Studio Plan only).
  */
 @Serializable

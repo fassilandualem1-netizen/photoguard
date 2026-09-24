@@ -175,30 +175,30 @@ class GalleryViewModel(
                 }
 
                 is NetworkResult.Error -> {
-                    // Rollback optimistic update
-                    val rolledBackList = _uiState.value.mediaItems.map { item ->
-                        if (item.id == mediaId) item.copy(isSelected = targetItem.isSelected) else item
-                    }
-                    _uiState.update {
-                        it.copy(
-                            mediaItems = rolledBackList,
-                            selectedCount = rolledBackList.count { m -> m.isSelected },
-                            isLocked = if (patchResult.code == 403) true else it.isLocked,
+                    // Atomic rollback: Dynamically revert the targeted photo based on current state
+                    _uiState.update { current ->
+                        val revertedList = current.mediaItems.map { item ->
+                            if (item.id == mediaId) item.copy(isSelected = !newSelectedState) else item
+                        }
+                        current.copy(
+                            mediaItems = revertedList,
+                            selectedCount = revertedList.count { it.isSelected },
+                            isLocked = if (patchResult.code == 403) true else current.isLocked,
                             userFeedbackMessage = patchResult.message
                         )
                     }
                 }
 
                 is NetworkResult.NetworkException -> {
-                    // Rollback on network connectivity dropout
-                    val rolledBackList = _uiState.value.mediaItems.map { item ->
-                        if (item.id == mediaId) item.copy(isSelected = targetItem.isSelected) else item
-                    }
-                    _uiState.update {
-                        it.copy(
-                            mediaItems = rolledBackList,
-                            selectedCount = rolledBackList.count { m -> m.isSelected },
-                            userFeedbackMessage = "Network error. Selection was not saved."
+                    // Atomic rollback on network connectivity dropout
+                    _uiState.update { current ->
+                        val revertedList = current.mediaItems.map { item ->
+                            if (item.id == mediaId) item.copy(isSelected = !newSelectedState) else item
+                        }
+                        current.copy(
+                            mediaItems = revertedList,
+                            selectedCount = revertedList.count { it.isSelected },
+                            userFeedbackMessage = "Network connection failed. Selection was not saved."
                         )
                     }
                 }

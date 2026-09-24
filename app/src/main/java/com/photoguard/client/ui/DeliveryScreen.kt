@@ -77,6 +77,7 @@ fun DeliveryScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollState = rememberScrollState()
@@ -311,8 +312,14 @@ fun DeliveryScreen(
                                     value = phone,
                                     icon = Icons.Default.Phone,
                                     onClick = {
-                                        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
-                                        context.startActivity(intent)
+                                        runCatching {
+                                            val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
+                                            context.startActivity(intent)
+                                        }.onFailure {
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Unable to open dialer application.")
+                                            }
+                                        }
                                     }
                                 )
                             }
@@ -323,9 +330,15 @@ fun DeliveryScreen(
                                     value = tg.removePrefix("https://t.me/").removePrefix("@"),
                                     icon = Icons.Default.Send,
                                     onClick = {
-                                        val url = if (tg.startsWith("http")) tg else "https://t.me/$tg"
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                        context.startActivity(intent)
+                                        runCatching {
+                                            val url = if (tg.startsWith("http")) tg else "https://t.me/$tg"
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                            context.startActivity(intent)
+                                        }.onFailure {
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Unable to open Telegram link.")
+                                            }
+                                        }
                                     }
                                 )
                             }
@@ -336,9 +349,15 @@ fun DeliveryScreen(
                                     value = insta.removePrefix("https://instagram.com/").removePrefix("@"),
                                     icon = Icons.Default.Share,
                                     onClick = {
-                                        val url = if (insta.startsWith("http")) insta else "https://instagram.com/$insta"
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                        context.startActivity(intent)
+                                        runCatching {
+                                            val url = if (insta.startsWith("http")) insta else "https://instagram.com/$insta"
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                            context.startActivity(intent)
+                                        }.onFailure {
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Unable to open Instagram link.")
+                                            }
+                                        }
                                     }
                                 )
                             }
@@ -349,9 +368,15 @@ fun DeliveryScreen(
                                     value = tiktok.removePrefix("https://tiktok.com/@"),
                                     icon = Icons.Default.Share,
                                     onClick = {
-                                        val url = if (tiktok.startsWith("http")) tiktok else "https://tiktok.com/@$tiktok"
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                        context.startActivity(intent)
+                                        runCatching {
+                                            val url = if (tiktok.startsWith("http")) tiktok else "https://tiktok.com/@$tiktok"
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                            context.startActivity(intent)
+                                        }.onFailure {
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Unable to open TikTok link.")
+                                            }
+                                        }
                                     }
                                 )
                             }
@@ -362,8 +387,14 @@ fun DeliveryScreen(
                                     value = "Visit Channel",
                                     icon = Icons.Default.Share,
                                     onClick = {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(yt))
-                                        context.startActivity(intent)
+                                        runCatching {
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(yt))
+                                            context.startActivity(intent)
+                                        }.onFailure {
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Unable to open YouTube channel.")
+                                            }
+                                        }
                                     }
                                 )
                             }

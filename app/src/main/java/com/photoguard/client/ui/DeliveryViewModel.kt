@@ -1,6 +1,7 @@
 package com.photoguard.client.ui
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.photoguard.client.data.model.AlbumDetailResponse
@@ -69,6 +70,17 @@ class DeliveryViewModel(
     val uiState: StateFlow<DeliveryUiState> = _uiState.asStateFlow()
 
     /**
+     * Sanitizes and verifies that a URL string is non-blank and starts with a valid http/https scheme.
+     */
+    private fun isValidHttpUrl(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        val trimmed = url.trim()
+        val uri = runCatching { Uri.parse(trimmed) }.getOrNull() ?: return false
+        val scheme = uri.scheme?.lowercase()
+        return (scheme == "http" || scheme == "https") && !uri.host.isNullOrBlank()
+    }
+
+    /**
      * Fetches high-resolution download URLs from GET /api/v1/client/{pin}/download
      * and triggers batch download via native Android DownloadManager.
      */
@@ -91,18 +103,30 @@ class DeliveryViewModel(
             when (result) {
                 is NetworkResult.Success -> {
                     val response = result.data
-                    val urls = response.downloadUrls.ifEmpty {
-                        // Fallback to high-res URLs in mediaItems if download_urls is empty
-                        album.mediaItems.filter { it.isSelected }.map { it.url }.ifEmpty {
+                    
+                    // Secure fallback resolution:
+                    // 1. Check if backend returned download_urls
+                    // 2. If empty, securely fall back to client-selected photos
+                    // 3. If no selections recorded, fallback to all album media items
+                    val rawCandidateUrls: List<String> = if (response.downloadUrls.isNotEmpty()) {
+                        response.downloadUrls
+                    } else {
+                        val selectedUrls = album.mediaItems.filter { it.isSelected }.map { it.url }
+                        selectedUrls.ifEmpty {
                             album.mediaItems.map { it.url }
                         }
                     }
 
-                    if (urls.isEmpty()) {
+                    // Strict URI validation: Strip whitespaces and filter only valid HTTP/HTTPS schemes
+                    val validUrls = rawCandidateUrls
+                        .map { it.trim() }
+                        .filter { isValidHttpUrl(it) }
+
+                    if (validUrls.isEmpty()) {
                         _uiState.update {
                             it.copy(
                                 isFetchingDownloads = false,
-                                feedbackMessage = "No high-resolution photos available for download."
+                                feedbackMessage = "No valid high-resolution photos available for download."
                             )
                         }
                         return@launch
@@ -111,14 +135,14 @@ class DeliveryViewModel(
                     // Native DownloadManager dispatch
                     val queued = DownloadUtils.enqueueBatchDownloads(
                         context = context.applicationContext,
-                        urls = urls,
+                        urls = validUrls,
                         albumTitle = currentState.albumTitle
                     )
 
                     _uiState.update {
                         it.copy(
                             isFetchingDownloads = false,
-                            downloadUrls = urls,
+                            downloadUrls = validUrls,
                             downloadSuccessCount = queued,
                             feedbackMessage = "Enqueued $queued high-res photos to Pictures/PhotoGuard"
                         )

@@ -68,6 +68,19 @@ def serialize_media_item(m: MediaItem) -> MediaItemResponse:
         created_at=m.created_at,
     )
 
+def resolve_creator_info(creator_user: Optional[User]) -> tuple[str, str]:
+    """
+    Returns (creator_name, creator_role) where creator_role is 'photographer' (Owner) or 'assistant'.
+    """
+    if not creator_user:
+        return ("Studio Owner", "photographer")
+    
+    role = str(getattr(creator_user, "role", "") or "").lower().strip()
+    is_assistant = (role == "assistant" or creator_user.parent_id is not None)
+    creator_role = "assistant" if is_assistant else "photographer"
+    creator_name = creator_user.full_name or ("Studio Assistant" if is_assistant else "Studio Owner")
+    return (creator_name, creator_role)
+
 def check_album_access(album: Album, current_user: User, db: Session) -> bool:
     """
     Strict Album Access Control & Data Isolation:
@@ -206,6 +219,8 @@ def create_album(
 
         logger.info(f"[Albums API] User #{current_user.id} ({user_role}) created album #{album.id} (Owner: #{root_photographer_id}).")
 
+        creator_name, creator_role = resolve_creator_info(current_user)
+
         return AlbumDetailResponse(
             id=album.id,
             title=album.title or "Untitled Album",
@@ -220,6 +235,8 @@ def create_album(
             submitted_at=album.submitted_at,
             media_count=0,
             selected_count=0,
+            creator_name=creator_name,
+            creator_role=creator_role,
             media_items=[]
         )
     except SQLAlchemyError as exc:
@@ -280,11 +297,22 @@ def list_albums(
                 .all()
             )
 
+        # Batch-fetch all creators for albums in a single query
+        creator_ids = {alb.photographer_id for alb in albums if alb.photographer_id}
+        creators_by_id = {}
+        if creator_ids:
+            creator_users = db.query(User).filter(User.id.in_(creator_ids)).all()
+            for u in creator_users:
+                creators_by_id[u.id] = u
+
         result = []
         for alb in albums:
             media_items = alb.media_items or []
             media_count = len(media_items)
             selected_count = sum(1 for m in media_items if bool(m.is_selected or False))
+            creator_user = creators_by_id.get(alb.photographer_id)
+            creator_name, creator_role = resolve_creator_info(creator_user)
+
             result.append(
                 AlbumListItemResponse(
                     id=alb.id,
@@ -299,7 +327,9 @@ def list_albums(
                     is_expired=check_is_expired(alb.expires_at),
                     submitted_at=alb.submitted_at,
                     media_count=media_count,
-                    selected_count=selected_count
+                    selected_count=selected_count,
+                    creator_name=creator_name,
+                    creator_role=creator_role
                 )
             )
         return result
@@ -336,6 +366,8 @@ def get_album(
         is_expired = check_is_expired(album.expires_at)
 
         safe_media_items = [serialize_media_item(m) for m in media_items]
+        creator_user = db.query(User).filter(User.id == album.photographer_id).first()
+        creator_name, creator_role = resolve_creator_info(creator_user)
 
         return AlbumDetailResponse(
             id=album.id,
@@ -351,6 +383,8 @@ def get_album(
             submitted_at=album.submitted_at,
             media_count=media_count,
             selected_count=selected_count,
+            creator_name=creator_name,
+            creator_role=creator_role,
             media_items=safe_media_items
         )
     except HTTPException:
@@ -419,6 +453,8 @@ def extend_album_expiration(
         media_count = len(media_items)
         selected_count = sum(1 for m in media_items if bool(m.is_selected or False))
         safe_media_items = [serialize_media_item(m) for m in media_items]
+        creator_user = db.query(User).filter(User.id == album.photographer_id).first()
+        creator_name, creator_role = resolve_creator_info(creator_user)
 
         return AlbumDetailResponse(
             id=album.id,
@@ -434,6 +470,8 @@ def extend_album_expiration(
             submitted_at=album.submitted_at,
             media_count=media_count,
             selected_count=selected_count,
+            creator_name=creator_name,
+            creator_role=creator_role,
             media_items=safe_media_items
         )
     except SQLAlchemyError as exc:
@@ -551,6 +589,8 @@ def update_album(
         media_count = len(media_items)
         selected_count = sum(1 for m in media_items if bool(m.is_selected or False))
         safe_media_items = [serialize_media_item(m) for m in media_items]
+        creator_user = db.query(User).filter(User.id == album.photographer_id).first()
+        creator_name, creator_role = resolve_creator_info(creator_user)
 
         return AlbumDetailResponse(
             id=album.id,
@@ -566,6 +606,8 @@ def update_album(
             submitted_at=album.submitted_at,
             media_count=media_count,
             selected_count=selected_count,
+            creator_name=creator_name,
+            creator_role=creator_role,
             media_items=safe_media_items
         )
     except SQLAlchemyError as exc:

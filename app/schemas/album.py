@@ -41,6 +41,8 @@ class AlbumListItemResponse(BaseModel):
     submitted_at: Optional[datetime] = Field(default=None)
     media_count: int = Field(default=0)
     selected_count: int = Field(default=0)
+    creator_name: Optional[str] = Field(default="Studio Owner")
+    creator_role: Optional[str] = Field(default="photographer")
 
     class Config:
         from_attributes = True
@@ -72,6 +74,8 @@ class AlbumDetailResponse(BaseModel):
     submitted_at: Optional[datetime] = Field(default=None)
     media_count: int = Field(default=0)
     selected_count: int = Field(default=0)
+    creator_name: Optional[str] = Field(default="Studio Owner")
+    creator_role: Optional[str] = Field(default="photographer")
     media_items: List[MediaItemResponse] = Field(default_factory=list)
 
     # Social links and Studio tier branding for client visibility (Studio Plan only)

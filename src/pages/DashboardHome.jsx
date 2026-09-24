@@ -445,10 +445,28 @@ export default function DashboardHome() {
 
                   {/* Title & Client Name */}
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-sm font-semibold text-white group-hover:text-amber-400 transition-colors truncate">
                         {album.title}
                       </h3>
+
+                      {/* Creator Tracking Badge */}
+                      {String(album.creator_role || "photographer").toLowerCase().trim() === "assistant" ? (
+                        <span
+                          title={`Created by Studio Assistant: ${album.creator_name || "Assistant"}`}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 bg-cyan-950/80 text-cyan-300 border border-cyan-400/50 shadow-sm shadow-cyan-500/20"
+                        >
+                          👤 Ast: {album.creator_name || "Assistant"}
+                        </span>
+                      ) : (
+                        <span
+                          title="Created by Studio Root Owner"
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 bg-slate-800/90 text-amber-300/90 border border-amber-500/20"
+                        >
+                          👑 Owner
+                        </span>
+                      )}
+
                       {selectedCount > 0 && (
                         <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.2 rounded-full shrink-0">
                           <CheckCircle2 className="w-3 h-3" />

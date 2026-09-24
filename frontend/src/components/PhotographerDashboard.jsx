@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/axios";
 import CreateAlbumModal from "./CreateAlbumModal";
+import AlbumCard from "./AlbumCard";
 import {
   Plus,
   Image as ImageIcon,
@@ -158,83 +159,9 @@ export default function PhotographerDashboard() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {albums.map((album) => {
-            const daysLeft = calculateDaysLeft(album.expires_at);
-            const isSubmitted = album.status === "submitted" || album.is_locked;
-            const photoCount = album.photo_count ?? album.media_count ?? 0;
-            const pinCode = album.pin || album.client_pin;
-
-            return (
-              <Link
-                to={`/dashboard/albums/${album.id}`}
-                key={album.id}
-                id={`album-card-${album.id}`}
-                className="group rounded-2xl border border-slate-800 bg-slate-900/40 backdrop-blur-sm overflow-hidden hover:border-slate-700 hover:bg-slate-900/60 transition-all flex flex-col justify-between cursor-pointer"
-              >
-                {/* Visual Header / Cover Preview */}
-                <div className="h-44 bg-gradient-to-tr from-slate-950 to-slate-900 flex items-center justify-center relative p-4 border-b border-slate-800/60">
-                  <ImageIcon className="w-10 h-10 text-slate-700 group-hover:text-amber-400/80 transition-colors" />
-
-                  {/* 6-Digit PIN Pill */}
-                  {pinCode && (
-                    <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-black/70 backdrop-blur-md border border-slate-700/60 text-xs font-mono font-semibold text-amber-400 tracking-wider">
-                      PIN: {pinCode}
-                    </div>
-                  )}
-
-                  {/* Status Indicator */}
-                  <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                    {isSubmitted ? (
-                      <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-950/80 border border-amber-500/40 text-[10px] font-medium text-amber-300">
-                        <Lock className="w-3 h-3 text-amber-400" />
-                        Submitted
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-[10px] font-medium text-emerald-300">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        Selecting
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Details Body */}
-                <div className="p-5 space-y-3 flex-1 flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <h3 className="text-sm font-semibold text-white group-hover:text-amber-400 transition-colors truncate">
-                        {album.title}
-                      </h3>
-                      <span className="text-[11px] text-slate-400 font-mono shrink-0">
-                        {photoCount} Photos
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400 truncate">
-                      Client: <span className="text-slate-300">{album.client_name || "Unassigned"}</span>
-                    </p>
-                  </div>
-
-                  {/* Footer Meta */}
-                  <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500">
-                    <span className="flex items-center gap-1 text-[11px]">
-                      <Clock className="w-3.5 h-3.5 text-slate-500" />
-                      {daysLeft !== null
-                        ? album.is_expired || daysLeft === 0
-                          ? "Expired"
-                          : `${daysLeft} days left`
-                        : "Permanent"}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-amber-400/90 font-medium text-[11px]">
-                        {album.selected_count ?? 0} Selected
-                      </span>
-                      <ExternalLink className="w-3.5 h-3.5 text-slate-600 group-hover:text-amber-400 transition-colors" />
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
+          {albums.map((album) => (
+            <AlbumCard key={album.id} album={album} />
+          ))}
 
           {/* New Album Quick Trigger Tile */}
           <button

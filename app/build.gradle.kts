@@ -6,12 +6,12 @@ plugins {
 
 android {
     namespace = "com.photoguard.client"
-    compileSdk = 35
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.photoguard.client"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
 
@@ -47,7 +47,7 @@ android {
 
     buildFeatures { compose = true }
 
-    composeOptions { kotlinCompilerExtensionVersion = "1.5.8" }
+    composeOptions { kotlinCompilerExtensionVersion = "1.5.11" }
 
     packaging {
         resources {
@@ -59,7 +59,7 @@ android {
 }
 
 dependencies {
-    implementation(platform("androidx.compose:compose-bom:2024.01.00"))
+    implementation(platform("androidx.compose:compose-bom:2024.04.00"))
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
@@ -84,5 +84,5 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
     // Image loading (RAM-only pipeline)
-    implementation("io.coil-kt:coil-compose:2.5.0")
+    implementation("io.coil-kt:coil-compose:2.6.0")
 }

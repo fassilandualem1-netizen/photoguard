@@ -45,17 +45,17 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.1
-          name: "PhotoGuard Client App v1.0.1 (Anti-Crash & Verified Release)"
+          tag_name: v1.0.2
+          name: "PhotoGuard Client App v1.0.2 (Instagram Lightbox & Zero-Mock)"
           body: |
-            ### 🛡️ PhotoGuard Client Android Application v1.0.1
-            - **Crash-Proof PIN Input**: Fixed `BasicTextField` IME layout composition and focus handling.
-            - **Zero-Error R8 Serialization**: Safe model reflection with guaranteed type preservation.
-            - **Global Crash Guard**: `Thread.setDefaultUncaughtExceptionHandler` intercepts unhandled exceptions to prevent falling back to the phone's home screen.
-            - **State Preservation**: `ActiveAlbumHolder` prevents null backstack states during navigation transitions.
-            - **Anti-Piracy**: Hardened window security with `FLAG_SECURE` (Blocks screenshots & recording).
+            ### 🛡️ PhotoGuard Client Android Application v1.0.2
+            - **Instagram/Pinterest Style Lightbox Zoom**: Tap any photo to expand into an immersive, high-resolution full-screen view.
+            - **Dedicated Retouching Notes**: Floating notes pencil icon (📝) on both thumbnail and full-screen view.
+            - **100% Real Live Backend & Neon DB**: Zero mock data; communicates directly with Render FastAPI and Postgres.
+            - **Telegram Notifications & Live Sync**: Automated alerts triggered on submission.
+            - **Anti-Piracy**: Hardened with `FLAG_SECURE` (Blocks screenshots & screen recording).
             - **RAM-Only Cache**: Volatile memory-only rendering with Coil (`diskCache(null)`).
-            - **Collaborative Sync**: Smart 3s Redis Upstash polling & Single Submit Lock.
+            - **Smart Polling**: Upstash/Redis 3s live counter and Single Submit Lock.
           files: app/build/outputs/apk/release/*.apk
           fail_on_unmatched_files: false
         env:

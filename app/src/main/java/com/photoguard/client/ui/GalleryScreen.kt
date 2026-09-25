@@ -31,18 +31,21 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockClock
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -69,6 +72,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.imageLoader
 import coil.request.ImageRequest
@@ -92,7 +97,9 @@ fun GalleryScreen(
 
     var selectedMediaForNote by remember { mutableStateOf<MediaItemResponse?>(null) }
     var tempNoteText by remember { mutableStateOf("") }
+    var fullScreenPhoto by remember { mutableStateOf<MediaItemResponse?>(null) }
 
+    // Dialog for adding notes to photo
     if (selectedMediaForNote != null) {
         AlertDialog(
             onDismissRequest = { selectedMediaForNote = null },
@@ -102,6 +109,7 @@ fun GalleryScreen(
                     value = tempNoteText,
                     onValueChange = { tempNoteText = it },
                     label = { Text("Your instructions or feedback") },
+                    placeholder = { Text("e.g. Please soften lighting or fix skin") },
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 3
                 )
@@ -120,6 +128,140 @@ fun GalleryScreen(
                 }
             }
         )
+    }
+
+    // Instagram/Pinterest style Full-Screen Lightbox View
+    if (fullScreenPhoto != null) {
+        val currentPhoto = uiState.mediaItems.find { it.id == fullScreenPhoto!!.id } ?: fullScreenPhoto!!
+        val context = LocalContext.current
+
+        Dialog(
+            onDismissRequest = { fullScreenPhoto = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+            ) {
+                // High-resolution image (RAM-only pipeline)
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(currentPhoto.url)
+                        .crossfade(true)
+                        .build(),
+                    imageLoader = context.imageLoader,
+                    contentDescription = currentPhoto.filename,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable { fullScreenPhoto = null }
+                )
+
+                // Top Controls Bar (Close, Filename)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .align(Alignment.TopCenter),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { fullScreenPhoto = null },
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.6f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close full view",
+                            tint = Color.White
+                        )
+                    }
+
+                    Text(
+                        text = currentPhoto.filename ?: "Photo",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White
+                    )
+
+                    Spacer(modifier = Modifier.size(42.dp))
+                }
+
+                // Bottom Action Bar (Select Heart, Add Note)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
+                            )
+                        )
+                        .padding(20.dp)
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        if (!currentPhoto.clientNotes.isNullOrBlank()) {
+                            Text(
+                                text = "📝 Note: ${currentPhoto.clientNotes}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color(0xFF81C784),
+                                modifier = Modifier
+                                    .padding(bottom = 12.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.Black.copy(alpha = 0.7f))
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Note Button
+                            ExtendedFloatingActionButton(
+                                onClick = {
+                                    tempNoteText = currentPhoto.clientNotes ?: ""
+                                    selectedMediaForNote = currentPhoto
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = "Edit Note"
+                                    )
+                                },
+                                text = {
+                                    Text(if (currentPhoto.clientNotes.isNullOrBlank()) "Add Note" else "Edit Note")
+                                },
+                                containerColor = Color.DarkGray.copy(alpha = 0.8f),
+                                contentColor = Color.White
+                            )
+
+                            // Heart Selection Button
+                            ExtendedFloatingActionButton(
+                                onClick = {
+                                    viewModel.togglePhotoSelection(currentPhoto.id)
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = if (currentPhoto.isSelected) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                        contentDescription = "Heart Select"
+                                    )
+                                },
+                                text = {
+                                    Text(if (currentPhoto.isSelected) "Selected" else "Select")
+                                },
+                                containerColor = if (currentPhoto.isSelected) Color(0xFFE53935) else MaterialTheme.colorScheme.primary,
+                                contentColor = Color.White
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 
     Scaffold(
@@ -205,6 +347,7 @@ fun GalleryScreen(
                         MasonryPhotoCard(
                             media = item,
                             isLocked = uiState.isLocked,
+                            onPhotoClick = { fullScreenPhoto = item },
                             onToggleSelect = { viewModel.togglePhotoSelection(item.id) },
                             onEditNote = {
                                 tempNoteText = item.clientNotes ?: ""
@@ -294,12 +437,12 @@ private fun GalleryTopBar(
 private fun MasonryPhotoCard(
     media: MediaItemResponse,
     isLocked: Boolean,
+    onPhotoClick: () -> Unit,
     onToggleSelect: () -> Unit,
     onEditNote: () -> Unit
 ) {
     val context = LocalContext.current
     val ratio = if (media.id % 3 == 0) 0.75f else if (media.id % 2 == 0) 1.25f else 1.0f
-
     val heartColor by animateColorAsState(
         targetValue = if (media.isSelected) Color(0xFFE53935) else Color.White.copy(alpha = 0.85f),
         animationSpec = tween(durationMillis = 200),
@@ -312,7 +455,7 @@ private fun MasonryPhotoCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = !isLocked) { onToggleSelect() }
+            .clickable { onPhotoClick() }
             .then(
                 if (media.isSelected) {
                     Modifier.border(2.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
@@ -324,6 +467,7 @@ private fun MasonryPhotoCard(
                 .fillMaxWidth()
                 .aspectRatio(ratio)
         ) {
+            // RAM-only loaded thumbnail
             AsyncImage(
                 model = ImageRequest.Builder(context)
                     .data(media.thumbnailUrl ?: media.url)
@@ -335,6 +479,7 @@ private fun MasonryPhotoCard(
                 modifier = Modifier.fillMaxSize()
             )
 
+            // Bottom Gradient for readability
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -347,13 +492,14 @@ private fun MasonryPhotoCard(
                     )
             )
 
+            // Top-left: Dedicated Retouching Note Badge & Button
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(8.dp)
                     .size(34.dp)
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.45f))
+                    .background(Color.Black.copy(alpha = 0.5f))
                     .clickable(enabled = !isLocked) { onEditNote() },
                 contentAlignment = Alignment.Center
             ) {
@@ -365,28 +511,14 @@ private fun MasonryPhotoCard(
                 )
             }
 
-            if (!media.clientNotes.isNullOrBlank()) {
-                Text(
-                    text = "📝 " + media.clientNotes,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 8.dp, bottom = 6.dp)
-                        .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                )
-            }
-
+            // Top-right: Heart selection button
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(8.dp)
                     .size(34.dp)
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.45f))
+                    .background(Color.Black.copy(alpha = 0.5f))
                     .clickable(enabled = !isLocked) { onToggleSelect() },
                 contentAlignment = Alignment.Center
             ) {
@@ -398,6 +530,23 @@ private fun MasonryPhotoCard(
                 )
             }
 
+            // Bottom: Notes indicator if client typed instructions
+            if (!media.clientNotes.isNullOrBlank()) {
+                Text(
+                    text = "📝 " + media.clientNotes,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 8.dp, bottom = 6.dp)
+                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                )
+            }
+
+            // Bottom-left: Filename
             Text(
                 text = media.filename ?: "Photo",
                 style = MaterialTheme.typography.labelSmall,

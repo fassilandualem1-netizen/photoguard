@@ -88,6 +88,9 @@ export default function App() {
 
   // Note dialog state
   const [activeNotePhoto, setActiveNotePhoto] = useState<MediaItem | null>(null);
+  // Job Sheet / Retouch Order Card Drawer State (Opens side-by-side with photo)
+  const [activeJobSheetPhoto, setActiveJobSheetPhoto] = useState<MediaItem | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'jobsheet'>('jobsheet');
   const [tempNote, setTempNote] = useState('');
 
   // 100% Real Live Database Albums (Zero Mock Data)
@@ -282,6 +285,11 @@ export default function App() {
     if (!currentAlbum) return [];
     const selected = currentAlbum.media_items.filter(m => m.is_selected);
     return selected.length > 0 ? selected : currentAlbum.media_items;
+  };
+
+  // Print / Export Job Sheet Function
+  const handlePrintJobSheet = () => {
+    window.print();
   };
 
   // 1. Copy Filenames for Lightroom / Photoshop / Capture One Library Search
@@ -584,75 +592,285 @@ export default function App() {
               </div>
             </div>
 
-            {/* Currently Selected Photos Live Table */}
+            {/* Retouch Order Cards & Studio Job Sheet (All Editors: Lightroom, Photoshop, Premiere, CapCut, Capture One) */}
             {currentAlbum && (
-              <div className="bg-slate-900 rounded-3xl border border-slate-800 p-6 space-y-4 shadow-xl">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="bg-slate-900 rounded-3xl border border-slate-800 p-6 space-y-6 shadow-2xl">
+                {/* Header with Switcher between Interactive Job Sheet & Compact Grid */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
                   <div>
-                    <h3 className="text-base font-bold text-white flex items-center gap-2">
-                      <span>Client Selections for Studio Editing</span>
-                      <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-xs font-mono">
-                        {currentAlbum.media_items.filter(m => m.is_selected).length} selected
-                      </span>
-                    </h3>
-                    <p className="text-xs text-slate-400">
-                      Shoot: <span className="text-white font-semibold">{currentAlbum.title}</span> (PIN: {currentAlbum.pin})
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <h3 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+                        <span>Retouch Order Sheet & Studio Job Cards</span>
+                        <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-xs font-mono font-bold">
+                          {currentAlbum.media_items.filter(m => m.is_selected).length} Selected for Edit
+                        </span>
+                      </h3>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Shoot: <span className="text-white font-semibold">{currentAlbum.title}</span> (PIN: {currentAlbum.pin}) • Client: <span className="text-slate-300 font-medium">{currentAlbum.client_name}</span>
                     </p>
                   </div>
 
-                  <button
-                    onClick={() => setActiveTab('simulator')}
-                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 border border-slate-700 flex items-center gap-1.5 transition"
-                  >
-                    <Smartphone className="w-3.5 h-3.5" />
-                    <span>Open in Mobile App</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* View Switcher */}
+                    <div className="bg-slate-950 p-1 rounded-xl border border-slate-800 flex items-center text-xs">
+                      <button
+                        onClick={() => setViewMode('jobsheet')}
+                        className={`px-3 py-1.5 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                          viewMode === 'jobsheet' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>Job Cards</span>
+                      </button>
+                      <button
+                        onClick={() => setViewMode('grid')}
+                        className={`px-3 py-1.5 rounded-lg font-semibold transition flex items-center gap-1.5 ${
+                          viewMode === 'grid' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>Compact Grid</span>
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={handlePrintJobSheet}
+                      className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 flex items-center gap-1.5 shadow transition"
+                      title="Print or Save Job Sheet as PDF"
+                    >
+                      <span>🖨️ Print Job Sheet</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-                  {currentAlbum.media_items.map(photo => (
-                    <div
-                      key={photo.id}
-                      onClick={() => handleToggleSelect(photo.id)}
-                      className={`relative rounded-2xl overflow-hidden border cursor-pointer group transition-all ${
-                        photo.is_selected
-                          ? 'border-indigo-500 ring-2 ring-indigo-500/40'
-                          : 'border-slate-800 opacity-60 hover:opacity-100'
-                      }`}
-                    >
-                      <img
-                        src={photo.thumbnail_url || photo.url}
-                        alt={photo.filename}
-                        className="w-full h-28 object-cover group-hover:scale-105 transition"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+                {/* VIEW 1: Retouch Order Cards (Camera Filename + Instruction Card side-by-side) */}
+                {viewMode === 'jobsheet' && (
+                  <div className="space-y-4">
+                    <p className="text-xs text-slate-400">
+                      እያንዳንዱ ፎቶ ከነ ካሜራ ስሙ (Filename) እና ደንበኛው ከሰጠው የማስተካከያ ትዕዛዝ (Frame size, retouching, cropping) ጋር ጎን ለጎን ተደርድሯል። ፎቶውን ሲነኩት በትልቁ ይከፈታል።
+                    </p>
 
-                      <div className="absolute top-1.5 right-1.5">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                          photo.is_selected ? 'bg-indigo-600 text-white' : 'bg-black/60 text-slate-400'
-                        }`}>
-                          <Heart className={`w-3.5 h-3.5 ${photo.is_selected ? 'fill-current' : ''}`} />
-                        </div>
-                      </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {currentAlbum.media_items
+                        .filter(m => m.is_selected)
+                        .map((photo, index) => (
+                          <div
+                            key={photo.id}
+                            onClick={() => setActiveJobSheetPhoto(photo)}
+                            className="bg-slate-950/80 hover:bg-slate-950 border border-slate-800 hover:border-indigo-500/60 rounded-2xl p-3.5 flex gap-3.5 cursor-pointer transition shadow-lg group relative"
+                          >
+                            {/* Photo Thumbnail */}
+                            <div className="relative w-28 h-28 rounded-xl overflow-hidden shrink-0 border border-slate-800 group-hover:border-indigo-500/40">
+                              <img
+                                src={photo.thumbnail_url || photo.url}
+                                alt={photo.filename}
+                                className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                              />
+                              <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-mono text-white font-bold">
+                                #{index + 1}
+                              </div>
+                            </div>
 
-                      <div className="absolute bottom-1.5 left-1.5 right-1.5 text-[10px] text-white truncate font-mono">
-                        {photo.filename}
-                      </div>
+                            {/* Job Sheet Sidecar Card */}
+                            <div className="flex-1 flex flex-col justify-between overflow-hidden">
+                              <div>
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="font-mono text-xs font-bold text-white truncate max-w-[170px]" title={photo.filename}>
+                                    {photo.filename}
+                                  </span>
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold shrink-0">
+                                    Selected ✓
+                                  </span>
+                                </div>
 
-                      {photo.client_notes && (
-                        <div className="absolute top-1.5 left-1.5 px-1 py-0.5 rounded bg-emerald-600 text-[8px] text-white font-sans font-bold">
-                          NOTE
-                        </div>
-                      )}
+                                {/* Retouch Instruction Callout Box */}
+                                <div className="mt-2 p-2 rounded-xl bg-slate-900 border border-slate-800/80 text-xs">
+                                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                                    <MessageSquare className="w-3 h-3 text-emerald-400" />
+                                    <span>Client Retouch Order:</span>
+                                  </div>
+                                  <p className="text-slate-200 text-xs leading-relaxed italic line-clamp-2">
+                                    {photo.client_notes ? `"${photo.client_notes}"` : "Standard beauty retouching & color grading"}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Action Footer for this specific photo */}
+                              <div className="flex items-center justify-between pt-2 border-t border-slate-900 text-[11px] text-slate-400">
+                                <span className="text-[10px] text-indigo-400 font-medium">Click to inspect ➔</span>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigator.clipboard.writeText(photo.filename.replace(/\.[^/.]+$/, ""));
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono transition"
+                                    title="Copy raw filename"
+                                  >
+                                    Copy Name
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      window.open(photo.url, '_blank');
+                                    }}
+                                    className="px-2 py-0.5 rounded bg-blue-600/80 hover:bg-blue-600 text-white text-[10px] font-medium transition"
+                                  >
+                                    Open
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                     </div>
-                  ))}
+                  </div>
+                )}
+
+                {/* VIEW 2: Compact Proofs Grid */}
+                {viewMode === 'grid' && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                    {currentAlbum.media_items.map(photo => (
+                      <div
+                        key={photo.id}
+                        onClick={() => setActiveJobSheetPhoto(photo)}
+                        className={`relative rounded-2xl overflow-hidden border cursor-pointer group transition-all ${
+                          photo.is_selected
+                            ? 'border-indigo-500 ring-2 ring-indigo-500/40'
+                            : 'border-slate-800 opacity-60 hover:opacity-100'
+                        }`}
+                      >
+                        <img
+                          src={photo.thumbnail_url || photo.url}
+                          alt={photo.filename}
+                          className="w-full h-28 object-cover group-hover:scale-105 transition"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+
+                        <div className="absolute top-1.5 right-1.5">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                            photo.is_selected ? 'bg-indigo-600 text-white' : 'bg-black/60 text-slate-400'
+                          }`}>
+                            <Heart className={`w-3.5 h-3.5 ${photo.is_selected ? 'fill-current' : ''}`} />
+                          </div>
+                        </div>
+
+                        <div className="absolute bottom-1.5 left-1.5 right-1.5 text-[10px] text-white truncate font-mono">
+                          {photo.filename}
+                        </div>
+
+                        {photo.client_notes && (
+                          <div className="absolute top-1.5 left-1.5 px-1 py-0.5 rounded bg-emerald-600 text-[8px] text-white font-sans font-bold">
+                            NOTE
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SIDE-BY-SIDE RETOUCH ORDER INSPECTOR MODAL (Shows photo on Left, Client Instructions on Right) */}
+            {activeJobSheetPhoto && (
+              <div 
+                className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+                onClick={() => setActiveJobSheetPhoto(null)}
+              >
+                <div 
+                  className="bg-slate-900 border border-slate-800 rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[85vh]"
+                  onClick={e => e.stopPropagation()}
+                >
+                  {/* Left: 4K Crisp Photo Preview */}
+                  <div className="md:w-3/5 bg-black flex items-center justify-center p-4 relative min-h-[300px]">
+                    <img
+                      src={activeJobSheetPhoto.url}
+                      alt={activeJobSheetPhoto.filename}
+                      className="max-h-[60vh] max-w-full object-contain rounded-lg"
+                    />
+                    <div className="absolute top-3 left-3 px-2 py-1 rounded-lg bg-black/70 font-mono text-xs text-white">
+                      {activeJobSheetPhoto.filename}
+                    </div>
+                  </div>
+
+                  {/* Right: Client Retouch Order Card */}
+                  <div className="md:w-2/5 p-6 flex flex-col justify-between bg-slate-900 border-t md:border-t-0 md:border-l border-slate-800">
+                    <div className="space-y-5">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div>
+                          <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
+                            Studio Job Order Card
+                          </span>
+                          <h4 className="text-base font-bold text-white mt-0.5">
+                            {activeJobSheetPhoto.filename}
+                          </h4>
+                        </div>
+                        <button
+                          onClick={() => setActiveJobSheetPhoto(null)}
+                          className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+
+                      {/* Client Order Instruction Box */}
+                      <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                          <MessageSquare className="w-4 h-4" />
+                          <span>Client Feedback & Retouching Order:</span>
+                        </div>
+                        <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">
+                          {activeJobSheetPhoto.client_notes || "ደንበኛው ምንም አይነት ለየት ያለ ኖት አላስቀመጠም። መደበኛውን የፎቶ ኤዲቲንግ እና የከለር ግሬዲንግ ስራ ያካሂዱ።"}
+                        </p>
+                      </div>
+
+                      {/* Photo details */}
+                      <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs space-y-1.5 text-slate-400">
+                        <div className="flex justify-between">
+                          <span>Status:</span>
+                          <span className="text-emerald-400 font-semibold">Selected for Editing</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Shoot Name:</span>
+                          <span className="text-slate-200 font-medium">{currentAlbum?.title}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Client:</span>
+                          <span className="text-slate-200 font-medium">{currentAlbum?.client_name}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons for Lightroom, Photoshop, Premiere, CapCut */}
+                    <div className="pt-4 space-y-2">
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(activeJobSheetPhoto.filename.replace(/\.[^/.]+$/, ""));
+                          alert(`Copied "${activeJobSheetPhoto.filename}" for Lightroom/Capture One/Premiere search!`);
+                        }}
+                        className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy Camera Name for Filter</span>
+                      </button>
+
+                      <button
+                        onClick={() => window.open(activeJobSheetPhoto.url, '_blank')}
+                        className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 border border-slate-700 flex items-center justify-center gap-2 transition"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Open in Photoshop / Direct Tab</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
           </div>
         )}
-
-        {/* TAB 2: Mobile Client Simulator (With Instagram Lightbox) */}
+{/* TAB 2: Mobile Client Simulator (With Instagram Lightbox) */}
         {activeTab === 'simulator' && (
           <div className="w-full flex flex-col lg:flex-row items-center justify-center gap-8 py-2">
             <div className="max-w-md w-full space-y-4 text-left">

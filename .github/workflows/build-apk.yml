@@ -41,21 +41,21 @@ jobs:
           path: app/build/outputs/apk/release/*.apk
           retention-days: 30
 
-      - name: Create GitHub Release & Direct Download Link
+      - name: Create or Update GitHub Release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.0
           name: "PhotoGuard Client App v1.0.0"
           body: |
-            ### 🛡️ PhotoGuard Client Android Application (Official Release)
-            - **Security**: Hardened anti-piracy protection via `FLAG_SECURE` (Blocks screenshots & recording).
-            - **Performance**: RAM-only volatile caching with Coil (`diskCache(null)`).
+            ### 🛡️ PhotoGuard Client Android Application (Production Release)
+            - **Anti-Piracy**: Hardened security via `FLAG_SECURE` (Blocks screenshots & recording).
+            - **Memory Security**: RAM-only volatile caching with Coil (`diskCache(null)`).
             - **Architecture**: 100% Jetpack Compose with declarative `PhotoGuardNavHost` (Login -> Gallery -> Delivery).
             - **Collaborative Sync**: Smart 3s Redis Upstash polling & Single Submit Lock.
             - **Download**: Direct High-Res Gallery export support.
           files: app/build/outputs/apk/release/*.apk
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

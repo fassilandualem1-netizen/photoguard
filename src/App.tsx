@@ -65,6 +65,9 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<{ en: string; am: string } | null>(null);
   const [currentAlbum, setCurrentAlbum] = useState<AlbumDetail | null>(null);
 
+  // 2-Step Review State: 1 = All Proofs, 2 = Review Selected Only
+  const [simulatorStep, setSimulatorStep] = useState<1 | 2>(1);
+
   // Full-screen Instagram lightbox view state
   const [fullScreenPhoto, setFullScreenPhoto] = useState<MediaItem | null>(null);
 
@@ -158,6 +161,7 @@ export default function App() {
       if (res.ok) {
         setCurrentAlbum(data);
         setSelectedExportAlbumId(data.id);
+        setSimulatorStep(1);
         if (data.is_locked) {
           setScreen('delivery');
         } else {
@@ -907,109 +911,224 @@ export default function App() {
 
                 {/* 2. Gallery Screen */}
                 {screen === 'gallery' && currentAlbum && (
-                  <div className="flex-1 flex flex-col h-full">
-                    <div className="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between shrink-0">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setScreen('login')}
-                          className="p-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
-                        >
-                          <ArrowLeft className="w-4 h-4" />
-                        </button>
+                  <div className="flex-1 flex flex-col h-full bg-slate-950">
+                    {/* Top Bar with Studio Logo, Name, Verified Badge & Sign Out */}
+                    <div className="px-3.5 py-2.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between shrink-0">
+                      <div className="flex items-center gap-2.5">
+                        {simulatorStep === 2 ? (
+                          <button
+                            onClick={() => setSimulatorStep(1)}
+                            className="p-1 rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition"
+                            title="Back to All Proofs"
+                          >
+                            <ArrowLeft className="w-4 h-4" />
+                          </button>
+                        ) : null}
+
+                        {/* Studio Logo / Avatar */}
+                        <div className="w-8 h-8 rounded-full border border-indigo-500/60 bg-slate-800 flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+                          <span className="text-xs font-black text-indigo-400">
+                            {(currentAlbum.photographer_name || currentAlbum.creator_name || 'PG').substring(0, 2).toUpperCase()}
+                          </span>
+                        </div>
+
                         <div>
-                          <h4 className="text-xs font-bold text-white truncate max-w-[150px]">
-                            {currentAlbum.title || 'Shoot Proofs'}
-                          </h4>
-                          <span className="text-[10px] text-indigo-400">
-                            {currentAlbum.media_items.filter(m => m.is_selected).length} of {currentAlbum.media_items.length} selected
+                          <div className="flex items-center gap-1">
+                            <h4 className="text-xs font-bold text-white truncate max-w-[130px]">
+                              {currentAlbum.photographer_name || currentAlbum.creator_name || 'PhotoGuard Studio'}
+                            </h4>
+                            <span className="w-3 h-3 rounded-full bg-indigo-500 text-white flex items-center justify-center text-[8px] font-bold">
+                              ✓
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 block -mt-0.5">
+                            {simulatorStep === 1
+                              ? `Proofs (${currentAlbum.media_items.length})`
+                              : `Review Selected (${currentAlbum.media_items.filter(m => m.is_selected).length})`}
                           </span>
                         </div>
                       </div>
 
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
-                        PIN {currentAlbum.pin}
-                      </span>
-                    </div>
-
-                    {/* Pinterest / Instagram Masonry Grid */}
-                    <div className="flex-1 p-3 overflow-y-auto">
-                      <div className="grid grid-cols-2 gap-2.5 pb-16">
-                        {currentAlbum.media_items.map((photo) => (
-                          <div
-                            key={photo.id}
-                            onClick={() => setFullScreenPhoto(photo)}
-                            className={`group relative rounded-xl overflow-hidden cursor-pointer border transition-all ${
-                              photo.is_selected
-                                ? 'border-indigo-500 ring-2 ring-indigo-500/30'
-                                : 'border-slate-800 hover:border-slate-700'
-                            }`}
-                          >
-                            <img
-                              src={photo.thumbnail_url || photo.url}
-                              alt={photo.filename}
-                              className="w-full h-36 object-cover bg-slate-900 group-hover:scale-105 transition duration-300"
-                              loading="lazy"
-                            />
-
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-80"></div>
-
-                            {/* Retouch Note Button */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveNotePhoto(photo);
-                                setTempNote(photo.client_notes || '');
-                              }}
-                              className={`absolute top-2 left-2 p-1.5 rounded-full backdrop-blur transition ${
-                                photo.client_notes
-                                  ? 'bg-emerald-500 text-white'
-                                  : 'bg-black/50 text-white/90 hover:bg-black/80'
-                              }`}
-                              title="Add Retouching Note"
-                            >
-                              <MessageSquare className="w-3.5 h-3.5" />
-                            </button>
-
-                            {/* Heart Selection Button */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleToggleSelect(photo.id);
-                              }}
-                              className={`absolute top-2 right-2 p-1.5 rounded-full backdrop-blur transition ${
-                                photo.is_selected
-                                  ? 'bg-rose-500 text-white scale-110 shadow-lg shadow-rose-500/40'
-                                  : 'bg-black/50 text-white/80 hover:text-white'
-                              }`}
-                            >
-                              <Heart className={`w-3.5 h-3.5 ${photo.is_selected ? 'fill-current' : ''}`} />
-                            </button>
-
-                            {photo.client_notes && (
-                              <div className="absolute bottom-2 left-2 right-2 px-1.5 py-0.5 rounded bg-black/70 text-[9px] text-emerald-300 truncate">
-                                📝 {photo.client_notes}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Bottom Submit Bar */}
-                    <div className="p-3 bg-slate-900/90 border-t border-slate-800 shrink-0">
+                      {/* Sign Out / Exit Icon Button */}
                       <button
                         onClick={() => {
-                          setScreen('delivery');
+                          setScreen('login');
+                          setPin('');
+                          setCurrentAlbum(null);
                         }}
-                        className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition"
+                        className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700/60 transition"
+                        title="Sign Out of Album"
                       >
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>Submit Selections to Studio ({currentAlbum.media_items.filter(m => m.is_selected).length})</span>
+                        <X className="w-4 h-4" />
                       </button>
+                    </div>
+
+                    {/* STEP 1: All Proofs Grid */}
+                    {simulatorStep === 1 && (
+                      <div className="flex-1 p-3 overflow-y-auto">
+                        <div className="grid grid-cols-2 gap-2.5 pb-20">
+                          {currentAlbum.media_items.map((photo) => (
+                            <div
+                              key={photo.id}
+                              onClick={() => setFullScreenPhoto(photo)}
+                              className={`group relative rounded-xl overflow-hidden cursor-pointer border transition-all ${
+                                photo.is_selected
+                                  ? 'border-indigo-500 ring-2 ring-indigo-500/30'
+                                  : 'border-slate-800 hover:border-slate-700'
+                              }`}
+                            >
+                              <img
+                                src={photo.thumbnail_url || photo.url}
+                                alt={photo.filename}
+                                className="w-full h-36 object-cover bg-slate-900 group-hover:scale-105 transition duration-300"
+                                loading="lazy"
+                              />
+
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-80"></div>
+
+                              {/* Retouch Note Button */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveNotePhoto(photo);
+                                  setTempNote(photo.client_notes || '');
+                                }}
+                                className={`absolute top-2 left-2 p-1.5 rounded-full backdrop-blur transition ${
+                                  photo.client_notes
+                                    ? 'bg-emerald-500 text-white'
+                                    : 'bg-black/50 text-white/90 hover:bg-black/80'
+                                }`}
+                                title="Add Retouching Note"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Heart Selection Button */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleSelect(photo.id);
+                                }}
+                                className={`absolute top-2 right-2 p-1.5 rounded-full backdrop-blur transition ${
+                                  photo.is_selected
+                                    ? 'bg-rose-500 text-white scale-110 shadow-lg shadow-rose-500/40'
+                                    : 'bg-black/50 text-white/80 hover:text-white'
+                                }`}
+                              >
+                                <Heart className={`w-3.5 h-3.5 ${photo.is_selected ? 'fill-current' : ''}`} />
+                              </button>
+
+                              {photo.client_notes && (
+                                <div className="absolute bottom-2 left-2 right-2 px-1.5 py-0.5 rounded bg-black/70 text-[9px] text-emerald-300 truncate">
+                                  📝 {photo.client_notes}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* STEP 2: Dedicated "Review Selected Only" Page */}
+                    {simulatorStep === 2 && (
+                      <div className="flex-1 p-3 overflow-y-auto">
+                        <div className="mb-2.5 p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-[11px] text-slate-300">
+                          <span>Reviewing chosen photos before submit</span>
+                          <span className="font-bold text-indigo-400 font-mono">
+                            {currentAlbum.media_items.filter(m => m.is_selected).length} Selected
+                          </span>
+                        </div>
+
+                        {currentAlbum.media_items.filter(m => m.is_selected).length === 0 ? (
+                          <div className="py-16 text-center space-y-3">
+                            <p className="text-xs text-slate-500">No photos selected yet.</p>
+                            <button
+                              onClick={() => setSimulatorStep(1)}
+                              className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold"
+                            >
+                              Choose Photos
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2.5 pb-20">
+                            {currentAlbum.media_items.filter(m => m.is_selected).map((photo) => (
+                              <div
+                                key={photo.id}
+                                className="group relative rounded-xl overflow-hidden border border-indigo-500/60 bg-slate-900 shadow-md"
+                              >
+                                <img
+                                  src={photo.thumbnail_url || photo.url}
+                                  alt={photo.filename}
+                                  onClick={() => setFullScreenPhoto(photo)}
+                                  className="w-full h-32 object-cover cursor-pointer"
+                                />
+
+                                {/* Remove Button */}
+                                <button
+                                  onClick={() => handleToggleSelect(photo.id)}
+                                  className="absolute top-1.5 right-1.5 p-1 rounded-full bg-rose-600/90 text-white hover:bg-rose-500 transition shadow"
+                                  title="Remove from selection"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+
+                                <div className="p-2 space-y-1">
+                                  <div className="flex items-center justify-between text-[10px]">
+                                    <span className="font-bold text-slate-300 truncate max-w-[90px]">{photo.filename}</span>
+                                    <button
+                                      onClick={() => {
+                                        setActiveNotePhoto(photo);
+                                        setTempNote(photo.client_notes || '');
+                                      }}
+                                      className="text-indigo-400 hover:text-indigo-300 font-medium"
+                                    >
+                                      Edit Note
+                                    </button>
+                                  </div>
+                                  <p className="text-[10px] text-emerald-300/90 truncate">
+                                    {photo.client_notes ? `📝 ${photo.client_notes}` : 'No note added'}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Bottom Action Bar */}
+                    <div className="p-3 bg-slate-900/95 border-t border-slate-800 shrink-0">
+                      {simulatorStep === 1 ? (
+                        <button
+                          onClick={() => setSimulatorStep(2)}
+                          disabled={currentAlbum.media_items.filter(m => m.is_selected).length === 0}
+                          className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 font-bold text-xs text-white flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition"
+                        >
+                          <span>Review Selected ({currentAlbum.media_items.filter(m => m.is_selected).length})</span>
+                          <span className="text-sm">➔</span>
+                        </button>
+                      ) : (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setSimulatorStep(1)}
+                            className="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 transition"
+                          >
+                            Add More
+                          </button>
+                          <button
+                            onClick={() => {
+                              setScreen('delivery');
+                            }}
+                            className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-bold text-xs text-white flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Final Submit to Studio 🔒</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
-
                 {/* 3. Delivery Screen */}
                 {screen === 'delivery' && currentAlbum && (
                   <div className="flex-1 flex flex-col justify-between p-6 text-center">

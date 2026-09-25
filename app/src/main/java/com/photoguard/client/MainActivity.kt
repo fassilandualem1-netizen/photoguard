@@ -151,6 +151,13 @@ fun PhotoGuardNavHost() {
                     viewModel = galleryViewModel,
                     onSubmitComplete = {
                         navController.navigate("delivery")
+                    },
+                    onSignOut = {
+                        ActiveAlbumHolder.album = null
+                        currentAlbum = null
+                        navController.navigate("login") {
+                            popUpTo(0) { inclusive = true }
+                        }
                     }
                 )
             } else {

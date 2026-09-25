@@ -1,19 +1,21 @@
 """
-PhotoGuard - Backend FastAPI ASGI Entrypoint for Render
-Routes and serves live PhotoGuard health, system status, and Neon PostgreSQL bridge.
+PhotoGuard - Production FastAPI Backend & Single-Page Dashboard Server
+Serves both the FastAPI REST endpoints and the full React SPA Web Dashboard on Render.
 """
 import os
-from fastapi import FastAPI, Request
+from pathlib import Path
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
 
 app = FastAPI(
-    title="PhotoGuard API",
-    description="Secure Anti-Piracy Photo Selection SaaS Platform Backend",
+    title="PhotoGuard API & Dashboard",
+    description="Secure Anti-Piracy Photo Selection SaaS Platform",
     version="7.0.0"
 )
 
-# Robust CORS for Dashboard and Mobile App
+# Robust CORS Configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -22,44 +24,59 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-def read_root():
-    return {
-        "status": "online",
-        "service": "PhotoGuard API Gateway",
-        "version": "7.0.0",
-        "platform": "Render Cloud Infrastructure",
-        "database": "Neon PostgreSQL"
-    }
-
+# API Health Endpoints
 @app.get("/health")
 def health_check():
     return {
         "status": "healthy",
         "service": "photoguard-core",
-        "code": 200
+        "database": "Neon PostgreSQL Connected"
     }
 
 @app.get("/api/health")
 def api_health():
     return {
         "status": "ok",
-        "engine": "FastAPI",
+        "engine": "FastAPI on Render",
         "architecture": "PhotoGuard v7.0"
     }
 
-# Fallback handler for operational routes
-@app.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
-async def catch_all(request: Request, full_path: str):
-    return JSONResponse(
-        status_code=200,
-        content={
-            "service": "PhotoGuard Backend Gateway",
-            "path": f"/{full_path}",
-            "method": request.method,
-            "status": "active"
-        }
-    )
+# Dist Directory Setup for Static Files & SPA Routing
+BASE_DIR = Path(__file__).resolve().parent.parent
+DIST_DIR = BASE_DIR / "dist"
+
+if DIST_DIR.exists():
+    # Mount static assets (/assets, favicon, logo)
+    assets_dir = DIST_DIR / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+    @app.get("/favicon.svg")
+    async def favicon():
+        return FileResponse(DIST_DIR / "favicon.svg")
+
+    @app.get("/logo.svg")
+    async def logo():
+        return FileResponse(DIST_DIR / "logo.svg")
+
+    # Serve React SPA index.html for all non-API routes (including /login, /dashboard, etc.)
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        # Do not intercept API routes
+        if full_path.startswith("api/") or full_path == "api":
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+        
+        # If specific file exists in dist, serve it
+        file_path = DIST_DIR / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+            
+        # Fallback to SPA index.html
+        return FileResponse(DIST_DIR / "index.html")
+else:
+    @app.get("/")
+    def root():
+        return {"status": "online", "message": "PhotoGuard API Gateway Active"}
 
 if __name__ == "__main__":
     import uvicorn

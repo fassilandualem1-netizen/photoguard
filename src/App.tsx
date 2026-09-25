@@ -108,7 +108,7 @@ interface NetworkLog {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'exportSuite' | 'simulator' | 'albums' | 'diagnostics' | 'download'>('exportSuite');
+  const [activeTab, setActiveTab] = useState<'exportSuite' | 'simulator' | 'albums' | 'diagnostics' | 'download'>('simulator');
 
   // Client app state inside the simulator
   const [screen, setScreen] = useState<'login' | 'gallery' | 'delivery'>('login');

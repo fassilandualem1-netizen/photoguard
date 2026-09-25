@@ -1,4 +1,4 @@
-﻿name: Build PhotoGuard APK
+name: Build PhotoGuard APK
 
 on:
   push:
@@ -9,11 +9,13 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Assemble Release APK
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -23,46 +25,39 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
-      - name: Set up Python 3
-        uses: actions/setup-python@v5
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
         with:
-          python-version: '3.11'
-
-      - name: Generate Android project from generate.py
-        run: python generate.py
-
-      - name: Setup Gradle wrapper
-        run: |
-          gradle wrapper --gradle-version=8.4 --distribution-type=bin
-          chmod +x gradlew
-
-      - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v3
-
-      - name: Cache Gradle packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ hashFiles('**/*.gradle.kts', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            gradle-
-
-      - name: Make gradlew executable
-        run: chmod +x gradlew
+          gradle-version: '8.4'
 
       - name: Build Release APK
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        run: gradle assembleRelease --no-daemon --stacktrace
 
-      - name: Upload Release APK
+      - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: photoguard-release-apk
           path: app/build/outputs/apk/release/*.apk
           retention-days: 30
+
+      - name: Create GitHub Release & Direct Download Link
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: "PhotoGuard Client App v1.0.0"
+          body: |
+            ### 🛡️ PhotoGuard Client Android Application (Official Release)
+            - **Security**: Hardened anti-piracy protection via `FLAG_SECURE` (Blocks screenshots & recording).
+            - **Performance**: RAM-only volatile caching with Coil (`diskCache(null)`).
+            - **Architecture**: 100% Jetpack Compose with declarative `PhotoGuardNavHost` (Login -> Gallery -> Delivery).
+            - **Collaborative Sync**: Smart 3s Redis Upstash polling & Single Submit Lock.
+            - **Download**: Direct High-Res Gallery export support.
+          files: app/build/outputs/apk/release/*.apk
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Build Logs on Failure
         if: failure()

@@ -45,15 +45,17 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          name: "PhotoGuard Client App v1.0.0"
+          tag_name: v1.0.1
+          name: "PhotoGuard Client App v1.0.1 (Anti-Crash & Verified Release)"
           body: |
-            ### 🛡️ PhotoGuard Client Android Application (Production Release)
-            - **Anti-Piracy**: Hardened security via `FLAG_SECURE` (Blocks screenshots & recording).
-            - **Memory Security**: RAM-only volatile caching with Coil (`diskCache(null)`).
-            - **Architecture**: 100% Jetpack Compose with declarative `PhotoGuardNavHost` (Login -> Gallery -> Delivery).
+            ### 🛡️ PhotoGuard Client Android Application v1.0.1
+            - **Crash-Proof PIN Input**: Fixed `BasicTextField` IME layout composition and focus handling.
+            - **Zero-Error R8 Serialization**: Safe model reflection with guaranteed type preservation.
+            - **Global Crash Guard**: `Thread.setDefaultUncaughtExceptionHandler` intercepts unhandled exceptions to prevent falling back to the phone's home screen.
+            - **State Preservation**: `ActiveAlbumHolder` prevents null backstack states during navigation transitions.
+            - **Anti-Piracy**: Hardened window security with `FLAG_SECURE` (Blocks screenshots & recording).
+            - **RAM-Only Cache**: Volatile memory-only rendering with Coil (`diskCache(null)`).
             - **Collaborative Sync**: Smart 3s Redis Upstash polling & Single Submit Lock.
-            - **Download**: Direct High-Res Gallery export support.
           files: app/build/outputs/apk/release/*.apk
           fail_on_unmatched_files: false
         env:

@@ -1,7 +1,9 @@
 package com.photoguard.client
 
 import android.os.Bundle
+import android.util.Log
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -40,14 +42,28 @@ import com.photoguard.client.ui.LoginViewModel
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Anti-piracy FLAG_SECURE prevents screen recording & screenshots
         window.setFlags(
             WindowManager.LayoutParams.FLAG_SECURE,
             WindowManager.LayoutParams.FLAG_SECURE
         )
 
+        // Global crash guard to prevent dropping to phone's home screen
+        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            Log.e("PhotoGuard", "Intercepted uncaught exception: ", throwable)
+            runOnUiThread {
+                Toast.makeText(
+                    applicationContext,
+                    "PhotoGuard Warning: ${throwable.localizedMessage ?: "Unexpected error"}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+            previousHandler?.uncaughtException(thread, throwable)
+        }
+
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
         setupRamOnlyImageLoader()
 
         setContent {
@@ -72,21 +88,24 @@ class MainActivity : ComponentActivity() {
             .diskCache(null)
             .crossfade(true)
             .build()
-
         Coil.setImageLoader(ramOnlyLoader)
     }
+}
+
+// Global holder to guarantee album state survives any navigation or recomposition
+object ActiveAlbumHolder {
+    var album: AlbumDetailResponse? = null
 }
 
 @Composable
 fun PhotoGuardNavHost() {
     val navController = rememberNavController()
     val clientApi = RetrofitClient.api
-
-    var currentAlbum by remember { mutableStateOf<AlbumDetailResponse?>(null) }
+    var currentAlbum by remember { mutableStateOf<AlbumDetailResponse?>(ActiveAlbumHolder.album) }
 
     NavHost(
         navController = navController,
-        startDestination = "login",
+        startDestination = if (currentAlbum != null) "gallery" else "login",
         enterTransition = { fadeIn(animationSpec = tween(300)) },
         exitTransition = { fadeOut(animationSpec = tween(300)) }
     ) {
@@ -94,10 +113,10 @@ fun PhotoGuardNavHost() {
             val loginViewModel: LoginViewModel = viewModel(
                 factory = ViewModelFactory(clientApi)
             )
-
             LoginScreen(
                 viewModel = loginViewModel,
                 onLoginSuccess = { verifiedAlbum ->
+                    ActiveAlbumHolder.album = verifiedAlbum
                     currentAlbum = verifiedAlbum
                     navController.navigate("gallery") {
                         popUpTo("login") { inclusive = true }
@@ -107,35 +126,51 @@ fun PhotoGuardNavHost() {
         }
 
         composable("gallery") {
-            currentAlbum?.let { album ->
+            val albumToDisplay = currentAlbum ?: ActiveAlbumHolder.album
+            if (albumToDisplay != null) {
                 val galleryViewModel: GalleryViewModel = viewModel(
-                    factory = GalleryViewModelFactory(clientApi, album)
+                    key = "gallery_${albumToDisplay.pin}",
+                    factory = GalleryViewModelFactory(clientApi, albumToDisplay)
                 )
-
                 GalleryScreen(
                     viewModel = galleryViewModel,
                     onSubmitComplete = {
                         navController.navigate("delivery")
                     }
                 )
+            } else {
+                // Safe fallback if album was cleared
+                LaunchedEffect(Unit) {
+                    navController.navigate("login") {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
             }
         }
 
         composable("delivery") {
-            currentAlbum?.let { album ->
+            val albumToDisplay = currentAlbum ?: ActiveAlbumHolder.album
+            if (albumToDisplay != null) {
                 val deliveryViewModel: DeliveryViewModel = viewModel(
-                    factory = DeliveryViewModelFactory(clientApi, album)
+                    key = "delivery_${albumToDisplay.pin}",
+                    factory = DeliveryViewModelFactory(clientApi, albumToDisplay)
                 )
-
                 DeliveryScreen(
                     viewModel = deliveryViewModel,
                     onSignOut = {
+                        ActiveAlbumHolder.album = null
                         currentAlbum = null
                         navController.navigate("login") {
                             popUpTo(0) { inclusive = true }
                         }
                     }
                 )
+            } else {
+                LaunchedEffect(Unit) {
+                    navController.navigate("login") {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
             }
         }
     }

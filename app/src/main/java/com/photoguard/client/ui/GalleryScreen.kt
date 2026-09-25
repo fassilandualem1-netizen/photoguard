@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,11 +22,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
-import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -49,8 +50,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -62,12 +61,11 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -108,7 +106,7 @@ fun parseBrandAccentColor(hexColor: String?): Color {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GalleryScreen(
     viewModel: GalleryViewModel,
@@ -119,12 +117,14 @@ fun GalleryScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Step state: 1 = All Proofs, 2 = Review Selected Only
-    var currentStep by remember { mutableStateOf(1) }
+    var currentStep by remember { mutableIntStateOf(1) }
 
     var showConfirmDialog by remember { mutableStateOf(false) }
     var showSignOutDialog by remember { mutableStateOf(false) }
     var activeEditingMedia by remember { mutableStateOf<MediaItemResponse?>(null) }
-    var fullScreenMedia by remember { mutableStateOf<MediaItemResponse?>(null) }
+
+    // Full screen horizontal pager index (-1 means lightbox is closed)
+    var fullScreenInitialIndex by remember { mutableIntStateOf(-1) }
 
     val brandAccent = remember(uiState.brandColorHex) {
         parseBrandAccentColor(uiState.brandColorHex)
@@ -153,8 +153,6 @@ fun GalleryScreen(
                 currentStep = currentStep,
                 selectedCount = uiState.selectedCount,
                 totalCount = uiState.totalCount,
-                isLocked = uiState.isLocked,
-                isSyncing = uiState.isSyncing,
                 onBackToStep1 = { currentStep = 1 },
                 onSignOutClick = { showSignOutDialog = true }
             )
@@ -182,7 +180,7 @@ fun GalleryScreen(
                                     color = Color.White
                                 )
                                 Text(
-                                    text = "Tap hearts to choose your proofs",
+                                    text = "Tap hearts or swipe to pick proofs",
                                     fontSize = 10.sp,
                                     color = Color(0xFF94A3B8)
                                 )
@@ -302,17 +300,17 @@ fun GalleryScreen(
                         verticalItemSpacing = 8.dp,
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        items(
+                        itemsIndexed(
                             items = uiState.mediaItems,
-                            key = { it.id }
-                        ) { media ->
+                            key = { _, item -> item.id }
+                        ) { index, media ->
                             GalleryItem(
                                 media = media,
                                 brandAccent = brandAccent,
                                 isLocked = uiState.isLocked,
                                 onToggleSelect = { viewModel.toggleSelect(media.id) },
                                 onEditNote = { activeEditingMedia = media },
-                                onOpenFullScreen = { fullScreenMedia = media }
+                                onOpenFullScreen = { fullScreenInitialIndex = index }
                             )
                         }
                     }
@@ -377,16 +375,20 @@ fun GalleryScreen(
                             verticalItemSpacing = 8.dp,
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            items(
+                            itemsIndexed(
                                 items = selectedItems,
-                                key = { it.id }
-                            ) { media ->
+                                key = { _, item -> item.id }
+                            ) { index, media ->
                                 ReviewItemCard(
                                     media = media,
                                     brandAccent = brandAccent,
                                     onRemove = { viewModel.toggleSelect(media.id) },
                                     onEditNote = { activeEditingMedia = media },
-                                    onOpenFullScreen = { fullScreenMedia = media }
+                                    onOpenFullScreen = {
+                                        // Find index in main list to swipe through seamlessly
+                                        val mainIdx = uiState.mediaItems.indexOfFirst { it.id == media.id }
+                                        fullScreenInitialIndex = if (mainIdx != -1) mainIdx else index
+                                    }
                                 )
                             }
                         }
@@ -460,14 +462,19 @@ fun GalleryScreen(
         }
     }
 
-    // Full Screen Lightbox (Instagram / Pinterest Full Resolution Viewer)
-    fullScreenMedia?.let { media ->
+    // FULL SCREEN HORIZONTAL PAGER LIGHTBOX (Instagram / Google Photos Swipe Experience)
+    if (fullScreenInitialIndex in uiState.mediaItems.indices) {
+        val pagerState = rememberPagerState(
+            initialPage = fullScreenInitialIndex,
+            pageCount = { uiState.mediaItems.size }
+        )
+
         Dialog(
-            onDismissRequest = { fullScreenMedia = null },
+            onDismissRequest = { fullScreenInitialIndex = -1 },
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
                 dismissOnBackPress = true,
-                dismissOnClickOutside = true
+                dismissOnClickOutside = false
             )
         ) {
             Box(
@@ -475,35 +482,48 @@ fun GalleryScreen(
                     .fillMaxSize()
                     .background(Color.Black)
             ) {
-                val context = LocalContext.current
-                val fullRequest = remember(media.url) {
-                    ImageRequest.Builder(context)
-                        .data(media.url)
-                        .crossfade(true)
-                        .precision(Precision.EXACT)
-                        .diskCachePolicy(CachePolicy.DISABLED)
-                        .memoryCachePolicy(CachePolicy.ENABLED)
-                        .build()
+                val currentMedia = uiState.mediaItems.getOrNull(pagerState.currentPage)
+
+                // The Horizontal Pager allows effortless left/right swiping without exiting
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    key = { page -> uiState.mediaItems[page].id }
+                ) { page ->
+                    val media = uiState.mediaItems[page]
+                    val context = LocalContext.current
+                    val fullRequest = remember(media.url) {
+                        ImageRequest.Builder(context)
+                            .data(media.url)
+                            .crossfade(true)
+                            .precision(Precision.EXACT)
+                            .diskCachePolicy(CachePolicy.DISABLED)
+                            .memoryCachePolicy(CachePolicy.ENABLED)
+                            .build()
+                    }
+
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            model = fullRequest,
+                            contentDescription = media.filename,
+                            contentScale = ContentScale.Fit,
+                            imageLoader = context.imageLoader,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
 
-                AsyncImage(
-                    model = fullRequest,
-                    contentDescription = media.filename,
-                    contentScale = ContentScale.Fit,
-                    imageLoader = context.imageLoader,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clickable { fullScreenMedia = null }
-                )
-
-                // Top control bar
+                // Top control bar showing Position Counter ("5 of 45")
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.TopCenter)
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(Color(0xCC000000), Color.Transparent)
+                                colors = listOf(Color(0xEE000000), Color.Transparent)
                             )
                         )
                         .padding(horizontal = 16.dp, vertical = 24.dp),
@@ -511,7 +531,7 @@ fun GalleryScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
-                        onClick = { fullScreenMedia = null },
+                        onClick = { fullScreenInitialIndex = -1 },
                         modifier = Modifier
                             .size(40.dp)
                             .background(Color(0x66000000), CircleShape)
@@ -523,64 +543,96 @@ fun GalleryScreen(
                         )
                     }
 
-                    Text(
-                        text = media.filename ?: "Photo",
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false).padding(horizontal = 12.dp)
-                    )
-
-                    // Toggle selection directly from full screen view
-                    IconButton(
-                        onClick = {
-                            viewModel.toggleSelect(media.id)
-                            fullScreenMedia = media.copy(isSelected = !media.isSelected)
-                        },
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(
-                                if (media.isSelected) brandAccent else Color(0x66000000),
-                                CircleShape
-                            )
-                    ) {
-                        Icon(
-                            imageVector = if (media.isSelected) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = "Favorite",
-                            tint = Color.White
+                    // Elegant Position Counter & Filename
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "${pagerState.currentPage + 1} of ${uiState.mediaItems.size}",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
                         )
+                        currentMedia?.filename?.let { fname ->
+                            Text(
+                                text = fname,
+                                color = Color(0xFF94A3B8),
+                                fontSize = 10.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    // Toggle selection directly from full screen swipe view
+                    if (currentMedia != null) {
+                        IconButton(
+                            onClick = {
+                                viewModel.toggleSelect(currentMedia.id)
+                            },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(
+                                    if (currentMedia.isSelected) brandAccent else Color(0x66000000),
+                                    CircleShape
+                                )
+                        ) {
+                            Icon(
+                                imageVector = if (currentMedia.isSelected) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = "Favorite",
+                                tint = Color.White
+                            )
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.size(40.dp))
                     }
                 }
 
-                // Bottom notes overlay
-                if (!media.clientNotes.isNullOrBlank()) {
+                // Bottom notes overlay for current item
+                if (currentMedia != null) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.BottomCenter)
                             .background(
                                 Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, Color(0xEE000000))
+                                    colors = listOf(Color.Transparent, Color(0xF5000000))
                                 )
                             )
                             .padding(horizontal = 20.dp, vertical = 24.dp)
                     ) {
                         Column {
-                            Text(
-                                text = "Retouching Instruction:",
-                                color = Color(0xFF94A3B8),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = media.clientNotes,
-                                color = Color(0xFFF1F5F9),
-                                fontSize = 13.sp,
-                                lineHeight = 18.sp
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Retouching Instruction:",
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+
+                                TextButton(
+                                    onClick = { activeEditingMedia = currentMedia }
+                                ) {
+                                    Text(
+                                        text = if (currentMedia.clientNotes.isNullOrBlank()) "+ Add Note" else "Edit Note",
+                                        color = brandAccent,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            if (!currentMedia.clientNotes.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = currentMedia.clientNotes,
+                                    color = Color(0xFFF1F5F9),
+                                    fontSize = 13.sp,
+                                    lineHeight = 18.sp
+                                )
+                            }
                         }
                     }
                 }
@@ -668,8 +720,6 @@ fun StudioBrandedTopBar(
     currentStep: Int,
     selectedCount: Int,
     totalCount: Int,
-    isLocked: Boolean,
-    isSyncing: Boolean,
     onBackToStep1: () -> Unit,
     onSignOutClick: () -> Unit
 ) {

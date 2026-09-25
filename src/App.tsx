@@ -68,8 +68,23 @@ export default function App() {
   // 2-Step Review State: 1 = All Proofs, 2 = Review Selected Only
   const [simulatorStep, setSimulatorStep] = useState<1 | 2>(1);
 
-  // Full-screen Instagram lightbox view state
-  const [fullScreenPhoto, setFullScreenPhoto] = useState<MediaItem | null>(null);
+  // Full-screen Instagram/Google Photos lightbox swipe state
+  const [fullScreenIndex, setFullScreenIndex] = useState<number | null>(null);
+  const fullScreenPhoto = fullScreenIndex !== null && currentAlbum ? currentAlbum.media_items[fullScreenIndex] || null : null;
+
+  const handlePrevPhoto = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (fullScreenIndex !== null && fullScreenIndex > 0) {
+      setFullScreenIndex(fullScreenIndex - 1);
+    }
+  };
+
+  const handleNextPhoto = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (fullScreenIndex !== null && currentAlbum && fullScreenIndex < currentAlbum.media_items.length - 1) {
+      setFullScreenIndex(fullScreenIndex + 1);
+    }
+  };
 
   // Note dialog state
   const [activeNotePhoto, setActiveNotePhoto] = useState<MediaItem | null>(null);
@@ -678,19 +693,42 @@ export default function App() {
                 <div className="w-8 h-1 bg-slate-900 rounded-full"></div>
               </div>
 
-              {/* Full-Screen Instagram-Style Lightbox Modal inside Simulator */}
-              {fullScreenPhoto && (
-                <div className="absolute inset-0 z-50 bg-black flex flex-col justify-between animate-fadeIn">
-                  <div className="p-4 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent">
+              {/* Full-Screen Instagram/Google Photos Swipe Lightbox Modal */}
+              {fullScreenPhoto && fullScreenIndex !== null && currentAlbum && (
+                <div 
+                  className="absolute inset-0 z-50 bg-black flex flex-col justify-between animate-fadeIn select-none"
+                  onTouchStart={(e) => {
+                    (window as any).__touchStartX = e.touches[0].clientX;
+                  }}
+                  onTouchEnd={(e) => {
+                    const startX = (window as any).__touchStartX;
+                    if (startX !== undefined) {
+                      const diff = e.changedTouches[0].clientX - startX;
+                      if (diff > 50) handlePrevPhoto(); // Swiped right -> prev
+                      if (diff < -50) handleNextPhoto(); // Swiped left -> next
+                    }
+                  }}
+                >
+                  {/* Top Bar with Position Counter & Filename */}
+                  <div className="p-3.5 flex items-center justify-between bg-gradient-to-b from-black/90 via-black/60 to-transparent z-10">
                     <button
-                      onClick={() => setFullScreenPhoto(null)}
+                      onClick={() => setFullScreenIndex(null)}
                       className="p-2 rounded-full bg-black/60 text-white hover:bg-black/90 transition"
+                      title="Close"
                     >
-                      <X className="w-5 h-5" />
+                      <X className="w-4 h-4" />
                     </button>
-                    <span className="text-xs font-semibold text-white truncate max-w-[200px]">
-                      {fullScreenPhoto.filename}
-                    </span>
+
+                    {/* Counter & Filename */}
+                    <div className="text-center">
+                      <span className="text-xs font-bold text-white block">
+                        {fullScreenIndex + 1} of {currentAlbum.media_items.length}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono truncate max-w-[140px] block">
+                        {fullScreenPhoto.filename}
+                      </span>
+                    </div>
+
                     <button
                       onClick={() => handleToggleSelect(fullScreenPhoto.id)}
                       className={`p-2 rounded-full transition ${
@@ -698,26 +736,51 @@ export default function App() {
                           ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/50'
                           : 'bg-black/60 text-white/80 hover:text-white'
                       }`}
+                      title="Select"
                     >
-                      <Heart className={`w-5 h-5 ${fullScreenPhoto.is_selected ? 'fill-current' : ''}`} />
+                      <Heart className={`w-4 h-4 ${fullScreenPhoto.is_selected ? 'fill-current' : ''}`} />
                     </button>
                   </div>
 
-                  <div className="flex-1 flex items-center justify-center p-2 overflow-hidden">
+                  {/* Image Display with Left/Right Navigation Chevron Controls */}
+                  <div className="flex-1 relative flex items-center justify-center p-2 overflow-hidden">
+                    {/* Previous Photo Button */}
+                    {fullScreenIndex > 0 && (
+                      <button
+                        onClick={handlePrevPhoto}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white hover:bg-black/80 z-20 transition"
+                        title="Previous photo"
+                      >
+                        <ArrowLeft className="w-5 h-5" />
+                      </button>
+                    )}
+
                     <img
                       src={fullScreenPhoto.url}
                       alt={fullScreenPhoto.filename}
-                      className="max-h-full max-w-full object-contain select-none"
+                      className="max-h-full max-w-full object-contain select-none transition-all duration-200"
                     />
+
+                    {/* Next Photo Button */}
+                    {fullScreenIndex < currentAlbum.media_items.length - 1 && (
+                      <button
+                        onClick={handleNextPhoto}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white hover:bg-black/80 z-20 transition"
+                        title="Next photo"
+                      >
+                        <ArrowLeft className="w-5 h-5 rotate-180" />
+                      </button>
+                    )}
                   </div>
 
-                  <div className="p-4 bg-gradient-to-t from-black/95 via-black/80 to-transparent space-y-3">
+                  {/* Bottom Bar: Client Notes & Selection Toggle */}
+                  <div className="p-3.5 bg-gradient-to-t from-black/95 via-black/80 to-transparent space-y-2.5 z-10">
                     {fullScreenPhoto.client_notes && (
-                      <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-emerald-300 flex items-start gap-2">
-                        <MessageSquare className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                        <div>
-                          <span className="font-semibold block text-[10px] text-slate-400">Client Note:</span>
-                          <span>{fullScreenPhoto.client_notes}</span>
+                      <div className="p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-emerald-300 flex items-start gap-2">
+                        <MessageSquare className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                        <div className="truncate">
+                          <span className="font-semibold block text-[9px] text-slate-400">Retouching Note:</span>
+                          <span className="text-[11px]">{fullScreenPhoto.client_notes}</span>
                         </div>
                       </div>
                     )}
@@ -728,28 +791,27 @@ export default function App() {
                           setActiveNotePhoto(fullScreenPhoto);
                           setTempNote(fullScreenPhoto.client_notes || '');
                         }}
-                        className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs flex items-center justify-center gap-1.5 transition"
+                        className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs flex items-center justify-center gap-1.5 transition"
                       >
-                        <MessageSquare className="w-4 h-4" />
-                        <span>{fullScreenPhoto.client_notes ? 'Edit Note' : 'Add Retouch Note'}</span>
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>{fullScreenPhoto.client_notes ? 'Edit Note' : 'Add Note'}</span>
                       </button>
 
                       <button
                         onClick={() => handleToggleSelect(fullScreenPhoto.id)}
-                        className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition ${
+                        className={`flex-1 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition ${
                           fullScreenPhoto.is_selected
-                            ? 'bg-rose-600 text-white'
+                            ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
                             : 'bg-indigo-600 hover:bg-indigo-500 text-white'
                         }`}
                       >
-                        <Heart className={`w-4 h-4 ${fullScreenPhoto.is_selected ? 'fill-current' : ''}`} />
+                        <Heart className={`w-3.5 h-3.5 ${fullScreenPhoto.is_selected ? 'fill-current' : ''}`} />
                         <span>{fullScreenPhoto.is_selected ? 'Selected' : 'Select Photo'}</span>
                       </button>
                     </div>
                   </div>
                 </div>
               )}
-
               {/* Note Dialog Modal inside Simulator */}
               {activeNotePhoto && (
                 <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -967,10 +1029,10 @@ export default function App() {
                     {simulatorStep === 1 && (
                       <div className="flex-1 p-3 overflow-y-auto">
                         <div className="grid grid-cols-2 gap-2.5 pb-20">
-                          {currentAlbum.media_items.map((photo) => (
+                          {currentAlbum.media_items.map((photo, idx) => (
                             <div
                               key={photo.id}
-                              onClick={() => setFullScreenPhoto(photo)}
+                              onClick={() => setFullScreenIndex(idx)}
                               className={`group relative rounded-xl overflow-hidden cursor-pointer border transition-all ${
                                 photo.is_selected
                                   ? 'border-indigo-500 ring-2 ring-indigo-500/30'
@@ -1059,7 +1121,7 @@ export default function App() {
                                 <img
                                   src={photo.thumbnail_url || photo.url}
                                   alt={photo.filename}
-                                  onClick={() => setFullScreenPhoto(photo)}
+                                  onClick={() => setFullScreenIndex(idx)}
                                   className="w-full h-32 object-cover cursor-pointer"
                                 />
 
@@ -1129,42 +1191,142 @@ export default function App() {
                     </div>
                   </div>
                 )}
-                {/* 3. Delivery Screen */}
+                {/* 3. Delivery Screen with Studio Contacts & Social Links */}
                 {screen === 'delivery' && currentAlbum && (
-                  <div className="flex-1 flex flex-col justify-between p-6 text-center">
-                    <div className="my-auto space-y-4">
-                      <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                        <Lock className="w-8 h-8" />
+                  <div className="flex-1 flex flex-col justify-between p-5 text-center overflow-y-auto">
+                    <div className="space-y-4 my-auto">
+                      <div className="w-14 h-14 mx-auto rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                        <Lock className="w-7 h-7" />
                       </div>
-                      <h3 className="text-xl font-bold text-white tracking-tight">Selections Finalized!</h3>
-                      <p className="text-xs text-slate-400 max-w-[260px] mx-auto leading-relaxed">
-                        Your photo choices have been transmitted directly to the studio. Your photographer is now working on high-end color grading and retouching.
-                      </p>
+                      <div>
+                        <h3 className="text-lg font-bold text-white tracking-tight">Selections Finalized!</h3>
+                        <p className="text-[11px] text-slate-400 max-w-[260px] mx-auto leading-relaxed mt-1">
+                          Your photo choices have been transmitted directly to the studio. Your photographer is now working on high-end color grading and retouching.
+                        </p>
+                      </div>
 
-                      <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-left space-y-2 text-xs">
+                      {/* Shoot Summary Box */}
+                      <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 text-left space-y-2 text-xs">
                         <div className="flex justify-between text-slate-400">
-                          <span>Shoot Title:</span>
-                          <span className="text-white font-medium">{currentAlbum.title}</span>
+                          <span>Studio:</span>
+                          <span className="text-white font-medium">
+                            {currentAlbum.photographer_name || currentAlbum.creator_name || 'PhotoGuard Studio'}
+                          </span>
                         </div>
                         <div className="flex justify-between text-slate-400">
-                          <span>Selected Photos:</span>
+                          <span>Selected Proofs:</span>
                           <span className="text-emerald-400 font-bold">
                             {currentAlbum.media_items.filter(m => m.is_selected).length}
                           </span>
                         </div>
                         <div className="flex justify-between text-slate-400">
-                          <span>Status:</span>
-                          <span className="text-amber-400 font-semibold">In Retouching</span>
+                          <span>Workflow Status:</span>
+                          <span className="text-amber-400 font-semibold">In Studio Retouching</span>
+                        </div>
+                      </div>
+
+                      {/* Studio Official Contacts & Social Channels */}
+                      <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 text-left space-y-2.5">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Official Studio Contacts & Channels
+                        </span>
+
+                        <div className="space-y-1.5">
+                          {/* Direct Phone Call */}
+                          <a
+                            href={currentAlbum.contact_phone ? `tel:${currentAlbum.contact_phone}` : 'tel:+251911234567'}
+                            className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800/80 transition text-xs group"
+                          >
+                            <div className="flex items-center gap-2 text-slate-300 group-hover:text-white">
+                              <span className="text-emerald-400">📞</span>
+                              <span className="font-medium">Direct Phone Call</span>
+                            </div>
+                            <span className="text-[11px] text-indigo-400 font-mono">
+                              {currentAlbum.contact_phone || '+251 91 123 4567'}
+                            </span>
+                          </a>
+
+                          {/* Telegram Channel / Direct Chat */}
+                          <a
+                            href={currentAlbum.telegram_url || 'https://t.me/photoguard'}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800/80 transition text-xs group"
+                          >
+                            <div className="flex items-center gap-2 text-slate-300 group-hover:text-white">
+                              <span className="text-sky-400">✈️</span>
+                              <span className="font-medium">Telegram Channel</span>
+                            </div>
+                            <span className="text-[11px] text-sky-400">Chat ➔</span>
+                          </a>
+
+                          {/* Instagram Portfolio */}
+                          <a
+                            href="https://instagram.com"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800/80 transition text-xs group"
+                          >
+                            <div className="flex items-center gap-2 text-slate-300 group-hover:text-white">
+                              <span className="text-pink-400">📸</span>
+                              <span className="font-medium">Instagram Portfolio</span>
+                            </div>
+                            <span className="text-[11px] text-pink-400">Follow ➔</span>
+                          </a>
+
+                          {/* TikTok Studio Channel */}
+                          <a
+                            href="https://tiktok.com"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800/80 transition text-xs group"
+                          >
+                            <div className="flex items-center gap-2 text-slate-300 group-hover:text-white">
+                              <span className="text-cyan-400">🎵</span>
+                              <span className="font-medium">TikTok Behind-the-Scenes</span>
+                            </div>
+                            <span className="text-[11px] text-cyan-400">Watch ➔</span>
+                          </a>
+
+                          {/* YouTube Channel */}
+                          <a
+                            href="https://youtube.com"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800/80 transition text-xs group"
+                          >
+                            <div className="flex items-center gap-2 text-slate-300 group-hover:text-white">
+                              <span className="text-red-400">▶️</span>
+                              <span className="font-medium">YouTube Channel</span>
+                            </div>
+                            <span className="text-[11px] text-red-400">Subscribe ➔</span>
+                          </a>
                         </div>
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => setScreen('gallery')}
-                      className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold text-xs border border-slate-800 transition"
-                    >
-                      Review My Selections
-                    </button>
+                    <div className="pt-3 space-y-2">
+                      <button
+                        onClick={() => {
+                          setScreen('gallery');
+                          setSimulatorStep(2);
+                        }}
+                        className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-semibold text-xs border border-slate-800 transition"
+                      >
+                        Review My Selections
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setScreen('login');
+                          setPin('');
+                          setCurrentAlbum(null);
+                        }}
+                        className="w-full py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-medium border border-rose-500/20 transition"
+                      >
+                        Sign Out of Album
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

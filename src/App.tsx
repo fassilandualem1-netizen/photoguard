@@ -1,4 +1,59 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component, ErrorInfo, ReactNode } from 'react';
+
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("ErrorBoundary caught:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
+          <div className="bg-slate-900 border border-red-500/30 rounded-3xl p-8 max-w-lg w-full text-center space-y-4 shadow-2xl">
+            <div className="w-16 h-16 rounded-2xl bg-red-500/10 text-red-400 flex items-center justify-center mx-auto text-2xl font-bold">
+              ⚠️
+            </div>
+            <h2 className="text-xl font-bold">Something went wrong</h2>
+            <p className="text-xs text-slate-400">
+              {this.state.error?.message || "An unexpected error occurred while rendering the dashboard."}
+            </p>
+            <button
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                window.location.reload();
+              }}
+              className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-xs shadow-lg transition"
+            >
+              Reload Dashboard
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 import {
   Smartphone, Download, CheckCircle2, Lock, Sparkles, RefreshCw,
   ExternalLink, Heart, MessageSquare, AlertTriangle, ArrowLeft,
@@ -81,7 +136,7 @@ export default function App() {
 
   const handleNextPhoto = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (fullScreenIndex !== null && currentAlbum && fullScreenIndex < currentAlbum.media_items.length - 1) {
+    if (fullScreenIndex !== null && currentAlbum && fullScreenIndex < (currentAlbum?.media_items || []).length - 1) {
       setFullScreenIndex(fullScreenIndex + 1);
     }
   };
@@ -209,7 +264,7 @@ export default function App() {
   // Real call to update photo selection
   const handleToggleSelect = async (photoId: number) => {
     if (!currentAlbum || currentAlbum.is_locked) return;
-    const target = currentAlbum.media_items.find(m => m.id === photoId);
+    const target = (currentAlbum?.media_items || []).find(m => m.id === photoId);
     if (!target) return;
     const nextSelected = !target.is_selected;
 
@@ -283,7 +338,7 @@ export default function App() {
   // Direct Ingest Generator for Professional Editing Suites
   const getSelectedItems = () => {
     if (!currentAlbum) return [];
-    const selected = currentAlbum.media_items.filter(m => m.is_selected);
+    const selected = (currentAlbum?.media_items || []).filter(m => m.is_selected);
     return selected.length > 0 ? selected : currentAlbum.media_items;
   };
 
@@ -603,7 +658,7 @@ export default function App() {
                       <h3 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
                         <span>Retouch Order Sheet & Studio Job Cards</span>
                         <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-xs font-mono font-bold">
-                          {currentAlbum.media_items.filter(m => m.is_selected).length} Selected for Edit
+                          {(currentAlbum?.media_items || []).filter(m => m.is_selected).length} Selected for Edit
                         </span>
                       </h3>
                     </div>
@@ -732,7 +787,7 @@ export default function App() {
                 {/* VIEW 2: Compact Proofs Grid */}
                 {viewMode === 'grid' && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-                    {currentAlbum.media_items.map(photo => (
+                    {(currentAlbum?.media_items || []).map(photo => (
                       <div
                         key={photo.id}
                         onClick={() => setActiveJobSheetPhoto(photo)}
@@ -940,7 +995,7 @@ export default function App() {
                     {/* Counter & Filename */}
                     <div className="text-center">
                       <span className="text-xs font-bold text-white block">
-                        {fullScreenIndex + 1} of {currentAlbum.media_items.length}
+                        {fullScreenIndex + 1} of {(currentAlbum?.media_items || []).length}
                       </span>
                       <span className="text-[10px] text-slate-400 font-mono truncate max-w-[140px] block">
                         {fullScreenPhoto.filename}
@@ -980,7 +1035,7 @@ export default function App() {
                     />
 
                     {/* Next Photo Button */}
-                    {fullScreenIndex < currentAlbum.media_items.length - 1 && (
+                    {fullScreenIndex < (currentAlbum?.media_items || []).length - 1 && (
                       <button
                         onClick={handleNextPhoto}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white hover:bg-black/80 z-20 transition"
@@ -1223,8 +1278,8 @@ export default function App() {
                           </div>
                           <span className="text-[10px] text-slate-400 block -mt-0.5">
                             {simulatorStep === 1
-                              ? `Proofs (${currentAlbum.media_items.length})`
-                              : `Review Selected (${currentAlbum.media_items.filter(m => m.is_selected).length})`}
+                              ? `Proofs (${(currentAlbum?.media_items || []).length})`
+                              : `Review Selected (${(currentAlbum?.media_items || []).filter(m => m.is_selected).length})`}
                           </span>
                         </div>
                       </div>
@@ -1247,7 +1302,7 @@ export default function App() {
                     {simulatorStep === 1 && (
                       <div className="flex-1 p-3 overflow-y-auto">
                         <div className="grid grid-cols-2 gap-2.5 pb-20">
-                          {currentAlbum.media_items.map((photo, idx) => (
+                          {(currentAlbum?.media_items || []).map((photo, idx) => (
                             <div
                               key={photo.id}
                               onClick={() => setFullScreenIndex(idx)}
@@ -1315,11 +1370,11 @@ export default function App() {
                         <div className="mb-2.5 p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-[11px] text-slate-300">
                           <span>Reviewing chosen photos before submit</span>
                           <span className="font-bold text-indigo-400 font-mono">
-                            {currentAlbum.media_items.filter(m => m.is_selected).length} Selected
+                            {(currentAlbum?.media_items || []).filter(m => m.is_selected).length} Selected
                           </span>
                         </div>
 
-                        {currentAlbum.media_items.filter(m => m.is_selected).length === 0 ? (
+                        {(currentAlbum?.media_items || []).filter(m => m.is_selected).length === 0 ? (
                           <div className="py-16 text-center space-y-3">
                             <p className="text-xs text-slate-500">No photos selected yet.</p>
                             <button
@@ -1331,7 +1386,7 @@ export default function App() {
                           </div>
                         ) : (
                           <div className="grid grid-cols-2 gap-2.5 pb-20">
-                            {currentAlbum.media_items.filter(m => m.is_selected).map((photo) => (
+                            {(currentAlbum?.media_items || []).filter(m => m.is_selected).map((photo) => (
                               <div
                                 key={photo.id}
                                 className="group relative rounded-xl overflow-hidden border border-indigo-500/60 bg-slate-900 shadow-md"
@@ -1381,10 +1436,10 @@ export default function App() {
                       {simulatorStep === 1 ? (
                         <button
                           onClick={() => setSimulatorStep(2)}
-                          disabled={currentAlbum.media_items.filter(m => m.is_selected).length === 0}
+                          disabled={(currentAlbum?.media_items || []).filter(m => m.is_selected).length === 0}
                           className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 font-bold text-xs text-white flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition"
                         >
-                          <span>Review Selected ({currentAlbum.media_items.filter(m => m.is_selected).length})</span>
+                          <span>Review Selected ({(currentAlbum?.media_items || []).filter(m => m.is_selected).length})</span>
                           <span className="text-sm">➔</span>
                         </button>
                       ) : (
@@ -1434,7 +1489,7 @@ export default function App() {
                         <div className="flex justify-between text-slate-400">
                           <span>Selected Proofs:</span>
                           <span className="text-emerald-400 font-bold">
-                            {currentAlbum.media_items.filter(m => m.is_selected).length}
+                            {(currentAlbum?.media_items || []).filter(m => m.is_selected).length}
                           </span>
                         </div>
                         <div className="flex justify-between text-slate-400">

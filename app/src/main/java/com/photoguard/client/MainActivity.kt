@@ -1,5 +1,6 @@
 package com.photoguard.client
 
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
@@ -30,6 +31,7 @@ import androidx.navigation.compose.rememberNavController
 import coil.Coil
 import coil.ImageLoader
 import coil.memory.MemoryCache
+import coil.size.Precision
 import com.photoguard.client.data.model.AlbumDetailResponse
 import com.photoguard.client.network.ClientApi
 import com.photoguard.client.network.RetrofitClient
@@ -79,16 +81,28 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * RAM-Only Image Loader with Perceptual Lossless 4K Rendering
+     * - Bitmap.Config.HARDWARE: Direct GPU rendering, zero RAM memory bloat, pin-sharp vector/text fidelity
+     * - Precision.INEXACT: Fast sub-sampling without glitching or moiré patterns
+     * - crossfade(250): Smooth visual transition without flicker
+     * - allowRgb565(false): Enforces 32-bit true-color depth
+     * - diskCache(null): Strict anti-piracy guarantee (no traces saved to flash storage)
+     */
     private fun setupRamOnlyImageLoader() {
         val ramOnlyLoader = ImageLoader.Builder(this)
             .memoryCache {
                 MemoryCache.Builder(this)
-                    .maxSizePercent(0.35)
+                    .maxSizePercent(0.40)
                     .build()
             }
             .diskCache(null)
-            .crossfade(true)
+            .bitmapConfig(Bitmap.Config.HARDWARE)
+            .allowRgb565(false)
+            .precision(Precision.INEXACT)
+            .crossfade(250)
             .build()
+
         Coil.setImageLoader(ramOnlyLoader)
     }
 }

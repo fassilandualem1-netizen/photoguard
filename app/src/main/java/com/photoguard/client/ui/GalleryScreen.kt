@@ -76,191 +76,32 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.imageLoader
+import coil.request.CachePolicy
 import coil.request.ImageRequest
+import coil.size.Precision
 import com.photoguard.client.data.model.MediaItemResponse
 
 @Composable
 fun GalleryScreen(
     viewModel: GalleryViewModel,
-    onSubmitComplete: () -> Unit = {},
-    modifier: Modifier = Modifier
+    onSubmitComplete: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    var showConfirmDialog by remember { mutableStateOf(false) }
+    var activeEditingMedia by remember { mutableStateOf<MediaItemResponse?>(null) }
+    var fullScreenMedia by remember { mutableStateOf<MediaItemResponse?>(null) }
 
-    LaunchedEffect(uiState.userFeedbackMessage) {
-        uiState.userFeedbackMessage?.let { msg ->
-            snackbarHostState.showSnackbar(msg)
-            viewModel.clearFeedbackMessage()
+    LaunchedEffect(uiState.isSubmitted) {
+        if (uiState.isSubmitted) {
+            onSubmitComplete()
         }
     }
 
-    var selectedMediaForNote by remember { mutableStateOf<MediaItemResponse?>(null) }
-    var tempNoteText by remember { mutableStateOf("") }
-    var fullScreenPhoto by remember { mutableStateOf<MediaItemResponse?>(null) }
-
-    // Dialog for adding notes to photo
-    if (selectedMediaForNote != null) {
-        AlertDialog(
-            onDismissRequest = { selectedMediaForNote = null },
-            title = { Text(text = "Add Retouching Note") },
-            text = {
-                OutlinedTextField(
-                    value = tempNoteText,
-                    onValueChange = { tempNoteText = it },
-                    label = { Text("Your instructions or feedback") },
-                    placeholder = { Text("e.g. Please soften lighting or fix skin") },
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 3
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.updatePhotoNote(selectedMediaForNote!!.id, tempNoteText)
-                    selectedMediaForNote = null
-                }) {
-                    Text("Save Note")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { selectedMediaForNote = null }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-
-    // Instagram/Pinterest style Full-Screen Lightbox View
-    if (fullScreenPhoto != null) {
-        val currentPhoto = uiState.mediaItems.find { it.id == fullScreenPhoto!!.id } ?: fullScreenPhoto!!
-        val context = LocalContext.current
-
-        Dialog(
-            onDismissRequest = { fullScreenPhoto = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black)
-            ) {
-                // High-resolution image (RAM-only pipeline)
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(currentPhoto.url)
-                        .crossfade(true)
-                        .build(),
-                    imageLoader = context.imageLoader,
-                    contentDescription = currentPhoto.filename,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clickable { fullScreenPhoto = null }
-                )
-
-                // Top Controls Bar (Close, Filename)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .align(Alignment.TopCenter),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = { fullScreenPhoto = null },
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.6f))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close full view",
-                            tint = Color.White
-                        )
-                    }
-
-                    Text(
-                        text = currentPhoto.filename ?: "Photo",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White
-                    )
-
-                    Spacer(modifier = Modifier.size(42.dp))
-                }
-
-                // Bottom Action Bar (Select Heart, Add Note)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
-                            )
-                        )
-                        .padding(20.dp)
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        if (!currentPhoto.clientNotes.isNullOrBlank()) {
-                            Text(
-                                text = "📝 Note: ${currentPhoto.clientNotes}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color(0xFF81C784),
-                                modifier = Modifier
-                                    .padding(bottom = 12.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color.Black.copy(alpha = 0.7f))
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                            )
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Note Button
-                            ExtendedFloatingActionButton(
-                                onClick = {
-                                    tempNoteText = currentPhoto.clientNotes ?: ""
-                                    selectedMediaForNote = currentPhoto
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Edit,
-                                        contentDescription = "Edit Note"
-                                    )
-                                },
-                                text = {
-                                    Text(if (currentPhoto.clientNotes.isNullOrBlank()) "Add Note" else "Edit Note")
-                                },
-                                containerColor = Color.DarkGray.copy(alpha = 0.8f),
-                                contentColor = Color.White
-                            )
-
-                            // Heart Selection Button
-                            ExtendedFloatingActionButton(
-                                onClick = {
-                                    viewModel.togglePhotoSelection(currentPhoto.id)
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = if (currentPhoto.isSelected) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                        contentDescription = "Heart Select"
-                                    )
-                                },
-                                text = {
-                                    Text(if (currentPhoto.isSelected) "Selected" else "Select")
-                                },
-                                containerColor = if (currentPhoto.isSelected) Color(0xFFE53935) else MaterialTheme.colorScheme.primary,
-                                contentColor = Color.White
-                            )
-                        }
-                    }
-                }
-            }
+    LaunchedEffect(uiState.errorMessage) {
+        uiState.errorMessage?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            viewModel.clearError()
         }
     }
 
@@ -268,22 +109,18 @@ fun GalleryScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             GalleryTopBar(
-                albumTitle = uiState.album?.title ?: "PhotoGuard Gallery",
-                isLocked = uiState.isLocked,
-                isSyncing = uiState.isSyncing,
+                albumTitle = uiState.albumTitle,
+                pin = uiState.pin,
                 selectedCount = uiState.selectedCount,
-                totalCount = uiState.mediaItems.size
+                totalCount = uiState.totalCount,
+                isLocked = uiState.isLocked,
+                isSyncing = uiState.isSyncing
             )
         },
         floatingActionButton = {
-            AnimatedVisibility(
-                visible = !uiState.isLocked && uiState.mediaItems.isNotEmpty(),
-                enter = scaleIn() + fadeIn(),
-                exit = scaleOut() + fadeOut()
-            ) {
+            if (!uiState.isLocked) {
                 ExtendedFloatingActionButton(
-                    onClick = { viewModel.submitSelections(onSuccess = onSubmitComplete) },
-                    expanded = true,
+                    onClick = { showConfirmDialog = true },
                     icon = {
                         if (uiState.isSubmitting) {
                             CircularProgressIndicator(
@@ -292,141 +129,504 @@ fun GalleryScreen(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = "Submit Selections"
-                            )
+                            Icon(Icons.Default.Check, contentDescription = "Submit Selection")
                         }
                     },
                     text = {
                         Text(
-                            text = if (uiState.isSubmitting) "Locking..."
-                            else "Submit (${uiState.selectedCount})",
+                            text = if (uiState.isSubmitting) "Submitting..." else "Submit Selections (${uiState.selectedCount})",
                             fontWeight = FontWeight.Bold
                         )
                     },
-                    containerColor = if (uiState.selectedCount > 0) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = if (uiState.selectedCount > 0) MaterialTheme.colorScheme.onPrimary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             }
-        },
-        modifier = modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background
-    ) { paddingValues ->
-        BoxWithConstraints(
+        }
+    ) { innerPadding ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(innerPadding)
+                .background(Color(0xFF0F172A))
         ) {
-            val isTablet = maxWidth > 600.dp
-            val gridColumns = if (isTablet) StaggeredGridCells.Fixed(4) else StaggeredGridCells.Fixed(2)
-
-            Column(modifier = Modifier.fillMaxSize()) {
-                AnimatedVisibility(visible = uiState.isLocked) {
-                    LockedBanner()
+            if (uiState.mediaItems.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No proofs uploaded yet.",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 14.sp
+                    )
                 }
-
+            } else {
                 LazyVerticalStaggeredGrid(
-                    columns = gridColumns,
-                    contentPadding = PaddingValues(
-                        start = 12.dp,
-                        end = 12.dp,
-                        top = 12.dp,
-                        bottom = 88.dp
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalItemSpacing = 10.dp,
+                    columns = StaggeredGridCells.Fixed(2),
+                    contentPadding = PaddingValues(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalItemSpacing = 8.dp,
                     modifier = Modifier.fillMaxSize()
                 ) {
                     items(
                         items = uiState.mediaItems,
                         key = { it.id }
-                    ) { item ->
-                        MasonryPhotoCard(
-                            media = item,
+                    ) { media ->
+                        GalleryItem(
+                            media = media,
                             isLocked = uiState.isLocked,
-                            onPhotoClick = { fullScreenPhoto = item },
-                            onToggleSelect = { viewModel.togglePhotoSelection(item.id) },
-                            onEditNote = {
-                                tempNoteText = item.clientNotes ?: ""
-                                selectedMediaForNote = item
-                            }
+                            onToggleSelect = { viewModel.toggleSelect(media.id) },
+                            onEditNote = { activeEditingMedia = media },
+                            onOpenFullScreen = { fullScreenMedia = media }
+                        )
+                    }
+                }
+            }
+
+            // Syncing indicator
+            AnimatedVisibility(
+                visible = uiState.isSyncing,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 8.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xCC1E293B),
+                    contentColor = Color(0xFF38BDF8),
+                    shadowElevation = 4.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sync,
+                            contentDescription = "Syncing",
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = "Syncing with studio...",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            // Locked banner
+            if (uiState.isLocked) {
+                Surface(
+                    color = Color(0xE67F1D1D),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = "Locked",
+                            tint = Color(0xFFFCA5A5),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Album is locked. Selections submitted to photographer.",
+                            color = Color(0xFFFEE2E2),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
             }
         }
     }
+
+    // Full Screen Lightbox (Instagram / Pinterest Full Resolution Viewer)
+    fullScreenMedia?.let { media ->
+        Dialog(
+            onDismissRequest = { fullScreenMedia = null },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+            ) {
+                val context = LocalContext.current
+                val fullRequest = remember(media.url) {
+                    ImageRequest.Builder(context)
+                        .data(media.url)
+                        .crossfade(true)
+                        .precision(Precision.EXACT)
+                        .diskCachePolicy(CachePolicy.DISABLED)
+                        .memoryCachePolicy(CachePolicy.ENABLED)
+                        .build()
+                }
+
+                AsyncImage(
+                    model = fullRequest,
+                    contentDescription = media.filename,
+                    contentScale = ContentScale.Fit,
+                    imageLoader = context.imageLoader,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable { fullScreenMedia = null }
+                )
+
+                // Top control bar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color(0xCC000000), Color.Transparent)
+                            )
+                        )
+                        .padding(horizontal = 16.dp, vertical = 24.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { fullScreenMedia = null },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(Color(0x66000000), CircleShape)
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = Color.White
+                        )
+                    }
+
+                    Text(
+                        text = media.filename,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false).padding(horizontal = 12.dp)
+                    )
+
+                    // Toggle selection directly from full screen view
+                    IconButton(
+                        onClick = {
+                            viewModel.toggleSelect(media.id)
+                            // Keep full screen item updated
+                            fullScreenMedia = media.copy(is_selected = !media.is_selected)
+                        },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(
+                                if (media.is_selected) Color(0xE6E11D48) else Color(0x66000000),
+                                CircleShape
+                            )
+                    ) {
+                        Icon(
+                            imageVector = if (media.is_selected) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "Favorite",
+                            tint = Color.White
+                        )
+                    }
+                }
+
+                // Bottom notes overlay
+                if (!media.client_notes.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(Color.Transparent, Color(0xEE000000))
+                                )
+                            )
+                            .padding(horizontal = 20.dp, vertical = 24.dp)
+                    ) {
+                        Column {
+                            Text(
+                                text = "Retouching Instruction:",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = media.client_notes,
+                                color = Color(0xFFF1F5F9),
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Retouch Note Editor Dialog
+    activeEditingMedia?.let { media ->
+        NoteEditorDialog(
+            initialNote = media.client_notes ?: "",
+            onDismiss = { activeEditingMedia = null },
+            onSave = { note ->
+                viewModel.updateClientNotes(media.id, note)
+                activeEditingMedia = null
+            }
+        )
+    }
+
+    // Submit Confirmation Dialog
+    if (showConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDialog = false },
+            icon = { Icon(Icons.Default.LockClock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("Finalize Album Selections?") },
+            text = {
+                Text(
+                    "You have selected ${uiState.selectedCount} of ${uiState.totalCount} proofs.\n\n" +
+                    "Once submitted, your album will be locked for the photographer to begin editing. " +
+                    "This action cannot be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showConfirmDialog = false
+                        viewModel.submitSelection()
+                    }
+                ) {
+                    Text("Confirm & Submit", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
-private fun GalleryTopBar(
+fun GalleryTopBar(
     albumTitle: String,
-    isLocked: Boolean,
-    isSyncing: Boolean,
+    pin: String,
     selectedCount: Int,
-    totalCount: Int
+    totalCount: Int,
+    isLocked: Boolean,
+    isSyncing: Boolean
 ) {
     Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 2.dp,
-        modifier = Modifier.fillMaxWidth()
+        color = Color(0xFF1E293B),
+        shadowElevation = 6.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = albumTitle,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
+                    text = albumTitle.ifEmpty { "Photo Shoot Proofs" },
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFF8FAFC),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "$selectedCount of $totalCount selected",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "PIN: $pin",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF94A3B8)
                     )
-                    if (isSyncing) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Icon(
-                            imageVector = Icons.Default.Sync,
-                            contentDescription = "Syncing",
-                            modifier = Modifier.size(12.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "• $selectedCount of $totalCount selected",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF38BDF8)
+                    )
+                }
+            }
+
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = if (isLocked) Color(0x33EF4444) else Color(0x3310B981),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isLocked) Color(0x80EF4444) else Color(0x8010B981)
+                )
+            ) {
+                Text(
+                    text = if (isLocked) "LOCKED" else "OPEN",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isLocked) Color(0xFFF87171) else Color(0xFF34D399),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun GalleryItem(
+    media: MediaItemResponse,
+    isLocked: Boolean,
+    onToggleSelect: () -> Unit,
+    onEditNote: () -> Unit,
+    onOpenFullScreen: () -> Unit
+) {
+    val heartColor by animateColorAsState(
+        targetValue = if (media.is_selected) Color(0xFFE11D48) else Color.White,
+        label = "heartColor"
+    )
+
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .border(
+                width = if (media.is_selected) 2.dp else 1.dp,
+                color = if (media.is_selected) Color(0xFFE11D48) else Color(0xFF334155),
+                shape = RoundedCornerShape(14.dp)
+            )
+            .clickable {
+                onOpenFullScreen()
+            }
+    ) {
+        Column {
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val context = LocalContext.current
+                val imageRequest = remember(media.thumbnail_url ?: media.url) {
+                    ImageRequest.Builder(context)
+                        .data(media.thumbnail_url ?: media.url)
+                        .crossfade(true)
+                        .precision(Precision.INEXACT)
+                        .diskCachePolicy(CachePolicy.DISABLED)
+                        .memoryCachePolicy(CachePolicy.ENABLED)
+                        .build()
+                }
+
+                AsyncImage(
+                    model = imageRequest,
+                    contentDescription = media.filename,
+                    contentScale = ContentScale.Crop,
+                    imageLoader = context.imageLoader,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(0.85f)
+                )
+
+                // Top right selection heart button
+                IconButton(
+                    onClick = {
+                        if (!isLocked) onToggleSelect()
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(36.dp)
+                        .background(Color(0x80000000), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = if (media.is_selected) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Select Photo",
+                        tint = heartColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                // Top left full screen tap indicator
+                IconButton(
+                    onClick = onOpenFullScreen,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .size(30.dp)
+                        .background(Color(0x80000000), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ZoomIn,
+                        contentDescription = "Zoom",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                // Bottom left note indicator badge
+                if (!media.client_notes.isNullOrBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xCC059669),
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(6.dp)
+                    ) {
+                        Text(
+                            text = "NOTE",
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                         )
                     }
                 }
             }
 
-            if (isLocked) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "Locked",
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Submitted",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
+            // Note action bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (media.client_notes.isNullOrBlank()) "No instruction" else media.client_notes,
+                    fontSize = 10.sp,
+                    color = if (media.client_notes.isNullOrBlank()) Color(0xFF64748B) else Color(0xFFF1F5F9),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                if (!isLocked) {
+                    IconButton(
+                        onClick = onEditNote,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Edit note",
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 }
             }
         }
@@ -434,164 +634,42 @@ private fun GalleryTopBar(
 }
 
 @Composable
-private fun MasonryPhotoCard(
-    media: MediaItemResponse,
-    isLocked: Boolean,
-    onPhotoClick: () -> Unit,
-    onToggleSelect: () -> Unit,
-    onEditNote: () -> Unit
+fun NoteEditorDialog(
+    initialNote: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
 ) {
-    val context = LocalContext.current
-    val ratio = if (media.id % 3 == 0) 0.75f else if (media.id % 2 == 0) 1.25f else 1.0f
-    val heartColor by animateColorAsState(
-        targetValue = if (media.isSelected) Color(0xFFE53935) else Color.White.copy(alpha = 0.85f),
-        animationSpec = tween(durationMillis = 200),
-        label = "heartColor"
-    )
+    var noteText by remember { mutableStateOf(initialNote) }
 
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onPhotoClick() }
-            .then(
-                if (media.isSelected) {
-                    Modifier.border(2.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
-                } else Modifier
-            )
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(ratio)
-        ) {
-            // RAM-only loaded thumbnail
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(media.thumbnailUrl ?: media.url)
-                    .crossfade(true)
-                    .build(),
-                imageLoader = context.imageLoader,
-                contentDescription = media.filename,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-
-            // Bottom Gradient for readability
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .align(Alignment.BottomCenter)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
-                        )
-                    )
-            )
-
-            // Top-left: Dedicated Retouching Note Badge & Button
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp)
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .clickable(enabled = !isLocked) { onEditNote() },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Add Note",
-                    tint = if (!media.clientNotes.isNullOrBlank()) Color(0xFF4CAF50) else Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            // Top-right: Heart selection button
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .clickable(enabled = !isLocked) { onToggleSelect() },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (media.isSelected) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (media.isSelected) "Deselect" else "Select",
-                    tint = heartColor,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            // Bottom: Notes indicator if client typed instructions
-            if (!media.clientNotes.isNullOrBlank()) {
-                Text(
-                    text = "📝 " + media.clientNotes,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 8.dp, bottom = 6.dp)
-                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                )
-            }
-
-            // Bottom-left: Filename
-            Text(
-                text = media.filename ?: "Photo",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.9f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 8.dp, bottom = 6.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun LockedBanner() {
-    Surface(
-        color = MaterialTheme.colorScheme.errorContainer,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.LockClock,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(10.dp))
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Retouching Instruction") },
+        text = {
             Column {
                 Text(
-                    text = "Album Selections Finalized",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onErrorContainer
+                    "Add instructions for the photographer (e.g., soften lighting, remove background reflection, crop):",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                    text = "This album has been submitted. Selections are locked for editing.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = noteText,
+                    onValueChange = { noteText = it },
+                    placeholder = { Text("Type instruction here...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 4
                 )
             }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(noteText) }) {
+                Text("Save", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
         }
-    }
+    )
 }

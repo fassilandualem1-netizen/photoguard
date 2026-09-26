@@ -592,6 +592,114 @@ export function devApiPlugin(): Plugin {
             }
           }
 
+          // 8.5 Global Broadcasts API
+          if (url.startsWith('/api/v1/broadcasts/active')) {
+            let activeBroadcast: any = null;
+            if (client) {
+              await client.connect();
+              try {
+                await client.query(`
+                  CREATE TABLE IF NOT EXISTS broadcasts (
+                    id SERIAL PRIMARY KEY,
+                    title VARCHAR(255) NOT NULL,
+                    message TEXT NOT NULL,
+                    type VARCHAR(50) DEFAULT 'info',
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                  );
+                `);
+                const q = await client.query('SELECT * FROM broadcasts WHERE is_active = TRUE ORDER BY created_at DESC LIMIT 1');
+                if (q.rows.length > 0) activeBroadcast = q.rows[0];
+              } catch {}
+              await client.end();
+            }
+            return sendJson(res, 200, activeBroadcast);
+          }
+
+          if (url.startsWith('/api/v1/admin/broadcasts')) {
+            // Deactivate: PUT or POST /api/v1/admin/broadcasts/:id/deactivate
+            const deactMatch = url.match(/\/api\/v1\/admin\/broadcasts\/(\d+)\/deactivate/);
+            if (deactMatch && (method === 'PUT' || method === 'POST')) {
+              const bId = parseInt(deactMatch[1], 10);
+              let updated: any = { id: bId, is_active: false };
+              if (client) {
+                await client.connect();
+                try {
+                  const q = await client.query('UPDATE broadcasts SET is_active = FALSE WHERE id = $1 RETURNING *', [bId]);
+                  if (q.rows.length > 0) updated = q.rows[0];
+                } catch {}
+                await client.end();
+              }
+              return sendJson(res, 200, updated);
+            }
+
+            // Create: POST /api/v1/admin/broadcasts
+            if (method === 'POST') {
+              const body = await parseJsonBody(req);
+              const title = (body.title || '').trim();
+              const message = (body.message || '').trim();
+              const bType = (body.type || 'info').toLowerCase();
+              if (!title || !message) {
+                return sendJson(res, 400, { detail: 'Title and message cannot be empty.' });
+              }
+              let newB: any = {
+                id: Date.now(),
+                title,
+                message,
+                type: bType,
+                is_active: true,
+                created_at: new Date().toISOString()
+              };
+              if (client) {
+                await client.connect();
+                try {
+                  await client.query(`
+                    CREATE TABLE IF NOT EXISTS broadcasts (
+                      id SERIAL PRIMARY KEY,
+                      title VARCHAR(255) NOT NULL,
+                      message TEXT NOT NULL,
+                      type VARCHAR(50) DEFAULT 'info',
+                      is_active BOOLEAN DEFAULT TRUE,
+                      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                    );
+                  `);
+                  await client.query('UPDATE broadcasts SET is_active = FALSE WHERE is_active = TRUE');
+                  const q = await client.query(
+                    'INSERT INTO broadcasts (title, message, type, is_active) VALUES ($1, $2, $3, TRUE) RETURNING *',
+                    [title, message, bType]
+                  );
+                  if (q.rows.length > 0) newB = q.rows[0];
+                } catch {}
+                await client.end();
+              }
+              return sendJson(res, 201, newB);
+            }
+
+            // List: GET /api/v1/admin/broadcasts
+            if (method === 'GET') {
+              let allBroadcasts: any[] = [];
+              if (client) {
+                await client.connect();
+                try {
+                  await client.query(`
+                    CREATE TABLE IF NOT EXISTS broadcasts (
+                      id SERIAL PRIMARY KEY,
+                      title VARCHAR(255) NOT NULL,
+                      message TEXT NOT NULL,
+                      type VARCHAR(50) DEFAULT 'info',
+                      is_active BOOLEAN DEFAULT TRUE,
+                      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                    );
+                  `);
+                  const q = await client.query('SELECT * FROM broadcasts ORDER BY created_at DESC LIMIT 50');
+                  allBroadcasts = q.rows;
+                } catch {}
+                await client.end();
+              }
+              return sendJson(res, 200, allBroadcasts);
+            }
+          }
+
           // 8. Albums API
           if (url.startsWith('/api/v1/albums')) {
             if (method === 'GET') {

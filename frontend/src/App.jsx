@@ -1,3 +1,4 @@
+import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
@@ -149,7 +150,8 @@ export function RootRoute() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <GlobalErrorBoundary>
+      <BrowserRouter>
       <Routes>
         {/* Public Login Route */}
         <Route path="/login" element={<LoginRoute />} />
@@ -198,5 +200,6 @@ export default function App() {
         <Route path="*" element={<RootRoute />} />
       </Routes>
     </BrowserRouter>
+    </GlobalErrorBoundary>
   );
 }

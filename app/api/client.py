@@ -6,6 +6,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.exc import SQLAlchemyError
 from app.core.database import get_db
 from app.core.redis import (
+    get_redis,
     get_album_version,
     increment_album_version,
     lock_album_submit,
@@ -282,15 +283,39 @@ def get_client_album_by_pin(
     return build_client_album_response(album, db)
 
 @router.get("/sync/{pin}", response_model=ClientSyncResponse, status_code=status.HTTP_200_OK)
-def sync_album_state(pin: str, db: Session = Depends(get_db)):
+def sync_album_state(
+    pin: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
     """
     Smart Polling endpoint (Upstash Redis).
     Returns current version counter and lock status.
     Mobile app polls this lightweight integer endpoint to detect collaborative changes
     without requiring persistent WebSockets.
     """
-    pin = pin.strip()
-    album = db.query(Album).filter(Album.pin == pin).first()
+    clean_pin = pin.strip()
+    client_ip = get_client_ip(request)
+
+    # Protect backend against aggressive polling flood attacks (Max 120 sync requests/min per IP)
+    client_redis = get_redis()
+    if client_redis:
+        try:
+            poll_key = f"ratelimit:sync_flood:{client_ip}"
+            requests_count = client_redis.incr(poll_key)
+            if requests_count == 1:
+                client_redis.expire(poll_key, 60)
+            elif requests_count > 120:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many polling requests. Slow down your synchronization interval."
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            pass  # Fail open gracefully if Redis has a transient hiccup
+
+    album = db.query(Album).filter(Album.pin == clean_pin).first()
     if not album:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -420,66 +445,70 @@ def submit_album_selection(
     db: Session = Depends(get_db)
 ):
     """
-    Atomic Single-Submit Lock.
-    When any family member/collaborator clicks Submit, this executes Redis setnx.
-    If lock is acquired, updates PostgreSQL Album.is_locked = True and album.submitted_at = func.now().
-    Dispatches asynchronous Telegram alert to photographer if telegram_chat_id is configured.
-    If already locked or expired, returns HTTP 409 Conflict or 403 Forbidden.
+    ACID-Compliant Atomic Single-Submit Lock.
+    Uses PostgreSQL SELECT ... FOR UPDATE row locking combined with Redis SETNX.
+    Guarantees strict single-submission even across multi-worker deployments.
     """
-    pin = pin.strip()
-    album = db.query(Album).filter(Album.pin == pin).first()
-    if not album:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Album with specified PIN not found."
-        )
+    clean_pin = pin.strip()
 
-    # Check expiration engine
-    now_utc = datetime.now(timezone.utc)
-    if album.expires_at is not None:
-        album_expires_utc = (
-            album.expires_at if album.expires_at.tzinfo is not None
-            else album.expires_at.replace(tzinfo=timezone.utc)
-        )
-        if album_expires_utc < now_utc:
-            try:
-                if not album.is_locked:
-                    album.is_locked = True
-                    db.commit()
-            except Exception:
-                db.rollback()
-            lock_album_submit(pin)
+    try:
+        # 1. Acquire exclusive PostgreSQL row-level lock
+        album = db.query(Album).filter(Album.pin == clean_pin).with_for_update().first()
+        if not album:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Album has expired and cannot be submitted."
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Album with specified PIN not found."
             )
 
-    if album.is_locked:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Album has already been submitted and locked by another collaborator."
-        )
+        # 2. Check if already locked inside the serialized transaction
+        if album.is_locked:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Album has already been submitted and locked by another collaborator."
+            )
 
-    # Enforce atomic single-submit lock via Redis setnx
-    lock_acquired = lock_album_submit(pin)
-    if not lock_acquired:
-        try:
-            album.is_locked = True
-            album.submitted_at = func.now()
-            db.commit()
-        except Exception:
-            db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Album was just locked by another family member."
-        )
+        # 3. Check expiration engine
+        now_utc = datetime.now(timezone.utc)
+        if album.expires_at is not None:
+            album_expires_utc = (
+                album.expires_at if album.expires_at.tzinfo is not None
+                else album.expires_at.replace(tzinfo=timezone.utc)
+            )
+            if album_expires_utc < now_utc:
+                try:
+                    album.is_locked = True
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                lock_album_submit(clean_pin)
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Album has expired and cannot be submitted."
+                )
 
-    # Persist lock and submission timestamp in PostgreSQL
-    try:
+        # 4. Enforce atomic single-submit lock via Redis setnx
+        lock_acquired = lock_album_submit(clean_pin)
+        if not lock_acquired:
+            try:
+                album.is_locked = True
+                album.submitted_at = func.now()
+                db.commit()
+            except Exception:
+                db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Album was just locked by another family member."
+            )
+
+        # 5. Persist lock and submission timestamp atomically in PostgreSQL
         album.is_locked = True
         album.submitted_at = func.now()
         db.commit()
         db.refresh(album)
+
+    except HTTPException:
+        db.rollback()
+        raise
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(
@@ -493,10 +522,10 @@ def submit_album_selection(
             detail=f"Unexpected error while submitting album: {str(exc)}"
         )
 
-    # Increment sync version so all polling clients immediately lock their UI
-    increment_album_version(pin)
+    # 6. Increment sync version so all polling clients immediately lock their UI
+    increment_album_version(clean_pin)
 
-    # Dispatch non-blocking Telegram alert to photographer
+    # 7. Dispatch non-blocking Telegram alert to photographer
     if album.photographer and album.photographer.telegram_chat_id:
         background_tasks.add_task(
             notify_photographer_submission,
@@ -507,7 +536,7 @@ def submit_album_selection(
 
     return ClientSubmitResponse(
         message="Album selection submitted successfully. Gallery is now permanently locked.",
-        pin=pin,
+        pin=clean_pin,
         is_locked=True
     )
 

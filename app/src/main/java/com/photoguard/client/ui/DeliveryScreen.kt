@@ -2,6 +2,7 @@ package com.photoguard.client.ui
 
 import android.content.Intent
 import android.net.Uri
+import com.photoguard.client.utils.DeepLinkUtils
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -278,7 +279,7 @@ fun DeliveryScreen(
                     }
                 }
 
-                // Studio Tier: Social Links & Contact Section (Hidden if null)
+                // Studio Tier: Social Links & Contact Section (Strict conditional display)
                 val hasSocialLinks = !uiState.contactPhone.isNullOrBlank() ||
                         !uiState.telegramUrl.isNullOrBlank() ||
                         !uiState.instagramUrl.isNullOrBlank() ||
@@ -287,12 +288,11 @@ fun DeliveryScreen(
 
                 if (hasSocialLinks) {
                     Text(
-                        text = "Connect with ${uiState.photographerName ?: "Your Photographer"}",
+                        text = "Connect with ${uiState.photographerName ?: "Your Studio"}",
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.fillMaxWidth()
                     )
-
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Card(
@@ -306,101 +306,80 @@ fun DeliveryScreen(
                                 .padding(12.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            // 1. Direct Phone Call (Deep link to system dialer)
                             uiState.contactPhone?.takeIf { it.isNotBlank() }?.let { phone ->
                                 SocialLinkRow(
-                                    label = "Call / SMS",
+                                    label = "Direct Call / SMS",
                                     value = phone,
                                     icon = Icons.Default.Phone,
                                     onClick = {
-                                        runCatching {
-                                            val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
-                                            context.startActivity(intent)
-                                        }.onFailure {
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar("Unable to open dialer application.")
-                                            }
+                                        if (!DeepLinkUtils.openDialer(context, phone)) {
+                                            scope.launch { snackbarHostState.showSnackbar("Unable to open phone dialer.") }
                                         }
                                     }
                                 )
                             }
 
+                            // 2. Telegram (Deep link to Telegram app or web)
                             uiState.telegramUrl?.takeIf { it.isNotBlank() }?.let { tg ->
+                                val cleanTg = DeepLinkUtils.cleanHandle(tg, listOf("https://t.me/", "http://t.me/", "t.me/"))
                                 SocialLinkRow(
-                                    label = "Telegram",
-                                    value = tg.removePrefix("https://t.me/").removePrefix("@"),
+                                    label = "Telegram (Direct Chat)",
+                                    value = "@$cleanTg",
                                     icon = Icons.Default.Send,
                                     onClick = {
-                                        runCatching {
-                                            val url = if (tg.startsWith("http")) tg else "https://t.me/$tg"
-                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                            context.startActivity(intent)
-                                        }.onFailure {
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar("Unable to open Telegram link.")
-                                            }
+                                        if (!DeepLinkUtils.openTelegram(context, tg)) {
+                                            scope.launch { snackbarHostState.showSnackbar("Unable to open Telegram.") }
                                         }
                                     }
                                 )
                             }
 
+                            // 3. Instagram (Deep link to Instagram app or web)
                             uiState.instagramUrl?.takeIf { it.isNotBlank() }?.let { insta ->
+                                val cleanInsta = DeepLinkUtils.cleanHandle(insta, listOf("https://instagram.com/", "https://www.instagram.com/", "http://instagram.com/", "instagram.com/"))
                                 SocialLinkRow(
-                                    label = "Instagram",
-                                    value = insta.removePrefix("https://instagram.com/").removePrefix("@"),
+                                    label = "Instagram (Profile)",
+                                    value = "@$cleanInsta",
                                     icon = Icons.Default.Share,
                                     onClick = {
-                                        runCatching {
-                                            val url = if (insta.startsWith("http")) insta else "https://instagram.com/$insta"
-                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                            context.startActivity(intent)
-                                        }.onFailure {
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar("Unable to open Instagram link.")
-                                            }
+                                        if (!DeepLinkUtils.openInstagram(context, insta)) {
+                                            scope.launch { snackbarHostState.showSnackbar("Unable to open Instagram.") }
                                         }
                                     }
                                 )
                             }
 
+                            // 4. TikTok (Deep link to TikTok app or web)
                             uiState.tiktokUrl?.takeIf { it.isNotBlank() }?.let { tiktok ->
+                                val cleanTiktok = DeepLinkUtils.cleanHandle(tiktok, listOf("https://www.tiktok.com/@", "https://tiktok.com/@", "tiktok.com/@"))
                                 SocialLinkRow(
-                                    label = "TikTok",
-                                    value = tiktok.removePrefix("https://tiktok.com/@"),
+                                    label = "TikTok (Studio)",
+                                    value = "@$cleanTiktok",
                                     icon = Icons.Default.Share,
                                     onClick = {
-                                        runCatching {
-                                            val url = if (tiktok.startsWith("http")) tiktok else "https://tiktok.com/@$tiktok"
-                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                            context.startActivity(intent)
-                                        }.onFailure {
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar("Unable to open TikTok link.")
-                                            }
+                                        if (!DeepLinkUtils.openTikTok(context, tiktok)) {
+                                            scope.launch { snackbarHostState.showSnackbar("Unable to open TikTok.") }
                                         }
                                     }
                                 )
                             }
 
+                            // 5. YouTube (Deep link to YouTube app or web)
                             uiState.youtubeUrl?.takeIf { it.isNotBlank() }?.let { yt ->
                                 SocialLinkRow(
-                                    label = "YouTube",
+                                    label = "YouTube (Channel)",
                                     value = "Visit Channel",
                                     icon = Icons.Default.Share,
                                     onClick = {
-                                        runCatching {
-                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(yt))
-                                            context.startActivity(intent)
-                                        }.onFailure {
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar("Unable to open YouTube channel.")
-                                            }
+                                        if (!DeepLinkUtils.openYouTube(context, yt)) {
+                                            scope.launch { snackbarHostState.showSnackbar("Unable to open YouTube.") }
                                         }
                                     }
                                 )
                             }
                         }
                     }
-
                     Spacer(modifier = Modifier.height(24.dp))
                 }
 

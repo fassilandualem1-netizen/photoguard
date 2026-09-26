@@ -4,10 +4,6 @@ import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,7 +25,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggerGridCells
-import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -37,25 +33,29 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContactSupport
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -77,6 +77,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -84,14 +85,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.imageLoader
 import coil.request.ImageRequest
 import com.photoguard.client.data.model.MediaItemResponse
+import com.photoguard.client.utils.DeepLinkUtils
 import kotlinx.coroutines.launch
 
 /**
- * Parses hex color strings safely with a standard studio gold fallback.
+ * Parses hex color strings safely with standard studio gold fallback.
  */
 private fun parseStudioColor(hex: String?, fallback: Color = Color(0xFFF59E0B)): Color {
     if (hex.isNullOrBlank()) return fallback
@@ -117,10 +121,14 @@ private fun getStudioInitials(name: String): String {
 }
 
 /**
- * 2-Step Masonry Gallery Screen with Live Smart Polling (3s) and Single Submit Lock.
+ * PhotoGuard Client Gallery Screen.
  *
- * Step 1: All Photos Gallery (Masonry Grid, Heart Selections, Review Button).
- * Step 2: Selected Photos Only Review (Horizontal Swipe Pager, 4K Display, Notes, Final Submit Lock).
+ * Implements:
+ * 1. Studio Branding with circular logo, verified badge, and dynamic accent colors.
+ * 2. Dedicated Studio Contacts / Social Links with direct deep linking (Phone, Telegram, Instagram, TikTok, YouTube).
+ * 3. Fullscreen Lightbox Pager with horizontal swipe across all photos (Instagram & Google Photos style),
+ *    zero system back gesture conflicts, in-lightbox selection toggle, and notes.
+ * 4. 2-Step Workflow: All Photos Gallery (Step 1) -> Selected Photos Review (Step 2) -> Single Submit Lock.
  */
 @Composable
 fun GalleryScreen(
@@ -133,14 +141,18 @@ fun GalleryScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // 2-Step State: 1 = All Photos Gallery, 2 = Selected Photos Review Pager
+    // 2-Step Navigation: 1 = All Photos Gallery, 2 = Selected Photos Review Pager
     var currentStep by remember { mutableIntStateOf(1) }
+
+    // Fullscreen Lightbox Pager Index (null = closed, Int = current open photo index)
+    var fullscreenLightboxIndex by remember { mutableStateOf<Int?>(null) }
 
     // Dialog States
     var showSignOutDialog by remember { mutableStateOf(false) }
     var showFinalSubmitDialog by remember { mutableStateOf(false) }
+    var showContactsDialog by remember { mutableStateOf(false) }
 
-    // Dynamic Studio Brand Accent Color
+    // Dynamic Studio Accent Color
     val brandColor = remember(uiState.album?.brandColor) {
         parseStudioColor(uiState.album?.brandColor)
     }
@@ -163,7 +175,7 @@ fun GalleryScreen(
         AlertDialog(
             onDismissRequest = { showSignOutDialog = false },
             title = { Text("Sign Out of Gallery", fontWeight = FontWeight.Bold) },
-            text = { Text("Are you sure you want to sign out and return to the PIN login screen?") },
+            text = { Text("Are you sure you want to exit and return to the PIN login screen?") },
             confirmButton = {
                 Button(
                     onClick = {
@@ -224,11 +236,40 @@ fun GalleryScreen(
         )
     }
 
+    // Dedicated Studio Contacts & Social Links Dialog
+    if (showContactsDialog) {
+        StudioContactsDialog(
+            studioName = studioName,
+            studioLogoUrl = studioLogoUrl,
+            brandColor = brandColor,
+            phone = uiState.album?.contactPhone,
+            telegram = uiState.album?.telegramUrl,
+            instagram = uiState.album?.instagramUrl,
+            tiktok = uiState.album?.tiktokUrl,
+            youtube = uiState.album?.youtubeUrl,
+            onDismiss = { showContactsDialog = false },
+            onError = { msg -> scope.launch { snackbarHostState.showSnackbar(msg) } }
+        )
+    }
+
+    // Fullscreen Lightbox Pager Modal (Horizontal Swipe across all photos)
+    if (fullscreenLightboxIndex != null && uiState.mediaItems.isNotEmpty()) {
+        FullscreenLightboxModal(
+            allPhotos = uiState.mediaItems,
+            initialIndex = fullscreenLightboxIndex!!.coerceIn(0, uiState.mediaItems.lastIndex),
+            brandColor = brandColor,
+            isLocked = uiState.isLocked,
+            onDismiss = { fullscreenLightboxIndex = null },
+            onToggleSelect = { mediaId -> viewModel.togglePhotoSelection(mediaId) },
+            onUpdateNotes = { mediaId, notes -> viewModel.updateClientNotes(mediaId, notes) }
+        )
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             if (currentStep == 1) {
-                // Step 1: Studio Branded Top Bar with Circular Logo, Verified Badge, and Sign Out
+                // Step 1: Studio Branded Top Bar with Circular Logo, Verified Badge, Contacts Icon, and Sign Out
                 GalleryTopBar(
                     studioName = studioName,
                     studioLogoUrl = studioLogoUrl,
@@ -238,6 +279,7 @@ fun GalleryScreen(
                     isSyncing = uiState.isSyncing,
                     selectedCount = uiState.selectedCount,
                     totalCount = uiState.mediaItems.size,
+                    onContactsClick = { showContactsDialog = true },
                     onSignOutClick = { showSignOutDialog = true }
                 )
             } else {
@@ -246,42 +288,84 @@ fun GalleryScreen(
                     selectedCount = selectedPhotos.size,
                     studioName = studioName,
                     brandColor = brandColor,
+                    onContactsClick = { showContactsDialog = true },
                     onBackToAllPhotos = { currentStep = 1 },
                     onSignOutClick = { showSignOutDialog = true }
                 )
             }
         },
-        floatingActionButton = {
+        bottomBar = {
             if (currentStep == 1 && !uiState.isLocked && uiState.mediaItems.isNotEmpty()) {
-                // Step 1 Floating Action Button: Review Selected (12) ➔
-                ExtendedFloatingActionButton(
-                    onClick = {
-                        if (uiState.selectedCount > 0) {
-                            currentStep = 2
-                        } else {
-                            scope.launch {
-                                snackbarHostState.showSnackbar("Tap the heart on photos to make selections first.")
-                            }
+                // Bottom Dual-Action Bar: [ 📞 Studio Contacts ]  [ Review Selected (12) ➔ ]
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 6.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Studio Contacts Button (Quick access to call, telegram, instagram, etc.)
+                        OutlinedButton(
+                            onClick = { showContactsDialog = true },
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .weight(0.42f)
+                                .height(50.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            border = ButtonDefaults.outlinedButtonBorder.copy(
+                                brush = Brush.linearGradient(listOf(brandColor.copy(alpha = 0.6f), brandColor))
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Phone,
+                                contentDescription = "Studio Contacts",
+                                tint = brandColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Contacts",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1
+                            )
                         }
-                    },
-                    expanded = true,
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.ArrowForward,
-                            contentDescription = "Review Selected",
-                            tint = if (uiState.selectedCount > 0) Color.Black else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    },
-                    text = {
-                        Text(
-                            text = "Review Selected (${uiState.selectedCount}) ➔",
-                            fontWeight = FontWeight.Bold,
-                            color = if (uiState.selectedCount > 0) Color.Black else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    },
-                    containerColor = if (uiState.selectedCount > 0) brandColor else MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = if (uiState.selectedCount > 0) Color.Black else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+
+                        // Review Selected FAB / Button
+                        Button(
+                            onClick = {
+                                if (uiState.selectedCount > 0) {
+                                    currentStep = 2
+                                } else {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Tap the heart on photos to select favorites first.")
+                                    }
+                                }
+                            },
+                            enabled = !uiState.isLocked,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .weight(0.58f)
+                                .height(50.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (uiState.selectedCount > 0) brandColor else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (uiState.selectedCount > 0) Color.Black else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        ) {
+                            Text(
+                                text = "Review (${uiState.selectedCount}) ➔",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
             }
         },
         modifier = modifier.fillMaxSize(),
@@ -307,23 +391,24 @@ fun GalleryScreen(
                     LazyVerticalStaggeredGrid(
                         columns = gridColumns,
                         contentPadding = PaddingValues(
-                            start = 14.dp,
-                            end = 14.dp,
-                            top = 14.dp,
-                            bottom = 96.dp // Generous space for sticky FAB
+                            start = 12.dp,
+                            end = 12.dp,
+                            top = 12.dp,
+                            bottom = 20.dp
                         ),
-                        horizontalItemSpacing = 12.dp,
-                        verticalItemSpacing = 12.dp,
+                        horizontalItemSpacing = 10.dp,
+                        verticalItemSpacing = 10.dp,
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        items(
+                        itemsIndexed(
                             items = uiState.mediaItems,
-                            key = { it.id }
-                        ) { item ->
+                            key = { _, it -> it.id }
+                        ) { index, item ->
                             MasonryPhotoCard(
                                 media = item,
                                 brandColor = brandColor,
                                 isLocked = uiState.isLocked,
+                                onCardClick = { fullscreenLightboxIndex = index },
                                 onToggleSelect = { viewModel.togglePhotoSelection(item.id) }
                             )
                         }
@@ -357,7 +442,7 @@ fun GalleryScreen(
 }
 
 /**
- * Top App Bar with circular studio logo, verified badge, studio title, and sign out button.
+ * Top App Bar with circular studio logo, verified badge, contacts shortcut, and exit action.
  */
 @Composable
 private fun GalleryTopBar(
@@ -369,6 +454,7 @@ private fun GalleryTopBar(
     isSyncing: Boolean,
     selectedCount: Int,
     totalCount: Int,
+    onContactsClick: () -> Unit,
     onSignOutClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -380,19 +466,23 @@ private fun GalleryTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Left: Circular Logo + Studio Name + Verified Badge
+            // Left: Circular Logo + Studio Name + Verified Badge (Clickable to open Contacts)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onContactsClick() }
+                    .padding(vertical = 2.dp)
             ) {
                 // Circular Studio Logo Avatar
                 Box(
                     modifier = Modifier
-                        .size(46.dp)
+                        .size(44.dp)
                         .clip(CircleShape)
                         .border(2.dp, brandColor, CircleShape)
                         .background(brandColor.copy(alpha = 0.15f)),
@@ -418,7 +508,7 @@ private fun GalleryTopBar(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(10.dp))
 
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -426,7 +516,7 @@ private fun GalleryTopBar(
                             text = studioName,
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 17.sp
+                                fontSize = 16.sp
                             ),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -437,10 +527,10 @@ private fun GalleryTopBar(
                             imageVector = Icons.Default.Verified,
                             contentDescription = "Verified Studio",
                             tint = brandColor,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(15.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(1.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = albumTitle,
@@ -454,7 +544,7 @@ private fun GalleryTopBar(
                             Icon(
                                 imageVector = Icons.Default.Sync,
                                 contentDescription = "Live Syncing",
-                                modifier = Modifier.size(12.dp),
+                                modifier = Modifier.size(11.dp),
                                 tint = brandColor
                             )
                         }
@@ -462,21 +552,39 @@ private fun GalleryTopBar(
                 }
             }
 
-            // Right: Selected Counter + Sign Out Action Button
+            // Right: Selected Counter + Contacts Shortcut + Sign Out Action
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // Counter badge
                 Surface(
-                    color = brandColor.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.padding(end = 4.dp)
+                    color = brandColor.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.padding(end = 6.dp)
                 ) {
                     Text(
                         text = "$selectedCount / $totalCount",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = brandColor,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
                     )
                 }
+
+                // Studio Contacts Icon Button
+                IconButton(
+                    onClick = onContactsClick,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Phone,
+                        contentDescription = "Studio Contacts",
+                        tint = brandColor,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
 
                 // Sign Out Button (X / Exit)
                 IconButton(
@@ -490,7 +598,7 @@ private fun GalleryTopBar(
                         imageVector = Icons.Default.ExitToApp,
                         contentDescription = "Sign Out",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(17.dp)
                     )
                 }
             }
@@ -506,6 +614,7 @@ private fun ReviewTopBar(
     selectedCount: Int,
     studioName: String,
     brandColor: Color,
+    onContactsClick: () -> Unit,
     onBackToAllPhotos: () -> Unit,
     onSignOutClick: () -> Unit
 ) {
@@ -544,13 +653,570 @@ private fun ReviewTopBar(
                 }
             }
 
-            IconButton(onClick = onSignOutClick) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onContactsClick) {
+                    Icon(
+                        imageVector = Icons.Default.Phone,
+                        contentDescription = "Studio Contacts",
+                        tint = brandColor
+                    )
+                }
+                IconButton(onClick = onSignOutClick) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Sign Out",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Fullscreen Lightbox Modal with Instagram/Google Photos style Horizontal Pager swipe,
+ * 4K Hardware-Accelerated display, in-lightbox selection toggle, and retouching notes.
+ */
+@Composable
+private fun FullscreenLightboxModal(
+    allPhotos: List<MediaItemResponse>,
+    initialIndex: Int,
+    brandColor: Color,
+    isLocked: Boolean,
+    onDismiss: () -> Unit,
+    onToggleSelect: (Int) -> Unit,
+    onUpdateNotes: (Int, String) -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val pagerState = rememberPagerState(initialPage = initialIndex, pageCount = { allPhotos.size })
+    val currentPhoto = allPhotos.getOrNull(pagerState.currentPage)
+
+    var showNotesDialog by remember { mutableStateOf(false) }
+    var noteInputText by remember { mutableStateOf("") }
+
+    // Dialog for editing retouching notes while inside Lightbox
+    if (showNotesDialog && currentPhoto != null) {
+        AlertDialog(
+            onDismissRequest = { showNotesDialog = false },
+            title = { Text("Retouching Notes", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        text = "Specific instructions for ${currentPhoto.filename}:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = noteInputText,
+                        onValueChange = { noteInputText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("e.g. Smooth facial skin, adjust warmth, crop...") },
+                        maxLines = 4
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onUpdateNotes(currentPhoto.id, noteInputText)
+                        showNotesDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = brandColor)
+                ) {
+                    Text("Save Note", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNotesDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        ) {
+            // Horizontal Pager (Consumes horizontal gestures, preventing back conflicts)
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val photo = allPhotos[page]
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(photo.url)
+                            .crossfade(true)
+                            .bitmapConfig(Bitmap.Config.HARDWARE)
+                            .allowHardware(true)
+                            .build(),
+                        contentDescription = photo.filename,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+
+            // Top Floating Controls Bar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent)
+                        )
+                    )
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // Close X Button
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.5f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close Lightbox",
+                            tint = Color.White
+                        )
+                    }
+
+                    // Counter Pill (e.g., "5 of 45")
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(14.dp),
+                        border = ButtonDefaults.outlinedButtonBorder.copy(
+                            brush = Brush.linearGradient(listOf(brandColor.copy(alpha = 0.4f), brandColor))
+                        )
+                    ) {
+                        Text(
+                            text = "${pagerState.currentPage + 1} of ${allPhotos.size}",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                        )
+                    }
+
+                    // Right Actions: Heart Toggle & Note Icon
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        currentPhoto?.let { photo ->
+                            val isHeartSelected = photo.isSelected
+                            val heartColor by animateColorAsState(
+                                targetValue = if (isHeartSelected) brandColor else Color.White.copy(alpha = 0.85f),
+                                animationSpec = tween(durationMillis = 180),
+                                label = "lightboxHeart"
+                            )
+
+                            // Heart Select / Deselect Button
+                            IconButton(
+                                onClick = { if (!isLocked) onToggleSelect(photo.id) },
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.5f))
+                            ) {
+                                Icon(
+                                    imageVector = if (isHeartSelected) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = "Toggle Selection",
+                                    tint = heartColor,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            // Retouching Note Shortcut
+                            IconButton(
+                                onClick = {
+                                    noteInputText = photo.clientNotes ?: ""
+                                    showNotesDialog = true
+                                },
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.5f))
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit Note",
+                                    tint = if (!photo.clientNotes.isNullOrBlank()) brandColor else Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Bottom Floating Bar: Retouching Notes Strip + Mini Thumbnails Carousel
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.90f))
+                        )
+                    )
+                    .padding(bottom = 16.dp, top = 8.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Notes display pill
+                    currentPhoto?.let { photo ->
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.65f),
+                            shape = RoundedCornerShape(12.dp),
+                            border = ButtonDefaults.outlinedButtonBorder.copy(
+                                brush = Brush.linearGradient(listOf(Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.1f)))
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                                .clickable {
+                                    noteInputText = photo.clientNotes ?: ""
+                                    showNotesDialog = true
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = null,
+                                        tint = brandColor,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (!photo.clientNotes.isNullOrBlank()) "Note: ${photo.clientNotes}" else "Tap to add retouching instructions...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (!photo.clientNotes.isNullOrBlank()) Color.White else Color.White.copy(alpha = 0.6f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Text(
+                                    text = if (!photo.clientNotes.isNullOrBlank()) "Edit" else "+ Add",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = brandColor
+                                )
+                            }
+                        }
+                    }
+
+                    // Mini Thumbnails Strip for instant jumping
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        itemsIndexed(allPhotos) { index, item ->
+                            val isCurrent = index == pagerState.currentPage
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(
+                                        width = if (isCurrent) 2.dp else 1.dp,
+                                        color = if (isCurrent) brandColor else Color.White.copy(alpha = 0.25f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable {
+                                        scope.launch { pagerState.animateScrollToPage(index) }
+                                    }
+                            ) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data(item.thumbnailUrl ?: item.url)
+                                        .crossfade(true)
+                                        .bitmapConfig(Bitmap.Config.HARDWARE)
+                                        .build(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+
+                                // Heart badge on thumbnail if selected
+                                if (item.isSelected) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(2.dp)
+                                            .size(12.dp)
+                                            .clip(CircleShape)
+                                            .background(brandColor)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Dedicated Studio Contacts & Social Links Dialog.
+ * Direct Deep Linking to Phone Dialer, Telegram, Instagram, TikTok, and YouTube.
+ * Only populated contact items are displayed; unpopulated channels are completely hidden.
+ */
+@Composable
+private fun StudioContactsDialog(
+    studioName: String,
+    studioLogoUrl: String?,
+    brandColor: Color,
+    phone: String?,
+    telegram: String?,
+    instagram: String?,
+    tiktok: String?,
+    youtube: String?,
+    onDismiss: () -> Unit,
+    onError: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val hasAnyContact = !phone.isNullOrBlank() ||
+            !telegram.isNullOrBlank() ||
+            !instagram.isNullOrBlank() ||
+            !tiktok.isNullOrBlank() ||
+            !youtube.isNullOrBlank()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .border(2.dp, brandColor, CircleShape)
+                        .background(brandColor.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!studioLogoUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(studioLogoUrl)
+                                .crossfade(true)
+                                .bitmapConfig(Bitmap.Config.HARDWARE)
+                                .build(),
+                            contentDescription = studioName,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Text(
+                            text = getStudioInitials(studioName),
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
+                            color = brandColor
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = studioName,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.Verified,
+                            contentDescription = "Verified Studio",
+                            tint = brandColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Text(
+                        text = "Official Studio Contacts",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (!hasAnyContact) {
+                    Text(
+                        text = "The studio has not listed public contact links for this proofing album.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    // 1. Direct Phone Call
+                    phone?.takeIf { it.isNotBlank() }?.let { phoneNum ->
+                        ContactItemRow(
+                            label = "Direct Call / SMS",
+                            value = phoneNum,
+                            icon = Icons.Default.Phone,
+                            brandColor = brandColor,
+                            onClick = {
+                                if (!DeepLinkUtils.openDialer(context, phoneNum)) {
+                                    onError("Unable to launch phone dialer application.")
+                                }
+                            }
+                        )
+                    }
+
+                    // 2. Telegram Direct Chat / Channel
+                    telegram?.takeIf { it.isNotBlank() }?.let { tg ->
+                        val clean = DeepLinkUtils.cleanHandle(tg, listOf("https://t.me/", "http://t.me/", "t.me/"))
+                        ContactItemRow(
+                            label = "Telegram (Direct Chat)",
+                            value = "@$clean",
+                            icon = Icons.Default.Send,
+                            brandColor = brandColor,
+                            onClick = {
+                                if (!DeepLinkUtils.openTelegram(context, tg)) {
+                                    onError("Unable to open Telegram.")
+                                }
+                            }
+                        )
+                    }
+
+                    // 3. Instagram Profile
+                    instagram?.takeIf { it.isNotBlank() }?.let { insta ->
+                        val clean = DeepLinkUtils.cleanHandle(insta, listOf("https://instagram.com/", "https://www.instagram.com/", "http://instagram.com/", "instagram.com/"))
+                        ContactItemRow(
+                            label = "Instagram (Profile)",
+                            value = "@$clean",
+                            icon = Icons.Default.Share,
+                            brandColor = brandColor,
+                            onClick = {
+                                if (!DeepLinkUtils.openInstagram(context, insta)) {
+                                    onError("Unable to open Instagram.")
+                                }
+                            }
+                        )
+                    }
+
+                    // 4. TikTok Studio Profile
+                    tiktok?.takeIf { it.isNotBlank() }?.let { tiktokHandle ->
+                        val clean = DeepLinkUtils.cleanHandle(tiktokHandle, listOf("https://www.tiktok.com/@", "https://tiktok.com/@", "tiktok.com/@"))
+                        ContactItemRow(
+                            label = "TikTok (Studio)",
+                            value = "@$clean",
+                            icon = Icons.Default.Share,
+                            brandColor = brandColor,
+                            onClick = {
+                                if (!DeepLinkUtils.openTikTok(context, tiktokHandle)) {
+                                    onError("Unable to open TikTok.")
+                                }
+                            }
+                        )
+                    }
+
+                    // 5. YouTube Channel
+                    youtube?.takeIf { it.isNotBlank() }?.let { yt ->
+                        ContactItemRow(
+                            label = "YouTube (Channel)",
+                            value = "Visit Channel",
+                            icon = Icons.Default.Share,
+                            brandColor = brandColor,
+                            onClick = {
+                                if (!DeepLinkUtils.openYouTube(context, yt)) {
+                                    onError("Unable to open YouTube.")
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close", fontWeight = FontWeight.Bold)
+            }
+        }
+    )
+}
+
+/**
+ * Clickable row element inside the Studio Contacts Dialog.
+ */
+@Composable
+private fun ContactItemRow(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    brandColor: Color,
+    onClick: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Sign Out",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = brandColor,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                color = brandColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -880,6 +1546,7 @@ private fun MasonryPhotoCard(
     media: MediaItemResponse,
     brandColor: Color,
     isLocked: Boolean,
+    onCardClick: () -> Unit,
     onToggleSelect: () -> Unit
 ) {
     val context = LocalContext.current
@@ -897,7 +1564,7 @@ private fun MasonryPhotoCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .clickable(enabled = !isLocked) { onToggleSelect() }
+            .clickable(onClick = onCardClick)
             .then(
                 if (media.isSelected) {
                     Modifier.border(2.5.dp, brandColor, RoundedCornerShape(14.dp))

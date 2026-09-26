@@ -93,7 +93,7 @@ def build_client_album_response(album: Album, db: Session) -> AlbumDetailRespons
         # Basic Plan: Strictly return null for all social links and explicitly force allow_download = False
         final_allow_download = False
         social_links_data = None
-        contact_phone = None
+        contact_phone = getattr(root_photographer, "contact_phone", None) if root_photographer else None
         tiktok_url = None
         instagram_url = None
         telegram_url = None

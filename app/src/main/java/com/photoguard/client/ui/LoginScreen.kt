@@ -273,76 +273,68 @@ private fun PinInputField(
     onImeDone: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier.clickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = null
-        ) {
-            focusRequester.requestFocus()
-        },
-        contentAlignment = Alignment.Center
-    ) {
-        // Native BasicTextField correctly invoked with invisible alpha so Compose's layout and IME handle it flawlessly
-        BasicTextField(
-            value = pin,
-            onValueChange = onPinChanged,
-            enabled = enabled,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.NumberPassword,
-                imeAction = ImeAction.Done
-            ),
-            keyboardActions = KeyboardActions(onDone = { onImeDone() }),
-            modifier = Modifier
-                .fillMaxWidth()
-                .alpha(0f)
-                .focusRequester(focusRequester),
-            decorationBox = { innerTextField ->
-                innerTextField()
-            }
-        )
+    BasicTextField(
+        value = pin,
+        onValueChange = onPinChanged,
+        enabled = enabled,
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.NumberPassword,
+            imeAction = ImeAction.Done
+        ),
+        keyboardActions = KeyboardActions(onDone = { onImeDone() }),
+        modifier = modifier.focusRequester(focusRequester),
+        decorationBox = {
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                // Adapt spacing and cell size to available container width
+                val totalSpacing = 40.dp // 5 gaps * 8.dp
+                val availableWidth = maxWidth - totalSpacing
+                val cellSize = minOf(48.dp, availableWidth / 6)
+                val spacing = if (maxWidth < 360.dp) 6.dp else 8.dp
 
-        // Custom Visual 6-Digit PIN Boxes
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            repeat(6) { index ->
-                val isFocused = pin.length == index
-                val char = pin.getOrNull(index)
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            if (char != null) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        )
-                        .border(
-                            width = if (isFocused) 2.dp else 1.dp,
-                            color = when {
-                                isFocused -> MaterialTheme.colorScheme.primary
-                                char != null -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                                else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                            },
-                            shape = RoundedCornerShape(12.dp)
-                        ),
-                    contentAlignment = Alignment.Center
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = char?.toString() ?: "",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    repeat(6) { index ->
+                        val isFocused = pin.length == index
+                        val char = pin.getOrNull(index)
+                        Box(
+                            modifier = Modifier
+                                .size(cellSize)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    if (char != null) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                )
+                                .border(
+                                    width = if (isFocused) 2.dp else 1.dp,
+                                    color = when {
+                                        isFocused -> MaterialTheme.colorScheme.primary
+                                        char != null -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                        else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                    },
+                                    shape = RoundedCornerShape(12.dp)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = char?.toString() ?: "",
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                ),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        if (index < 5) {
+                            Spacer(modifier = Modifier.width(spacing))
+                        }
+                    }
                 }
             }
         }
-    }
+    )
 }
 
 @Composable

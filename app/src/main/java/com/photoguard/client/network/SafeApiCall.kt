@@ -5,6 +5,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
 
 sealed interface NetworkResult<out T> {
     data class Success<out T>(val data: T) : NetworkResult<T>
@@ -37,6 +40,24 @@ suspend fun <T> safeApiCall(
             },
             onFailure = { throwable ->
                 when (throwable) {
+                    is UnknownHostException -> {
+                        NetworkResult.NetworkException(
+                            throwable = throwable,
+                            message = "No internet connection or DNS lookup failed. Please verify your network."
+                        )
+                    }
+                    is SocketTimeoutException -> {
+                        NetworkResult.NetworkException(
+                            throwable = throwable,
+                            message = "Connection timed out. Server took too long to respond. Please try again."
+                        )
+                    }
+                    is SSLException -> {
+                        NetworkResult.NetworkException(
+                            throwable = throwable,
+                            message = "Secure connection error. Please ensure your device clock and network are secure."
+                        )
+                    }
                     is IOException -> {
                         NetworkResult.NetworkException(
                             throwable = throwable,
@@ -49,6 +70,7 @@ suspend fun <T> safeApiCall(
                             throwable.response()?.errorBody()?.string()
                         }.getOrNull()
                         val parsedMessage = when (statusCode) {
+                            409 -> "This album was just submitted and locked by another collaborator."
                             429 -> "Rate limit reached. Please wait a moment before trying again."
                             401 -> "Invalid credentials or session expired."
                             403 -> "Access restricted."

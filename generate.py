@@ -2646,11 +2646,92 @@ class DeliveryViewModelFactory(
 }
 """
 
+# ── Launcher Icons (no PNG needed – pure XML adaptive + legacy layer-list) ──────
+
+_IC_FOREGROUND = """\
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Shield outline -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,14 L82,26 L82,50 C82,68 66,80 54,86 C42,80 26,68 26,50 L26,26 Z" />
+    <!-- Lock body -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M44,52 L44,56 Q44,60 48,60 L60,60 Q64,60 64,56 L64,52 Q64,48 60,48 L48,48 Q44,48 44,52 Z" />
+    <!-- Lock shackle -->
+    <path
+        android:strokeColor="#1565C0"
+        android:strokeWidth="4"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M48,48 L48,43 Q48,37 54,37 Q60,37 60,43 L60,48" />
+    <!-- Keyhole dot -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M57,54 A3,3 0 1,1 51,54 A3,3 0 1,1 57,54 Z" />
+</vector>
+"""
+
+_IC_BACKGROUND = """\
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#0D47A1" />
+</shape>
+"""
+
+_IC_ADAPTIVE = """\
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
+"""
+
+_IC_LEGACY = """\
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/ic_launcher_background" />
+    <item
+        android:top="18dp"
+        android:left="18dp"
+        android:right="18dp"
+        android:bottom="18dp"
+        android:drawable="@drawable/ic_launcher_foreground" />
+</layer-list>
+"""
+
+_ICON_FILES = {
+    "app/src/main/res/drawable/ic_launcher_foreground.xml": _IC_FOREGROUND,
+    "app/src/main/res/drawable/ic_launcher_background.xml": _IC_BACKGROUND,
+    # Adaptive (API 26+)
+    "app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml":       _IC_ADAPTIVE,
+    "app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml": _IC_ADAPTIVE,
+    # Legacy layer-list for each screen density
+    "app/src/main/res/mipmap-mdpi/ic_launcher.xml":       _IC_LEGACY,
+    "app/src/main/res/mipmap-mdpi/ic_launcher_round.xml": _IC_LEGACY,
+    "app/src/main/res/mipmap-hdpi/ic_launcher.xml":       _IC_LEGACY,
+    "app/src/main/res/mipmap-hdpi/ic_launcher_round.xml": _IC_LEGACY,
+    "app/src/main/res/mipmap-xhdpi/ic_launcher.xml":       _IC_LEGACY,
+    "app/src/main/res/mipmap-xhdpi/ic_launcher_round.xml": _IC_LEGACY,
+    "app/src/main/res/mipmap-xxhdpi/ic_launcher.xml":       _IC_LEGACY,
+    "app/src/main/res/mipmap-xxhdpi/ic_launcher_round.xml": _IC_LEGACY,
+    "app/src/main/res/mipmap-xxxhdpi/ic_launcher.xml":       _IC_LEGACY,
+    "app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.xml": _IC_LEGACY,
+}
+
+
 def generate():
     base_dir = os.path.abspath(".")
     print(f"🚀 Initializing PhotoGuard Android Project generation in: {base_dir}")
 
-    for file_path, content in FILES.items():
+    all_files = {**FILES, **_ICON_FILES}
+
+    for file_path, content in all_files.items():
         full_path = os.path.join(base_dir, file_path)
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
         with open(full_path, "w", encoding="utf-8") as f:
@@ -2663,4 +2744,4 @@ def generate():
     print("🧭 Navigation: Declarative NavHost (Login -> Gallery -> Delivery) ready to build.")
 
 if __name__ == "__main__":
-    generate()
+    generate()

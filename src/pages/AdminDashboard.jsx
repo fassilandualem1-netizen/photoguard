@@ -88,9 +88,9 @@ export default function AdminDashboard() {
     try {
       setLoadingAuditLogs(true);
       const res = await api.get("/api/v1/admin/audit-logs?limit=50");
-      setAuditLogs(res.data);
+      setAuditLogs(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      console.error("Failed to load audit logs:", err);
+      setAuditLogs([]);
     } finally {
       setLoadingAuditLogs(false);
     }
@@ -101,9 +101,9 @@ export default function AdminDashboard() {
     try {
       setLoadingErrors(true);
       const res = await api.get("/api/v1/admin/system-health/errors?limit=50&include_resolved=false");
-      setSystemErrors(res.data);
+      setSystemErrors(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      console.error("Failed to load system health errors:", err);
+      setSystemErrors([]);
     } finally {
       setLoadingErrors(false);
     }
@@ -216,8 +216,8 @@ export default function AdminDashboard() {
         .catch(() => {});
       // Preload active crash count for badge notification
       api.get("/api/v1/admin/system-health/errors?limit=50&include_resolved=false")
-        .then((res) => setSystemErrors(res.data))
-        .catch(() => {});
+        .then((res) => setSystemErrors(Array.isArray(res.data) ? res.data : []))
+        .catch(() => setSystemErrors([]));
     } catch (err) {
       console.error("Failed to load admin metrics:", err);
       setErrorBanner(

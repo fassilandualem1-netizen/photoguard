@@ -440,6 +440,279 @@ export function devApiPlugin(): Plugin {
             return sendJson(res, 200, usersList);
           }
 
+          // 6.1 Admin Create User (POST /api/v1/admin/users)
+          if (url === '/api/v1/admin/users' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const email = (body.email || '').trim().toLowerCase();
+            const fullName = (body.full_name || '').trim();
+            const plan = (body.subscription_plan || 'basic').trim().toLowerCase();
+            const customQuotaGB = body.custom_quota_gb;
+            const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let tempPassword = '';
+            for (let i = 0; i < 8; i++) {
+              tempPassword += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+            }
+            const salt = crypto.randomBytes(16).toString('hex');
+            const derived = crypto.pbkdf2Sync(tempPassword, Buffer.from(salt, 'utf-8'), 100000, 32, 'sha256').toString('hex');
+            const hash = `pbkdf2_sha256$100000$${salt}$${derived}`;
+            const quotaBytes = customQuotaGB ? Math.round(customQuotaGB * 1024 * 1024 * 1024) : (plan === 'studio' ? 26843545600 : 5368709120);
+
+            let createdUser: any = {
+              id: Date.now(),
+              email,
+              full_name: fullName,
+              role: 'photographer',
+              subscription_plan: plan,
+              is_active: true,
+              is_verified: true,
+              storage_quota_limit: quotaBytes,
+              storage_used: 0,
+              needs_password_change: true,
+              total_albums: 0,
+              total_media: 0,
+              assistants_count: 0,
+              assistants: [],
+              created_at: new Date().toISOString()
+            };
+
+            if (client) {
+              await client.connect();
+              try {
+                const existing = await client.query('SELECT id FROM users WHERE email = $1', [email]);
+                if (existing.rows.length > 0) {
+                  await client.end();
+                  return sendJson(res, 400, { detail: `User with email '${email}' already exists.` });
+                }
+                const insertRes = await client.query(
+                  `INSERT INTO users (email, full_name, hashed_password, role, subscription_plan, plan, is_active, is_verified, storage_quota_limit, storage_used, needs_password_change)
+                   VALUES ($1, $2, $3, 'photographer', $4, $4, true, true, $5, 0, true) RETURNING *`,
+                  [email, fullName, hash, plan, quotaBytes]
+                );
+                if (insertRes.rows.length > 0) {
+                  const u = insertRes.rows[0];
+                  createdUser = {
+                    id: u.id,
+                    email: u.email,
+                    full_name: u.full_name,
+                    role: 'photographer',
+                    subscription_plan: u.subscription_plan || plan,
+                    is_active: u.is_active,
+                    is_verified: u.is_verified,
+                    storage_quota_limit: Number(u.storage_quota_limit) || quotaBytes,
+                    storage_used: Number(u.storage_used) || 0,
+                    needs_password_change: u.needs_password_change,
+                    total_albums: 0,
+                    total_media: 0,
+                    assistants_count: 0,
+                    assistants: [],
+                    created_at: u.created_at
+                  };
+                }
+              } catch (err: any) {
+                await client.end();
+                return sendJson(res, 500, { detail: err.message || 'Error creating user' });
+              }
+              await client.end();
+            }
+
+            return sendJson(res, 201, {
+              message: 'User created',
+              temp_password: tempPassword,
+              user: createdUser
+            });
+          }
+
+          // 6.2 Admin Suspend User (PUT /api/v1/admin/users/:id/suspend)
+          const suspendMatch = url.match(/\/api\/v1\/admin\/users\/(\d+)\/suspend/);
+          if (suspendMatch && method === 'PUT') {
+            const targetId = parseInt(suspendMatch[1], 10);
+            let updatedStatus = true;
+            if (client) {
+              await client.connect();
+              try {
+                const uRes = await client.query('SELECT is_active FROM users WHERE id = $1', [targetId]);
+                if (uRes.rows.length > 0) {
+                  updatedStatus = !uRes.rows[0].is_active;
+                  await client.query('UPDATE users SET is_active = $1 WHERE id = $2', [updatedStatus, targetId]);
+                  await client.query('UPDATE users SET is_active = $1 WHERE parent_id = $2', [updatedStatus, targetId]);
+                }
+              } catch {}
+              await client.end();
+            }
+            return sendJson(res, 200, {
+              message: `User is now ${updatedStatus ? 'active' : 'suspended'}`,
+              user_id: targetId,
+              is_active: updatedStatus
+            });
+          }
+
+          // 6.3 Admin Plan Toggle (PUT /api/v1/admin/users/:id/plan)
+          const planMatch = url.match(/\/api\/v1\/admin\/users\/(\d+)\/plan/);
+          if (planMatch && method === 'PUT') {
+            const targetId = parseInt(planMatch[1], 10);
+            let newPlan = 'studio';
+            let newQuota = 26843545600;
+            if (client) {
+              await client.connect();
+              try {
+                const uRes = await client.query('SELECT subscription_plan FROM users WHERE id = $1', [targetId]);
+                if (uRes.rows.length > 0) {
+                  const currentPlan = uRes.rows[0].subscription_plan || 'basic';
+                  newPlan = currentPlan === 'basic' ? 'studio' : 'basic';
+                  newQuota = newPlan === 'studio' ? 26843545600 : 5368709120;
+                  await client.query(
+                    'UPDATE users SET subscription_plan = $1, plan = $1, storage_quota_limit = $2 WHERE id = $3',
+                    [newPlan, newQuota, targetId]
+                  );
+                }
+              } catch {}
+              await client.end();
+            }
+            return sendJson(res, 200, {
+              message: `Plan updated to ${newPlan}`,
+              user_id: targetId,
+              subscription_plan: newPlan,
+              storage_quota_limit: newQuota
+            });
+          }
+
+          // 6.4 Admin Quota Update (PUT /api/v1/admin/users/:id/quota)
+          const quotaMatch = url.match(/\/api\/v1\/admin\/users\/(\d+)\/quota/);
+          if (quotaMatch && method === 'PUT') {
+            const targetId = parseInt(quotaMatch[1], 10);
+            const body = await parseJsonBody(req);
+            const newQuota = body.new_quota_bytes || (body.new_quota_gb ? Math.round(body.new_quota_gb * 1024 * 1024 * 1024) : 5368709120);
+            if (client) {
+              await client.connect();
+              try {
+                await client.query('UPDATE users SET storage_quota_limit = $1 WHERE id = $2', [newQuota, targetId]);
+              } catch {}
+              await client.end();
+            }
+            return sendJson(res, 200, {
+              message: 'Quota updated successfully',
+              user_id: targetId,
+              storage_quota_limit: newQuota
+            });
+          }
+
+          // 6.5 Admin Password Reset (POST /api/v1/admin/users/:id/reset-password)
+          const resetPassMatch = url.match(/\/api\/v1\/admin\/users\/(\d+)\/reset-password/);
+          if (resetPassMatch && method === 'POST') {
+            const targetId = parseInt(resetPassMatch[1], 10);
+            const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let tempPassword = '';
+            for (let i = 0; i < 8; i++) {
+              tempPassword += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+            }
+            const salt = crypto.randomBytes(16).toString('hex');
+            const derived = crypto.pbkdf2Sync(tempPassword, Buffer.from(salt, 'utf-8'), 100000, 32, 'sha256').toString('hex');
+            const hash = `pbkdf2_sha256$100000$${salt}$${derived}`;
+            let userEmail = 'user@photoguard.com';
+            if (client) {
+              await client.connect();
+              try {
+                const uRes = await client.query(
+                  'UPDATE users SET hashed_password = $1, needs_password_change = true WHERE id = $2 RETURNING email',
+                  [hash, targetId]
+                );
+                if (uRes.rows.length > 0) userEmail = uRes.rows[0].email;
+              } catch {}
+              await client.end();
+            }
+            return sendJson(res, 200, {
+              message: 'Password reset successfully',
+              user_id: targetId,
+              email: userEmail,
+              temporary_password: tempPassword
+            });
+          }
+
+          // 6.6 Admin System Health Errors API (GET & PUT resolve)
+          if (url.startsWith('/api/v1/admin/system-health/errors')) {
+            const resolveMatch = url.match(/\/api\/v1\/admin\/system-health\/errors\/(\d+)\/resolve/);
+            if (resolveMatch && (method === 'PUT' || method === 'POST')) {
+              const errId = parseInt(resolveMatch[1], 10);
+              let resolvedRow: any = { id: errId, is_resolved: true, resolved_at: new Date().toISOString() };
+              if (client) {
+                await client.connect();
+                try {
+                  const q = await client.query(
+                    'UPDATE system_error_logs SET is_resolved = TRUE, resolved_at = NOW() WHERE id = $1 RETURNING *',
+                    [errId]
+                  );
+                  if (q.rows.length > 0) resolvedRow = q.rows[0];
+                } catch {}
+                await client.end();
+              }
+              return sendJson(res, 200, resolvedRow);
+            }
+
+            if (method === 'GET') {
+              let errorLogs: any[] = [];
+              if (client) {
+                await client.connect();
+                try {
+                  await client.query(`
+                    CREATE TABLE IF NOT EXISTS system_error_logs (
+                      id SERIAL PRIMARY KEY,
+                      timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                      error_type VARCHAR(50) NOT NULL,
+                      endpoint VARCHAR(255),
+                      error_message VARCHAR(1000) NOT NULL,
+                      traceback_details TEXT,
+                      is_resolved BOOLEAN DEFAULT FALSE,
+                      resolved_at TIMESTAMP WITH TIME ZONE
+                    );
+                  `);
+                  const includeResolved = url.includes('include_resolved=true');
+                  const limitMatch = url.match(/limit=(\d+)/);
+                  const limitVal = limitMatch ? parseInt(limitMatch[1], 10) : 50;
+
+                  const q = includeResolved
+                    ? await client.query('SELECT * FROM system_error_logs ORDER BY timestamp DESC LIMIT $1', [limitVal])
+                    : await client.query('SELECT * FROM system_error_logs WHERE is_resolved = FALSE ORDER BY timestamp DESC LIMIT $1', [limitVal]);
+                  errorLogs = q.rows;
+                } catch {}
+                await client.end();
+              }
+              return sendJson(res, 200, errorLogs);
+            }
+          }
+
+          // 6.7 Admin Audit Logs API (GET /api/v1/admin/audit-logs)
+          if (url.startsWith('/api/v1/admin/audit-logs') && method === 'GET') {
+            let auditLogs: any[] = [];
+            if (client) {
+              await client.connect();
+              try {
+                await client.query(`
+                  CREATE TABLE IF NOT EXISTS audit_logs (
+                    id SERIAL PRIMARY KEY,
+                    admin_id INTEGER,
+                    action VARCHAR(100) NOT NULL,
+                    target_user_id INTEGER,
+                    details VARCHAR(500) NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                  );
+                `);
+                const limitMatch = url.match(/limit=(\d+)/);
+                const limitVal = limitMatch ? parseInt(limitMatch[1], 10) : 50;
+                const q = await client.query(`
+                  SELECT a.id, a.admin_id, u1.email as admin_email, a.action, a.target_user_id, u2.email as target_user_email, a.details, a.created_at
+                  FROM audit_logs a
+                  LEFT JOIN users u1 ON a.admin_id = u1.id
+                  LEFT JOIN users u2 ON a.target_user_id = u2.id
+                  ORDER BY a.created_at DESC
+                  LIMIT $1
+                `, [limitVal]);
+                auditLogs = q.rows;
+              } catch {}
+              await client.end();
+            }
+            return sendJson(res, 200, auditLogs);
+          }
+
           // 7. Password Change
           if ((url === '/api/auth/change-password' || url === '/api/v1/auth/change-password' || url === '/api/v1/users/change-password') && (method === 'PUT' || method === 'POST')) {
             const body = await parseJsonBody(req);

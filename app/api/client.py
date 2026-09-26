@@ -98,9 +98,9 @@ def build_client_album_response(album: Album, db: Session) -> AlbumDetailRespons
         instagram_url = None
         telegram_url = None
         youtube_url = None
-        studio_logo_url = None
-        brand_color = None
-        photographer_name = root_photographer.full_name if root_photographer else None
+        studio_logo_url = getattr(root_photographer, "studio_logo_url", None) if root_photographer else None
+        brand_color = getattr(root_photographer, "brand_color", None) or "#F59E0B"
+        photographer_name = getattr(root_photographer, "full_name", None) if root_photographer else "PhotoGuard Studio"
 
     # Track view analytics safely
     try:

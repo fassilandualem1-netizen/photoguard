@@ -262,6 +262,32 @@ class GalleryViewModel(
     /**
      * Dismisses the active user feedback toast/message.
      */
+    /**
+     * Updates or attaches client retouching notes to a photo.
+     */
+    fun updateClientNotes(mediaId: Int, notes: String) {
+        val currentState = _uiState.value
+        if (currentState.isLocked) {
+            _uiState.update { it.copy(userFeedbackMessage = "Album is locked. Notes cannot be altered.") }
+            return
+        }
+        val updatedList = currentState.mediaItems.map { item ->
+            if (item.id == mediaId) item.copy(clientNotes = notes) else item
+        }
+        _uiState.update { it.copy(mediaItems = updatedList) }
+        viewModelScope.launch {
+            safeApiCall {
+                clientApi.updateMedia(
+                    mediaId = mediaId,
+                    request = ClientMediaUpdateRequest(
+                        pin = albumPin,
+                        clientNotes = notes
+                    )
+                )
+            }
+        }
+    }
+
     fun clearFeedbackMessage() {
         _uiState.update { it.copy(userFeedbackMessage = null) }
     }

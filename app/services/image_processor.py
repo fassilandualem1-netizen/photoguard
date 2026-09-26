@@ -39,8 +39,8 @@ class ImageProcessorService:
     @staticmethod
     def compress_image_silent_ai(
         image_bytes: bytes,
-        max_dimension: int = 2048,
-        quality: int = 82
+        max_dimension: int = 3840,
+        quality: int = 90
     ) -> bytes:
         """
         Compresses original RAW/JPEG image bytes using Lanczos filter downsampling and WebP encoding.
@@ -94,8 +94,8 @@ class ImageProcessorService:
     @staticmethod
     def create_thumbnail_silent_ai(
         image_bytes: bytes,
-        max_width: int = 600,
-        quality: int = 78
+        max_width: int = 1200,
+        quality: int = 86
     ) -> bytes:
         """
         Generates a lightweight, lightning-fast thumbnail WebP for Masonry grid rendering.

@@ -64,6 +64,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.graphics.Bitmap
 import coil.compose.AsyncImage
 import coil.imageLoader
 import coil.request.ImageRequest
@@ -303,6 +304,8 @@ private fun MasonryPhotoCard(
                 model = ImageRequest.Builder(context)
                     .data(media.thumbnailUrl ?: media.url)
                     .crossfade(true)
+                    .bitmapConfig(Bitmap.Config.HARDWARE)
+                    .allowHardware(true)
                     .build(),
                 imageLoader = context.imageLoader,
                 contentDescription = media.filename,

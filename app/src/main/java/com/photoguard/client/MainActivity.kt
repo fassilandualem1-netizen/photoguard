@@ -1,5 +1,6 @@
 package com.photoguard.client
 
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -62,7 +63,9 @@ class MainActivity : ComponentActivity() {
                     .maxSizePercent(0.35) // Allocate up to 35% of app memory for fast RAM rendering
                     .build()
             }
-            .diskCache(null) // STRICT: Absolutely no disk caching
+            .diskCache(null) // STRICT: Absolutely no disk caching (RAM-Only rendering)
+            .bitmapConfig(Bitmap.Config.HARDWARE) // GPU Hardware Acceleration for ultra-sharp 4K display
+            .allowHardware(true)
             .crossfade(true)
             .build()
 

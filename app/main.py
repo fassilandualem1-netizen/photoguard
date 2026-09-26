@@ -780,16 +780,30 @@ def force_seed_admin_endpoint():
             }
         )
 
-# Static files directory resolution (built React app in dist/)
+# Static files directory resolution (built React app in dist/ or frontend/dist/)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DIST_DIR = os.path.join(BASE_DIR, "dist")
-if not os.path.exists(DIST_DIR):
-    DIST_DIR = os.path.join(os.getcwd(), "dist")
 
-# Mount /assets if dist/assets exists
-assets_path = os.path.join(DIST_DIR, "assets")
-if os.path.exists(assets_path):
-    app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+# Multi-path discovery for built frontend dist
+candidate_dist_dirs = [
+    os.path.join(BASE_DIR, "dist"),
+    os.path.join(os.getcwd(), "dist"),
+    os.path.join(BASE_DIR, "frontend", "dist"),
+    os.path.join(os.getcwd(), "frontend", "dist"),
+    os.path.join(BASE_DIR, "frontend", "build"),
+    os.path.join(os.getcwd(), "build")
+]
+
+DIST_DIR = os.path.join(BASE_DIR, "dist")
+for candidate in candidate_dist_dirs:
+    if os.path.exists(os.path.join(candidate, "index.html")):
+        DIST_DIR = candidate
+        break
+
+# Mount /assets if assets directory exists
+if os.path.exists(DIST_DIR):
+    assets_path = os.path.join(DIST_DIR, "assets")
+    if os.path.exists(assets_path):
+        app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
 
 # Ensure and mount local uploads directory for fallback storage
 UPLOADS_DIR = os.path.join(os.getcwd(), "uploads")
@@ -838,11 +852,11 @@ def health_check(db: Session = Depends(get_db)):
 @app.get("/", status_code=status.HTTP_200_OK)
 def root():
     """
-    Root endpoint: serves the production React SPA frontend if built in dist/,
+    Root endpoint: serves the production React SPA frontend if built,
     otherwise falls back to API status.
     """
     index_file = os.path.join(DIST_DIR, "index.html")
-    if os.path.exists(index_file):
+    if os.path.isfile(index_file):
         return FileResponse(index_file)
     return {
         "service": "PhotoGuard API",
@@ -853,29 +867,31 @@ def root():
         "message": "PhotoGuard Elite Anti-Piracy Photo Selection SaaS Backend is Live."
     }
 
-@app.get("/{full_path:path}")
-async def catch_all_spa(full_path: str):
+@app.get("/{catchall:path}")
+async def catch_all_spa(catchall: str):
     """
-    Catch-all route: Serves static files from dist/ if they exist,
-    or falls back to index.html for React Router client-side routing.
+    Catch-all route: Serves static files if they exist, or returns index.html
+    for React Router client-side routing (e.g., /login, /dashboard).
     Excludes all /api/v1/* routes and system endpoints.
     """
-    if full_path.startswith("api/") or full_path in ["health", "docs", "redoc", "openapi.json"]:
+    if catchall.startswith("api/") or catchall in ["health", "docs", "redoc", "openapi.json"]:
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
     
     # Check if this points to an uploaded media item
-    if full_path.startswith("uploads/"):
-        upload_subpath = full_path.replace("uploads/", "", 1)
+    if catchall.startswith("uploads/"):
+        upload_subpath = catchall.replace("uploads/", "", 1)
         upload_clean = os.path.basename(upload_subpath)
         file_in_uploads = os.path.join(UPLOADS_DIR, upload_clean)
         if os.path.isfile(file_in_uploads):
             return FileResponse(file_in_uploads)
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Uploaded file not found"})
     
-    file_path = os.path.join(DIST_DIR, full_path)
+    # Check if a static file exists in DIST_DIR
+    file_path = os.path.join(DIST_DIR, catchall)
     if os.path.isfile(file_path):
         return FileResponse(file_path)
     
+    # Return index.html for all SPA routes like /login
     index_file = os.path.join(DIST_DIR, "index.html")
     if os.path.isfile(index_file):
         return FileResponse(index_file)

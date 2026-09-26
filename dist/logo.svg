@@ -1,35 +1,64 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#3b82f6" />
-      <stop offset="100%" stop-color="#1d4ed8" />
+    <!-- Background Gradient -->
+    <linearGradient id="pgBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0e131f" />
+      <stop offset="100%" stop-color="#06080d" />
     </linearGradient>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0f172a" />
-      <stop offset="100%" stop-color="#020617" />
+
+    <!-- Shield Gold/Amber Gradient -->
+    <linearGradient id="pgGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="40%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#b45309" />
     </linearGradient>
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#2563eb" flood-opacity="0.5"/>
+
+    <!-- Shield Blue/Indigo Gradient -->
+    <linearGradient id="pgShieldCore" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+
+    <!-- Cyan/Blue Lens Glow -->
+    <linearGradient id="pgLensGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+
+    <!-- Filter for subtle depth shadow -->
+    <filter id="pgDropShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.6"/>
     </filter>
   </defs>
 
-  <!-- Background rounded square matching app launcher -->
-  <rect width="108" height="108" rx="26" fill="url(#bgGrad)" stroke="#1e293b" stroke-width="2" />
+  <!-- Base Dark App Icon Tile -->
+  <rect width="512" height="512" rx="112" fill="url(#pgBgGrad)" stroke="#1e293b" stroke-width="6" />
+
+  <!-- Outer Protective Shield (Bold Amber Gold) -->
+  <path d="M256,64 L396,128 C396,270 326,380 256,432 C186,380 116,270 116,128 Z"
+        fill="url(#pgGoldGrad)"
+        filter="url(#pgDropShadow)" />
+
+  <!-- Inner Shield Contrast Core -->
+  <path d="M256,86 L374,140 C374,258 316,356 256,400 C196,356 138,258 138,140 Z"
+        fill="url(#pgShieldCore)" />
+
+  <!-- Camera Aperture / Iris Ring (Gold Ring) -->
+  <circle cx="256" cy="242" r="78" fill="none" stroke="url(#pgGoldGrad)" stroke-width="8" />
+
+  <!-- Aperture Blades Geometry -->
+  <circle cx="256" cy="242" r="68" fill="#0b0f17" />
   
-  <!-- Outer glowing shield -->
-  <path d="M54,14 L82,26 L82,50 C82,68 66,80 54,86 C42,80 26,68 26,50 L26,26 Z" 
-        fill="#ffffff" 
-        filter="url(#glow)" />
+  <path d="M256,174 L294,228 L270,228 Z" fill="#f59e0b" opacity="0.9" />
+  <path d="M324,242 L270,280 L270,256 Z" fill="#d97706" opacity="0.9" />
+  <path d="M256,310 L218,256 L242,256 Z" fill="#b45309" opacity="0.9" />
+  <path d="M188,242 L242,204 L242,228 Z" fill="#f59e0b" opacity="0.9" />
 
-  <!-- Inner shield core -->
-  <path d="M54,18 L78,28.5 L78,49.5 C78,65 64,76 54,81.5 C44,76 30,65 30,49.5 L30,28.5 Z" 
-        fill="url(#shieldGrad)" />
-
-  <!-- Camera / Shutter aperture accent in lock -->
-  <circle cx="54" cy="51" r="16" fill="#ffffff" opacity="0.15" />
-  <circle cx="54" cy="51" r="11" fill="#0d47a1" />
-
-  <!-- Keyhole / Center lens -->
-  <circle cx="54" cy="49" r="3.5" fill="#60a5fa" />
-  <path d="M52.5,50 L55.5,50 L56.5,56 L51.5,56 Z" fill="#60a5fa" />
+  <!-- Central Camera Lens / Shutter Core -->
+  <circle cx="256" cy="242" r="32" fill="#090d16" stroke="#38bdf8" stroke-width="4" />
+  <circle cx="256" cy="242" r="20" fill="url(#pgLensGrad)" />
+  
+  <!-- Lens Glass Light Reflection / Glint -->
+  <circle cx="248" cy="234" r="6" fill="#ffffff" opacity="0.85" />
+  <circle cx="264" cy="250" r="2.5" fill="#ffffff" opacity="0.5" />
 </svg>

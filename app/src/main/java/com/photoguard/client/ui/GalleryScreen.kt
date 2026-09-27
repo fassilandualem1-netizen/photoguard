@@ -5,6 +5,11 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -502,8 +507,34 @@ fun GalleryScreen(
                             .build()
                     }
 
+                    var scale by remember { mutableFloatStateOf(1f) }
+                    var offset by remember { mutableStateOf(Offset.Zero) }
+
+                    // Reset zoom & pan when navigating to another photo
+                    LaunchedEffect(page, pagerState.currentPage) {
+                        if (pagerState.currentPage != page) {
+                            scale = 1f
+                            offset = Offset.Zero
+                        }
+                    }
+
                     Box(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(page) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    val newScale = (scale * zoom).coerceIn(1f, 5f)
+                                    scale = newScale
+                                    offset = if (newScale > 1f) {
+                                        Offset(
+                                            x = offset.x + pan.x,
+                                            y = offset.y + pan.y
+                                        )
+                                    } else {
+                                        Offset.Zero
+                                    }
+                                }
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         AsyncImage(
@@ -511,7 +542,14 @@ fun GalleryScreen(
                             contentDescription = media.filename,
                             contentScale = ContentScale.Fit,
                             imageLoader = context.imageLoader,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer(
+                                    scaleX = scale,
+                                    scaleY = scale,
+                                    translationX = offset.x,
+                                    translationY = offset.y
+                                )
                         )
                     }
                 }

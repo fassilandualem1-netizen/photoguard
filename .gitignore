@@ -22,3 +22,7 @@ local.properties
 # Keystore
 *.jks
 *.keystore
+-e 
+node_modules/
+dist/
+

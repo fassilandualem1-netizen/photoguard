@@ -696,3 +696,41 @@ async def upload_album_photo_alias(
     """
     from app.api.media import upload_album_photo
     return await upload_album_photo(album_id=album_id, file=file, db=db, current_user=current_user)
+
+@router.post("/{album_id}/toggle-download", status_code=status.HTTP_200_OK)
+def toggle_album_client_download(
+    album_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Studio Plan Feature: Toggles client download permissions for an album.
+    When enabled, clients can download high-resolution photos directly from the mobile app.
+    """
+    album = db.query(Album).filter(Album.id == album_id).first()
+    if not album:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
+
+    if not check_album_access(album, current_user, db):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this album.")
+
+    owner = db.query(User).filter(User.id == current_user.effective_owner_id).first() or current_user
+    user_plan = getattr(owner, "subscription_plan", "basic") or getattr(owner, "plan_tier", "basic") or "basic"
+    plan_cfg = get_or_create_plan_config(db, user_plan)
+    is_admin = (current_user.role == UserRole.ADMIN.value or current_user.role == UserRole.ADMIN)
+
+    if not is_admin and not plan_cfg.can_enable_downloads:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Direct Client Gallery Download is an exclusive Studio Plan feature. Please upgrade to Studio to enable client downloads."
+        )
+
+    album.allow_download = not bool(album.allow_download or False)
+    db.commit()
+    db.refresh(album)
+
+    return {
+        "album_id": album.id,
+        "allow_download": album.allow_download,
+        "message": "Client direct downloads enabled" if album.allow_download else "Client direct downloads disabled"
+    }

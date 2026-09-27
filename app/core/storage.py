@@ -180,6 +180,19 @@ def save_file_locally(file_bytes: bytes, filename: str) -> str:
         
     return f"/uploads/{saved_filename}"
 
+def save_thumbnail_locally(thumb_bytes: bytes, filename: str) -> str:
+    """
+    Saves optimized, retina-quality WebP thumbnail to uploads/ directory.
+    Delivers lightweight, crystal-clear proof images for web & mobile grids.
+    """
+    unique_prefix = uuid.uuid4().hex[:12]
+    base_name = os.path.splitext(filename)[0].replace(" ", "_").replace("/", "_")[:40]
+    saved_filename = f"thumb_{unique_prefix}_{base_name}.webp"
+    file_path = os.path.join(UPLOADS_DIR, saved_filename)
+    with open(file_path, "wb") as f:
+        f.write(thumb_bytes)
+    return f"/uploads/{saved_filename}"
+
 def upload_file_to_s3(file: UploadFile, filename: str) -> str:
     """
     Uploads the raw high-res photo to IDrive e2 origin storage.

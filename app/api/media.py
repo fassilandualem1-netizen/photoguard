@@ -164,6 +164,7 @@ async def upload_album_photo(
 
     # Silent AI Compression & Face Recognition
     face_encodings = []
+    compressed_bytes = None
     try:
         compressed_bytes = image_processor.compress_image_silent_ai(file_bytes)
         compressed_size = len(compressed_bytes) if compressed_bytes else int(original_size * 0.15)
@@ -172,6 +173,14 @@ async def upload_album_photo(
         logger.warning(f"AI image processing warning: {ai_exc}")
         compressed_size = int(original_size * 0.15)
         face_encodings = []
+
+    # If local fallback storage was used, store the crystal-clear compressed WebP as thumbnail_url
+    if storage_provider == "local" and compressed_bytes:
+        try:
+            from app.core.storage import save_thumbnail_locally
+            thumbnail_url = save_thumbnail_locally(compressed_bytes, file.filename or "photo.jpg")
+        except Exception as thumb_err:
+            logger.warning(f"Failed to save local thumbnail: {thumb_err}")
 
     media_item = MediaItem(
         album_id=album.id,

@@ -7,6 +7,7 @@ import {
   UploadCloud,
   CheckCircle2,
   Lock,
+  Unlock,
   Calendar,
   Sparkles,
   Download,
@@ -54,6 +55,10 @@ export default function AlbumDetail() {
   // Extend Expiration state (Studio plan)
   const [extending, setExtending] = useState(false);
   const [extendSuccessMsg, setExtendSuccessMsg] = useState(false);
+
+  // Studio Allow Client Download state
+  const [togglingDownload, setTogglingDownload] = useState(false);
+  const [deliveryToast, setDeliveryToast] = useState(null);
 
   // Native Folder Download state (File System Access API)
   const [isDownloadingFolder, setIsDownloadingFolder] = useState(false);
@@ -195,6 +200,36 @@ export default function AlbumDetail() {
 
     // Stay on "all" tab so newly uploaded photos appear immediately
     fetchAlbumDetail(false);
+  };
+
+  // Studio Allow Client Download Permission Toggle
+  const handleToggleClientDownload = async () => {
+    if (!isStudio) {
+      alert("Direct Client Gallery Download is an exclusive Studio Plan feature. Please upgrade to Studio to enable client downloads.");
+      return;
+    }
+
+    try {
+      setTogglingDownload(true);
+      const res = await api.post(`/api/v1/albums/${id}/toggle-download`);
+      const newAllowed = res.data.allow_download;
+      setAlbum((prev) => ({
+        ...prev,
+        allow_download: newAllowed,
+      }));
+
+      setDeliveryToast(
+        newAllowed
+          ? "Client Delivery Active: Clients can now download high-resolution photos in the mobile app."
+          : "Client Delivery Disabled: Gallery is currently restricted to watermarked proofing."
+      );
+      setTimeout(() => setDeliveryToast(null), 4000);
+    } catch (err) {
+      console.error("Failed to toggle download permission:", err);
+      alert(err.response?.data?.detail || "Failed to update download permissions.");
+    } finally {
+      setTogglingDownload(false);
+    }
   };
 
   // Extend lifespan handler (Studio plan only)
@@ -529,6 +564,14 @@ export default function AlbumDetail() {
                   <span>Client In Review</span>
                 </span>
               )}
+
+              {/* Client Delivery Download Status Badge */}
+              {album.allow_download && (
+                <span className="px-3 py-1 rounded-full bg-sky-500/15 text-sky-300 text-xs font-semibold border border-sky-500/30 flex items-center gap-1.5">
+                  <Unlock className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Client Delivery Active</span>
+                </span>
+              )}
             </div>
 
             {/* Gallery Meta Info */}
@@ -561,9 +604,45 @@ export default function AlbumDetail() {
             </div>
           </div>
 
-          {/* Header Action Buttons: Share PIN & Download All */}
+          {/* Header Action Buttons: Allow Client Download Toggle, Share PIN & Download All */}
           <div className="flex flex-wrap items-center gap-3 shrink-0">
             
+            {/* STUDIO EXCLUSIVE: Allow Client Download (Direct Gallery Delivery) Toggle */}
+            <button
+              type="button"
+              id="toggle-client-download-btn"
+              onClick={handleToggleClientDownload}
+              disabled={togglingDownload}
+              className={`inline-flex items-center gap-2 px-3.5 py-3 rounded-2xl text-xs font-semibold transition-all border cursor-pointer ${
+                album.allow_download
+                  ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25 shadow-lg shadow-emerald-500/10"
+                  : "bg-slate-850/80 border-slate-700/80 text-slate-400 hover:text-white hover:bg-slate-800"
+              }`}
+              title={
+                isStudio
+                  ? album.allow_download
+                    ? "Client Delivery is ACTIVE: Clients can download high-resolution photos in mobile app. Click to disable."
+                    : "Client Delivery is DISABLED: Click to allow clients to download final edited photos."
+                  : "Client Gallery Delivery is a Studio Plan exclusive feature."
+              }
+            >
+              {togglingDownload ? (
+                <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+              ) : album.allow_download ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <Lock className="w-4 h-4 text-slate-500" />
+              )}
+              <span>
+                {album.allow_download ? "Allow to Download (On)" : "Allow to Download"}
+              </span>
+              {!isStudio && (
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  Studio
+                </span>
+              )}
+            </button>
+
             {/* ONE-CLICK SHARE PIN DROPDOWN */}
             <div className="relative z-50" ref={shareDropdownRef}>
               <button
@@ -699,6 +778,14 @@ export default function AlbumDetail() {
           </div>
         </div>
       </div>
+
+      {/* Floating Delivery Status Toast */}
+      {deliveryToast && (
+        <div className="p-4 rounded-2xl bg-emerald-950/90 border border-emerald-500/50 text-emerald-200 text-xs font-semibold shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span>{deliveryToast}</span>
+        </div>
+      )}
 
       {/* SINGLE SUBMIT LOCKED BANNER */}
       {isSubmitted && (

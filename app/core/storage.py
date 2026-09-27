@@ -77,7 +77,7 @@ def upload_file_to_cloudinary(file_bytes: bytes, filename: str, folder: str = "p
     if secure_url and "/upload/" in secure_url:
         thumbnail_url = secure_url.replace(
             "/upload/",
-            "/upload/c_limit,w_600,q_auto:good,f_auto/"
+            "/upload/f_avif,q_auto:best,dpr_2.0,w_1200,c_limit/"
         )
 
     return {

@@ -25,12 +25,11 @@ import {
   ChevronRight,
   X,
   FolderDown,
-  FileText,
   MessageSquare,
   Check,
   CheckSquare,
   FolderCheck,
-  Folder
+  ExternalLink
 } from "lucide-react";
 
 export default function AlbumDetail() {
@@ -42,7 +41,8 @@ export default function AlbumDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Tab View state: "all" (All Proofs) | "selections" (Review Client Selections)
+  // Tab View state: "all" (All Uploaded Proofs) | "selections" (Review Client Selections)
+  // Default is "all" so photographer immediately sees what they upload
   const [activeViewTab, setActiveViewTab] = useState("all");
 
   // Bulk Upload state
@@ -68,11 +68,7 @@ export default function AlbumDetail() {
     failedFiles: [],
   });
 
-  // Automated Job Sheet Modal
-  const [showJobSheetModal, setShowJobSheetModal] = useState(false);
-  const [copiedJobSheet, setCopiedJobSheet] = useState(false);
-
-  // One-Click Client Share dropdown state
+  // Share PIN dropdown state
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [copiedInvite, setCopiedInvite] = useState(false);
   const shareDropdownRef = useRef(null);
@@ -142,14 +138,15 @@ export default function AlbumDetail() {
       formData.append("file", file);
 
       try {
-        await api.post(`/api/v1/albums/${id}/upload`, formData, {
+        // Primary media upload route with fallback alias
+        await api.post(`/api/v1/media/upload/${id}`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
         successfulUploads++;
       } catch (err) {
         console.error(`Failed to upload ${file.name}:`, err);
         failedUploads++;
-        const detail = err.response?.data?.detail || "Upload error";
+        const detail = err.response?.data?.detail || err.message || "Upload error";
         failureReasons.push(`${file.name} (${detail})`);
       }
     }
@@ -166,6 +163,7 @@ export default function AlbumDetail() {
       reasons: failureReasons,
     });
 
+    // Refresh album and ensure we stay on "all" tab to show newly uploaded photos
     fetchAlbumDetail(false);
   };
 
@@ -222,21 +220,9 @@ export default function AlbumDetail() {
   const mediaItems = album?.media_items || [];
   const selectedItems = mediaItems.filter((m) => m.is_selected);
 
-  // Client Invite Text
+  // Client Invite Text & Deep Linking
   const albumPin = album?.pin || album?.client_pin || "";
   const shareText = `Your private proof gallery is ready! Access PIN: ${albumPin}. Review proofs & mark your selections here: https://photoguard.com/app`;
-
-  const handleWhatsAppShare = () => {
-    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
-    window.open(waUrl, "_blank", "noopener,noreferrer");
-    setIsShareOpen(false);
-  };
-
-  const handleTelegramShare = () => {
-    const tgUrl = `https://t.me/share/url?url=${encodeURIComponent("https://photoguard.com/app")}&text=${encodeURIComponent(shareText)}`;
-    window.open(tgUrl, "_blank", "noopener,noreferrer");
-    setIsShareOpen(false);
-  };
 
   const handleCopyInviteMessage = async () => {
     try {
@@ -246,37 +232,6 @@ export default function AlbumDetail() {
     } catch {
       console.warn("Clipboard access failed.");
     }
-    setIsShareOpen(false);
-  };
-
-  // Generate automated Job_Sheet.txt content
-  const generateJobSheetText = (albumObj, photosList) => {
-    const dateStr = new Date().toLocaleString("en-US", { dateStyle: "full", timeStyle: "medium" });
-    const selectedCount = photosList.filter((p) => p.is_selected).length;
-    const pin = albumObj?.pin || albumObj?.client_pin || "N/A";
-    const albumTitle = albumObj?.title || "Gallery Proofs";
-
-    let out = "========================================================================\n";
-    out += "                 PHOTOGUARD STUDIO — CLIENT JOB SHEET                   \n";
-    out += "========================================================================\n\n";
-    out += `GALLERY ALBUM : ${albumTitle}\n`;
-    out += `GENERATED ON  : ${dateStr}\n`;
-    out += `CLIENT PIN    : ${pin}\n`;
-    out += `TOTAL PHOTOS  : ${photosList.length} (${selectedCount} client-selected)\n`;
-    out += `STATUS        : ${albumObj?.is_submitted ? "CLIENT SELECTION SUBMITTED & LOCKED" : "IN REVIEW / DRAFT"}\n\n`;
-    out += "========================================================================\n";
-    out += "  PHOTO FILENAME                  | CLIENT RETOUCHING / SELECTION NOTE   \n";
-    out += "========================================================================\n";
-
-    photosList.forEach((photo, idx) => {
-      const fn = (photo.filename || `Photo_${idx + 1}.jpg`).padEnd(32, " ");
-      const note = photo.client_notes || photo.client_note || "[No specific note — standard color grade]";
-      out += `${fn} | ${note}\n`;
-    });
-
-    out += "========================================================================\n";
-    out += "Generated automatically by PhotoGuard Studio Suite.\n";
-    return out;
   };
 
   // Helper to fetch blob with proxy fallback
@@ -291,9 +246,38 @@ export default function AlbumDetail() {
     return proxyRes.data;
   };
 
-  // NATIVE FOLDER DOWNLOAD (File System Access API: window.showDirectoryPicker)
+  // Automated Job Sheet text generator (saved in folder upon download)
+  const generateJobSheetText = (albumObj, photosList) => {
+    const dateStr = new Date().toLocaleString("en-US", { dateStyle: "full", timeStyle: "medium" });
+    const selectedCount = photosList.filter((p) => p.is_selected).length;
+    const pin = albumObj?.pin || albumObj?.client_pin || "N/A";
+    const albumTitle = albumObj?.title || "Gallery Proofs";
+
+    let out = "========================================================================\n";
+    out += "                 PHOTOGUARD STUDIO — CLIENT SELECTION SHEET             \n";
+    out += "========================================================================\n\n";
+    out += `GALLERY ALBUM : ${albumTitle}\n`;
+    out += `GENERATED ON  : ${dateStr}\n`;
+    out += `CLIENT PIN    : ${pin}\n`;
+    out += `TOTAL PHOTOS  : ${photosList.length} (${selectedCount} client-selected)\n`;
+    out += `LOCK STATUS   : ${albumObj?.is_submitted ? "CLIENT SELECTION SUBMITTED & LOCKED" : "IN REVIEW / DRAFT"}\n\n`;
+    out += "========================================================================\n";
+    out += "  PHOTO FILENAME                  | CLIENT RETOUCHING / SELECTION NOTE   \n";
+    out += "========================================================================\n";
+
+    photosList.forEach((photo, idx) => {
+      const fn = (photo.filename || `Photo_${idx + 1}.jpg`).padEnd(32, " ");
+      const note = photo.client_notes || photo.client_note || "[No specific note — standard edit / color grade]";
+      out += `${fn} | ${note}\n`;
+    });
+
+    out += "========================================================================\n";
+    out += "Generated automatically by PhotoGuard Studio Suite.\n";
+    return out;
+  };
+
+  // NATIVE FOLDER DOWNLOAD (window.showDirectoryPicker)
   const handleDownloadAllOriginals = async () => {
-    // If in selections tab or if client made selections, download selected; else download all
     const targetPhotos = selectedItems.length > 0 ? selectedItems : mediaItems;
 
     if (targetPhotos.length === 0) {
@@ -304,13 +288,11 @@ export default function AlbumDetail() {
     const supportsDirectoryPicker = typeof window !== "undefined" && "showDirectoryPicker" in window;
 
     if (!supportsDirectoryPicker) {
-      // Fallback for browsers without File System Access API
       handleFallbackMultiDownload(targetPhotos);
       return;
     }
 
     try {
-      // 1. Browser prompts photographer to select or create a specific local folder
       const dirHandle = await window.showDirectoryPicker({
         id: "photoguard_studio_downloads",
         mode: "readwrite",
@@ -332,7 +314,6 @@ export default function AlbumDetail() {
       let successCount = 0;
       const failedFiles = [];
 
-      // 2. Iterate through photos, fetch original blobs, and write directly into selected folder
       for (let i = 0; i < targetPhotos.length; i++) {
         const item = targetPhotos[i];
         const filename = item.filename || `Photo_${i + 1}.jpg`;
@@ -356,17 +337,16 @@ export default function AlbumDetail() {
         }
       }
 
-      // 3. Automated Job Sheet: Save Job_Sheet.txt in the same selected folder
-      setDownloadProgress((prev) => ({
-        ...prev,
-        currentFilename: "Saving Job_Sheet.txt...",
-      }));
-
-      const jobSheetText = generateJobSheetText(album, targetPhotos);
-      const jobSheetHandle = await dirHandle.getFileHandle("Job_Sheet.txt", { create: true });
-      const jobSheetWritable = await jobSheetHandle.createWritable();
-      await jobSheetWritable.write(jobSheetText);
-      await jobSheetWritable.close();
+      // Automatically save Job_Sheet.txt in the same local folder
+      try {
+        const jobSheetText = generateJobSheetText(album, targetPhotos);
+        const jobSheetHandle = await dirHandle.getFileHandle("Job_Sheet.txt", { create: true });
+        const jobSheetWritable = await jobSheetHandle.createWritable();
+        await jobSheetWritable.write(jobSheetText);
+        await jobSheetWritable.close();
+      } catch (jsErr) {
+        console.warn("Could not write Job_Sheet.txt:", jsErr);
+      }
 
       setDownloadProgress((prev) => ({
         ...prev,
@@ -387,23 +367,9 @@ export default function AlbumDetail() {
     }
   };
 
-  // Fallback download for browsers without File System Access API
   const handleFallbackMultiDownload = async (targetPhotos) => {
-    alert("Your browser does not support direct directory write. Files will be downloaded individually, along with Job_Sheet.txt.");
-    
-    // Download Job Sheet
-    const jobSheetText = generateJobSheetText(album, targetPhotos);
-    const jobBlob = new Blob([jobSheetText], { type: "text/plain;charset=utf-8" });
-    const jobUrl = URL.createObjectURL(jobBlob);
-    const jobLink = document.createElement("a");
-    jobLink.href = jobUrl;
-    jobLink.download = `${(album?.title || "Gallery").replace(/\s+/g, "_")}_Job_Sheet.txt`;
-    document.body.appendChild(jobLink);
-    jobLink.click();
-    document.body.removeChild(jobLink);
-    URL.revokeObjectURL(jobUrl);
+    alert("Your browser does not support direct directory write. Files will be downloaded individually.");
 
-    // Download Photos
     for (const item of targetPhotos) {
       const a = document.createElement("a");
       a.href = item.url;
@@ -416,7 +382,6 @@ export default function AlbumDetail() {
     }
   };
 
-  // Single photo download helper
   const handleDownloadSinglePhoto = async (item) => {
     try {
       const blob = await fetchPhotoBlob(item.url, item.id);
@@ -525,10 +490,9 @@ export default function AlbumDetail() {
         )}
       </div>
 
-      {/* Main Album Header Card */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-[#0e121a]/95 border border-slate-800/90 shadow-2xl backdrop-blur-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
-
+      {/* Main Album Header Card — Note: NO overflow-hidden so Share PIN dropdown is NEVER clipped */}
+      <div className="p-6 sm:p-8 rounded-3xl bg-[#0e121a]/95 border border-slate-800/90 shadow-2xl backdrop-blur-xl relative z-30">
+        
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2.5">
@@ -554,7 +518,7 @@ export default function AlbumDetail() {
             <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400">
               <div className="flex items-center gap-1.5">
                 <span className="text-slate-500 font-medium">Access PIN:</span>
-                <span className="font-mono font-bold text-amber-400 px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 tracking-wider">
+                <span className="font-mono font-bold text-amber-400 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 tracking-wider text-sm shadow-inner">
                   {albumPin}
                 </span>
               </div>
@@ -580,51 +544,90 @@ export default function AlbumDetail() {
             </div>
           </div>
 
-          {/* Header Action Buttons: Native Folder Download & Workflow Controls */}
+          {/* Header Action Buttons: Share PIN & Download Originals */}
           <div className="flex flex-wrap items-center gap-3 shrink-0">
             
-            {/* One-Click Client Invite Button */}
-            <div className="relative" ref={shareDropdownRef}>
+            {/* ONE-CLICK SHARE PIN DROPDOWN (WhatsApp, Telegram, Copy) */}
+            <div className="relative z-50" ref={shareDropdownRef}>
               <button
                 type="button"
-                id="share-client-dropdown-btn"
+                id="share-pin-dropdown-btn"
                 onClick={() => setIsShareOpen(!isShareOpen)}
-                className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700/80 border border-slate-700/80 text-white font-semibold text-xs transition-all shadow-md cursor-pointer"
+                className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-emerald-500/20 cursor-pointer"
+                title="Share PIN and private gallery link directly with client via WhatsApp, Telegram, or message"
               >
-                <Share2 className="w-4 h-4 text-amber-400" />
-                <span>Send Gallery to Client</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isShareOpen ? "rotate-180" : ""}`} />
+                <Share2 className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                <span>Share PIN</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isShareOpen ? "rotate-180" : ""}`} />
               </button>
 
               {isShareOpen && (
-                <div className="absolute right-0 top-full mt-2 w-72 rounded-2xl border border-slate-700/80 bg-[#12161f] p-2 shadow-2xl z-50 space-y-1 animate-in fade-in zoom-in-95 duration-100">
-                  <div className="px-3 py-2 border-b border-slate-800/80 text-[11px] text-slate-400">
-                    Share PIN <span className="font-mono text-amber-300 font-bold">{albumPin}</span> with client:
+                <div className="absolute right-0 top-full mt-2 w-80 sm:w-88 rounded-2xl border border-slate-700/90 bg-[#12161f] p-3.5 shadow-2xl shadow-black/95 z-50 space-y-2.5 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-2 py-1 border-b border-slate-800/80">
+                    <p className="text-xs font-semibold text-white flex items-center gap-1.5">
+                      <Share2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Share PIN with Client</span>
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                      Private PIN: <span className="font-mono font-bold text-amber-400 text-xs">{albumPin}</span>
+                    </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleWhatsAppShare}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-200 hover:text-white hover:bg-emerald-950/40 hover:border-emerald-500/30 border border-transparent transition-colors text-left"
+
+                  {/* Direct WhatsApp Deep Link */}
+                  <a
+                    id="share-whatsapp-btn"
+                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setIsShareOpen(false)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-emerald-200 hover:text-white bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-500/30 hover:border-emerald-500/60 transition-all text-left group cursor-pointer"
                   >
-                    <MessageCircle className="w-4 h-4 text-emerald-400" />
-                    <span>Send via WhatsApp</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleTelegramShare}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-200 hover:text-white hover:bg-sky-950/40 hover:border-sky-500/30 border border-transparent transition-colors text-left"
+                    <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0 group-hover:scale-105 transition-transform">
+                      <MessageCircle className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-bold text-white">Share via WhatsApp</div>
+                      <div className="text-[10px] text-emerald-400/80">Direct pre-filled chat invite</div>
+                    </div>
+                    <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-300 transition-colors" />
+                  </a>
+
+                  {/* Direct Telegram Deep Link */}
+                  <a
+                    id="share-telegram-btn"
+                    href={`https://t.me/share/url?url=${encodeURIComponent("https://photoguard.com/app")}&text=${encodeURIComponent(shareText)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setIsShareOpen(false)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-sky-200 hover:text-white bg-sky-950/50 hover:bg-sky-900/60 border border-sky-500/30 hover:border-sky-500/60 transition-all text-left group cursor-pointer"
                   >
-                    <Send className="w-4 h-4 text-sky-400" />
-                    <span>Send via Telegram</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCopyInviteMessage}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-amber-300 hover:text-white hover:bg-amber-500/10 transition-colors text-left"
-                  >
-                    <Copy className="w-4 h-4 text-amber-400" />
-                    <span>{copiedInvite ? "Copied to Clipboard!" : "Copy Invite Message"}</span>
-                  </button>
+                    <div className="w-7 h-7 rounded-lg bg-sky-500/20 flex items-center justify-center text-sky-400 shrink-0 group-hover:scale-105 transition-transform">
+                      <Send className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-bold text-white">Share via Telegram</div>
+                      <div className="text-[10px] text-sky-400/80">Instant messenger broadcast</div>
+                    </div>
+                    <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-sky-300 transition-colors" />
+                  </a>
+
+                  <div className="border-t border-slate-800/80 pt-2 space-y-2">
+                    {/* Copy Invitation Text */}
+                    <button
+                      type="button"
+                      id="copy-invite-text-btn"
+                      onClick={handleCopyInviteMessage}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-amber-300 hover:text-white hover:bg-amber-500/10 border border-transparent hover:border-amber-500/30 transition-colors text-left cursor-pointer"
+                    >
+                      <Copy className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>{copiedInvite ? "Copied to Clipboard!" : "Copy Invitation Message"}</span>
+                    </button>
+
+                    {/* Preview snippet */}
+                    <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80 text-[10px] text-slate-400 font-mono leading-relaxed select-all">
+                      "{shareText}"
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -648,26 +651,14 @@ export default function AlbumDetail() {
               </button>
             )}
 
-            {/* View Job Sheet Button */}
-            <button
-              type="button"
-              id="view-job-sheet-btn"
-              onClick={() => setShowJobSheetModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700/80 border border-slate-700/80 text-white font-semibold text-xs transition-all shadow-md cursor-pointer"
-              title="View automated client job sheet mapping notes to filenames"
-            >
-              <FileText className="w-4 h-4 text-amber-400" />
-              <span>Job Sheet</span>
-            </button>
-
-            {/* MAGIC NATIVE FOLDER DOWNLOAD BUTTON */}
+            {/* DOWNLOAD ALL ORIGINALS (Native Folder Picker) */}
             <button
               id="download-all-originals-btn"
               type="button"
               onClick={handleDownloadAllOriginals}
               disabled={isDownloadingFolder || mediaItems.length === 0}
               className="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-200 text-slate-950 font-bold text-xs sm:text-sm hover:brightness-110 active:scale-[0.98] transition-all shadow-xl shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              title="Select a local folder on your computer to save all original high-res photos and Job_Sheet.txt"
+              title="Select a local folder on your computer to save all original high-res photos without ZIP extraction"
             >
               {isDownloadingFolder ? (
                 <>
@@ -704,22 +695,32 @@ export default function AlbumDetail() {
                   Single Submit Lock Active
                 </span>
                 <h3 className="text-base font-bold tracking-tight text-white uppercase">
-                  SUBMITTED & READY FOR RETOUCHING
+                  CLIENT SELECTION SUBMITTED & LOCKED
                 </h3>
               </div>
               <p className="text-xs text-amber-300/80 mt-1 max-w-xl leading-relaxed">
-                The client has submitted their final selections ({selectedItems.length} photos). Use "Download All Originals" above to save them straight into your editing folder alongside the automated Job_Sheet.txt.
+                The client has submitted their final selections ({selectedItems.length} photos). Review their selections below or download all originals directly into your local editing folder.
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleDownloadAllOriginals}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shadow-md transition-colors shrink-0 cursor-pointer"
-          >
-            <FolderDown className="w-4 h-4 stroke-[2.4]" />
-            <span>Download Selected Originals</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveViewTab("selections")}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-700 transition-colors cursor-pointer"
+            >
+              <CheckSquare className="w-4 h-4 text-amber-400" />
+              <span>Review Selections ({selectedItems.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadAllOriginals}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shadow-md transition-colors cursor-pointer"
+            >
+              <FolderDown className="w-4 h-4 stroke-[2.4]" />
+              <span>Download Originals</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -736,7 +737,7 @@ export default function AlbumDetail() {
                 <span>Upload Original Shoot Proofs</span>
               </h2>
               <p className="text-xs text-slate-400">
-                Drag and drop original high-res RAW or JPEG photos. PhotoGuard stores high-res originals while serving encrypted proof streams to clients.
+                Drag and drop original high-res photos. PhotoGuard stores high-res originals while serving encrypted proof streams to clients.
               </p>
             </div>
 
@@ -804,14 +805,14 @@ export default function AlbumDetail() {
         </div>
       )}
 
-      {/* GALLERY WORKFLOW SECTION: View Switcher (All Photos vs Review Selections) */}
+      {/* GALLERY WORKFLOW SECTION: View Switcher (All Proofs vs Review Selections) */}
       <div id="gallery-workflow-section" className="space-y-4">
         
         {/* Navigation Tabs */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
           
           <div className="flex items-center gap-2">
-            {/* Tab 1: All Photos */}
+            {/* Tab 1: All Proofs (Default) */}
             <button
               type="button"
               id="tab-all-photos-btn"
@@ -849,20 +850,24 @@ export default function AlbumDetail() {
             </button>
           </div>
 
-          {/* Quick Counter / Helper */}
+          {/* Counter info */}
           <div className="text-xs text-slate-400 flex items-center gap-2">
             <span>
               Showing {displayPhotos.length} of {mediaItems.length} photos
             </span>
             {selectedItems.length > 0 && activeViewTab === "all" && (
-              <span className="text-amber-400 font-semibold cursor-pointer hover:underline" onClick={() => setActiveViewTab("selections")}>
+              <button
+                type="button"
+                onClick={() => setActiveViewTab("selections")}
+                className="text-amber-400 font-semibold hover:underline cursor-pointer"
+              >
                 ({selectedItems.length} selected by client)
-              </span>
+              </button>
             )}
           </div>
         </div>
 
-        {/* Gallery Content Area */}
+        {/* Gallery Grid */}
         {displayPhotos.length === 0 ? (
           <div className="py-16 text-center rounded-3xl border border-slate-800/60 bg-slate-900/20 max-w-xl mx-auto p-8 space-y-3">
             {activeViewTab === "selections" ? (
@@ -870,14 +875,14 @@ export default function AlbumDetail() {
                 <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
                   <CheckSquare className="w-6 h-6" />
                 </div>
-                <h3 className="text-base font-bold text-white">No Selections Yet</h3>
+                <h3 className="text-base font-bold text-white">No Client Selections Yet</h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  The client has not marked their photo selections yet. Once they open their private mobile app using PIN <span className="font-mono text-amber-300 font-bold">{albumPin}</span>, their favorited proofs and retouching notes will appear here.
+                  Once your client enters PIN <span className="font-mono text-amber-300 font-bold">{albumPin}</span> in the mobile app and submits their selected photos and retouching notes, they will appear right here.
                 </p>
                 <button
                   type="button"
                   onClick={() => setActiveViewTab("all")}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition-colors mt-2"
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition-colors mt-2 cursor-pointer"
                 >
                   View All Uploaded Proofs
                 </button>
@@ -887,9 +892,9 @@ export default function AlbumDetail() {
                 <div className="w-12 h-12 rounded-2xl bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
                   <UploadCloud className="w-6 h-6" />
                 </div>
-                <h3 className="text-base font-bold text-white">Gallery is Empty</h3>
+                <h3 className="text-base font-bold text-white">No Proofs Uploaded Yet</h3>
                 <p className="text-xs text-slate-400">
-                  Upload original shoot proofs using the upload section above.
+                  Select and upload photos above to create this gallery's proof collection.
                 </p>
               </>
             )}
@@ -920,7 +925,7 @@ export default function AlbumDetail() {
                       className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
 
-                    {/* Selection Star / Badge */}
+                    {/* Selection Badge */}
                     {item.is_selected && (
                       <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 text-[11px] font-bold flex items-center gap-1 shadow-lg backdrop-blur-md">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
@@ -943,7 +948,7 @@ export default function AlbumDetail() {
                       <button
                         type="button"
                         onClick={() => setPreviewPhoto(item)}
-                        className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-white hover:bg-slate-800 transition-colors shadow-lg"
+                        className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-white hover:bg-slate-800 transition-colors shadow-lg cursor-pointer"
                         title="Zoom / Fullscreen Lightbox"
                       >
                         <ZoomIn className="w-4 h-4 text-amber-400" />
@@ -952,7 +957,7 @@ export default function AlbumDetail() {
                       <button
                         type="button"
                         onClick={() => handleDownloadSinglePhoto(item)}
-                        className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-white hover:bg-slate-800 transition-colors shadow-lg"
+                        className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-white hover:bg-slate-800 transition-colors shadow-lg cursor-pointer"
                         title="Download Original High-Res"
                       >
                         <Download className="w-4 h-4 text-emerald-400" />
@@ -962,7 +967,7 @@ export default function AlbumDetail() {
                         <button
                           type="button"
                           onClick={() => handleDeletePhoto(item.id)}
-                          className="p-2.5 rounded-xl bg-red-950/90 border border-red-800 text-red-300 hover:bg-red-900 transition-colors shadow-lg"
+                          className="p-2.5 rounded-xl bg-red-950/90 border border-red-800 text-red-300 hover:bg-red-900 transition-colors shadow-lg cursor-pointer"
                           title="Delete Photo"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -971,7 +976,7 @@ export default function AlbumDetail() {
                     </div>
                   </div>
 
-                  {/* Photo Card Body & Prominent Client Notes */}
+                  {/* Photo Card Body & Client Notes */}
                   <div className="p-3.5 space-y-2.5 flex-1 flex flex-col justify-between">
                     <div>
                       <p className="text-xs font-semibold text-white truncate" title={item.filename}>
@@ -979,7 +984,7 @@ export default function AlbumDetail() {
                       </p>
                     </div>
 
-                    {/* CRITICAL: PROMINENT CLIENT RETOUCHING / SELECTION NOTE */}
+                    {/* CLIENT RETOUCHING / SELECTION NOTE DISPLAY */}
                     {hasClientNote ? (
                       <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500/15 to-amber-500/5 border border-amber-500/35 text-amber-200 space-y-1 shadow-sm">
                         <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-300">
@@ -1001,7 +1006,7 @@ export default function AlbumDetail() {
                       </div>
                     )}
 
-                    {/* Card Footer: Quick Save Action */}
+                    {/* Card Footer */}
                     <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
                       <button
                         type="button"
@@ -1027,7 +1032,6 @@ export default function AlbumDetail() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in">
           <div className="max-w-md w-full rounded-3xl bg-[#0e121a] border border-amber-500/30 p-6 sm:p-8 space-y-6 shadow-2xl relative text-center">
             
-            {/* Icon Header */}
             <div className={`w-14 h-14 rounded-2xl mx-auto flex items-center justify-center shadow-lg ${
               downloadProgress.completed
                 ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-400"
@@ -1040,17 +1044,15 @@ export default function AlbumDetail() {
               )}
             </div>
 
-            {/* Modal Titles */}
             <div>
               <h3 className="text-lg font-bold text-white">
-                {downloadProgress.completed ? "Originals Saved Successfully!" : "Writing to Local Folder"}
+                {downloadProgress.completed ? "Originals Saved to Folder!" : "Writing to Local Folder"}
               </h3>
               <p className="text-xs text-slate-400 mt-1">
                 Folder: <span className="font-mono text-amber-300 font-bold">{downloadProgress.folderName || "Selected Folder"}</span>
               </p>
             </div>
 
-            {/* Progress Bar & Status */}
             {!downloadProgress.completed ? (
               <div className="space-y-3">
                 <div className="w-full h-2.5 rounded-full bg-slate-800 overflow-hidden">
@@ -1070,18 +1072,14 @@ export default function AlbumDetail() {
               <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 text-xs text-emerald-200 space-y-2 text-left">
                 <div className="font-bold flex items-center gap-1.5 text-emerald-400">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Folder Download Complete</span>
+                  <span>Direct Download Complete</span>
                 </div>
                 <p>
-                  • <strong>{downloadProgress.successCount} photos</strong> written directly into your selected folder without ZIP extraction.
-                </p>
-                <p>
-                  • <strong>Job_Sheet.txt</strong> created with all client retouching notes mapped to filenames.
+                  • <strong>{downloadProgress.successCount} photos</strong> saved directly to your local folder without ZIP extraction.
                 </p>
               </div>
             )}
 
-            {/* Modal Actions */}
             <div>
               <button
                 type="button"
@@ -1098,61 +1096,7 @@ export default function AlbumDetail() {
       )}
 
       {/* =========================================================================
-          AUTOMATED JOB SHEET MODAL (View / Copy)
-          ========================================================================= */}
-      {showJobSheetModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in select-none" onClick={() => setShowJobSheetModal(false)}>
-          <div className="max-w-2xl w-full rounded-3xl bg-[#0e121a] border border-slate-800 p-6 sm:p-8 space-y-5 shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-              <div className="flex items-center gap-2.5">
-                <FileText className="w-5 h-5 text-amber-400" />
-                <h3 className="text-base font-bold text-white">Client Job Sheet</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowJobSheetModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-400">
-              This Job Sheet is automatically generated and written to your local folder as <strong className="text-amber-300">Job_Sheet.txt</strong> when downloading originals.
-            </p>
-
-            <pre className="p-4 rounded-2xl bg-black/60 border border-slate-800 text-amber-200/90 font-mono text-[11px] leading-relaxed max-h-72 overflow-y-auto whitespace-pre-wrap select-text">
-              {generateJobSheetText(album, selectedItems.length > 0 ? selectedItems : mediaItems)}
-            </pre>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={async () => {
-                  const text = generateJobSheetText(album, selectedItems.length > 0 ? selectedItems : mediaItems);
-                  await navigator.clipboard.writeText(text);
-                  setCopiedJobSheet(true);
-                  setTimeout(() => setCopiedJobSheet(false), 2000);
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition-colors cursor-pointer"
-              >
-                <Copy className="w-4 h-4 text-amber-400" />
-                <span>{copiedJobSheet ? "Copied to Clipboard!" : "Copy Job Sheet Text"}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowJobSheetModal(false)}
-                className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-bold transition-colors cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* =========================================================================
-          HIGH RESOLUTION PHOTO SCANNER LIGHTBOX
+          HIGH RESOLUTION PHOTO LIGHTBOX
           ========================================================================= */}
       {previewPhoto && (
         <div
@@ -1160,7 +1104,6 @@ export default function AlbumDetail() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-2 sm:p-4 animate-in fade-in select-none"
           onClick={() => setPreviewPhoto(null)}
         >
-          {/* Navigation Arrows */}
           {activeList.length > 1 && (
             <>
               <button
@@ -1188,7 +1131,6 @@ export default function AlbumDetail() {
             className="relative max-w-6xl w-full max-h-[92vh] flex flex-col items-center justify-center gap-3"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Top Lightbox Header */}
             <div className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl bg-slate-900/90 border border-slate-800 backdrop-blur-md text-slate-300">
               <div className="flex items-center gap-3">
                 <span className="text-xs sm:text-sm font-semibold text-white truncate max-w-[180px] sm:max-w-md">
@@ -1200,7 +1142,7 @@ export default function AlbumDetail() {
                 {previewPhoto.is_selected && (
                   <span className="px-2.5 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-[11px] font-semibold flex items-center gap-1">
                     <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                    <span>Selected Proof</span>
+                    <span>Client Pick</span>
                   </span>
                 )}
               </div>
@@ -1218,14 +1160,13 @@ export default function AlbumDetail() {
                 <button
                   type="button"
                   onClick={() => setPreviewPhoto(null)}
-                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            {/* Photo Container */}
             <div className="relative max-h-[72vh] flex items-center justify-center overflow-hidden rounded-2xl bg-black/60 border border-slate-800/80">
               <img
                 src={previewPhoto.url}
@@ -1234,12 +1175,11 @@ export default function AlbumDetail() {
               />
             </div>
 
-            {/* Bottom Client Note Display in Lightbox */}
             {(previewPhoto.client_notes || previewPhoto.client_note) && (
               <div className="w-full p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 flex items-start gap-3 backdrop-blur-md">
                 <MessageSquare className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                 <div className="text-xs">
-                  <span className="font-bold text-amber-300">Client Instruction / Retouching Note: </span>
+                  <span className="font-bold text-amber-300">Client Retouching Note: </span>
                   <span className="text-white">{previewPhoto.client_notes || previewPhoto.client_note}</span>
                 </div>
               </div>

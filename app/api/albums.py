@@ -683,3 +683,16 @@ def delete_album(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error deleting album: {str(exc)}"
         )
+
+@router.post("/{album_id}/upload", status_code=status.HTTP_201_CREATED)
+async def upload_album_photo_alias(
+    album_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Direct alias endpoint to upload photo proofs to an album.
+    """
+    from app.api.media import upload_album_photo
+    return await upload_album_photo(album_id=album_id, file=file, db=db, current_user=current_user)

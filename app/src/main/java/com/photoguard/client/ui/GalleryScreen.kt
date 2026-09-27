@@ -97,6 +97,22 @@ import com.photoguard.client.data.model.MediaItemResponse
 /**
  * Parse studio brand color with safe fallback
  */
+/**
+ * Formats image URLs into high-resolution crisp thumbnails for mobile display (w_800, q_auto:best)
+ */
+fun getCrispAndroidThumbnailUrl(rawUrl: String?): String {
+    if (rawUrl.isNullOrBlank()) return ""
+    return if (rawUrl.contains("res.cloudinary.com") && rawUrl.contains("/upload/")) {
+        // Upgrade transformation to high-DPI crisp mobile thumbnail (w_800, q_auto:best)
+        rawUrl.replace(
+            Regex("/upload/(?:[a-zA-Z0-9_:,.-]+/)?"),
+            "/upload/w_800,q_auto:best,c_limit/"
+        )
+    } else {
+        rawUrl
+    }
+}
+
 fun parseBrandAccentColor(hexColor: String?): Color {
     if (hexColor.isNullOrBlank()) return Color(0xFF3B82F6) // Default Electric Indigo
     return try {
@@ -902,16 +918,18 @@ fun GalleryItem(
         Column {
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val context = LocalContext.current
-                val imageRequest = remember(media.thumbnailUrl ?: media.url) {
+                val crispUrl = remember(media.thumbnailUrl, media.url) {
+                    getCrispAndroidThumbnailUrl(media.thumbnailUrl ?: media.url)
+                }
+                val imageRequest = remember(crispUrl) {
                     ImageRequest.Builder(context)
-                        .data(media.thumbnailUrl ?: media.url)
+                        .data(crispUrl)
                         .crossfade(true)
-                        .precision(Precision.INEXACT)
+                        .precision(Precision.EXACT)
                         .diskCachePolicy(CachePolicy.DISABLED)
                         .memoryCachePolicy(CachePolicy.ENABLED)
                         .build()
                 }
-
                 AsyncImage(
                     model = imageRequest,
                     contentDescription = media.filename,
@@ -1036,10 +1054,23 @@ fun ReviewItemCard(
         Column {
             Box(modifier = Modifier.fillMaxWidth()) {
                 val context = LocalContext.current
+                val crispUrl = remember(media.thumbnailUrl, media.url) {
+                    getCrispAndroidThumbnailUrl(media.thumbnailUrl ?: media.url)
+                }
+                val imageRequest = remember(crispUrl) {
+                    ImageRequest.Builder(context)
+                        .data(crispUrl)
+                        .crossfade(true)
+                        .precision(Precision.EXACT)
+                        .diskCachePolicy(CachePolicy.DISABLED)
+                        .memoryCachePolicy(CachePolicy.ENABLED)
+                        .build()
+                }
                 AsyncImage(
-                    model = media.thumbnailUrl ?: media.url,
+                    model = imageRequest,
                     contentDescription = media.filename,
                     contentScale = ContentScale.Crop,
+                    imageLoader = context.imageLoader,
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(0.9f)

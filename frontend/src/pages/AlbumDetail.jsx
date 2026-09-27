@@ -1014,101 +1014,61 @@ export default function AlbumDetail() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-3.5 sm:gap-4">
             {displayPhotos.map((item) => {
-              const rawSize = Number(item.original_size || 0);
-              const originalMb = rawSize > 0 ? (rawSize / (1024 * 1024)).toFixed(1) : null;
-              const hasClientNote = Boolean(item.client_notes || item.client_note);
+              const hasCustomNote = Boolean(item.client_notes || item.client_note);
 
               return (
                 <div
                   key={item.id}
                   id={`media-item-${item.id}`}
-                  className={`rounded-2xl border transition-all duration-200 overflow-hidden shadow-lg flex flex-col justify-between ${
-                    item.is_selected
-                      ? "border-amber-500/40 bg-[#12161f] shadow-amber-500/5 ring-1 ring-amber-500/20"
-                      : "border-slate-800/80 bg-slate-900/60 hover:border-slate-700"
-                  }`}
+                  className="group relative aspect-[4/3] rounded-2xl sm:rounded-3xl overflow-hidden bg-black/60 border border-slate-800/80 hover:border-amber-400/50 transition-all duration-300 shadow-lg cursor-pointer"
+                  onClick={() => setPreviewPhoto(item)}
                 >
-                  {/* Photo Preview Container (Clicking opens Lightbox) */}
-                  <div className="relative aspect-[4/3] bg-black overflow-hidden group cursor-pointer" onClick={() => setPreviewPhoto(item)}>
-                    <img
-                      src={item.thumbnail_url || item.url}
-                      alt={item.filename}
-                      loading="lazy"
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    />
+                  {/* Pure Photo */}
+                  <img
+                    src={item.thumbnail_url || item.url}
+                    alt={item.filename || "Photo"}
+                    loading="lazy"
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
 
-                    {/* Client Selection Badge */}
-                    {item.is_selected && (
-                      <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 text-[11px] font-bold flex items-center gap-1 shadow-lg backdrop-blur-md">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Client Pick</span>
-                      </div>
-                    )}
-
-                    {/* File Size Badge */}
-                    {originalMb && (
-                      <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/80 border border-slate-700/70 text-[10px] font-mono text-slate-300 backdrop-blur-sm">
-                        {originalMb} MB
-                      </div>
-                    )}
-
-                    {/* Zoom / Lightbox Quick Action on Hover */}
+                  {/* Subtle Client Custom Retouching Note Indicator */}
+                  {hasCustomNote && (
                     <div
-                      className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[2px]"
-                      onClick={(e) => e.stopPropagation()}
+                      className="absolute bottom-2.5 left-2.5 p-1.5 rounded-lg bg-black/80 border border-amber-500/40 text-amber-300 backdrop-blur-md shadow-md"
+                      title={`Client Request: "${item.client_notes || item.client_note}"`}
                     >
+                      <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+                    </div>
+                  )}
+
+                  {/* Elegant Hover Overlay with Zoom & Delete */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2 backdrop-blur-[1px]">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPreviewPhoto(item);
+                      }}
+                      className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-white hover:text-amber-400 hover:bg-slate-800 transition-colors shadow-xl cursor-pointer"
+                      title="Fullscreen Preview"
+                    >
+                      <ZoomIn className="w-4 h-4" />
+                    </button>
+
+                    {!isSubmitted && (
                       <button
                         type="button"
-                        onClick={() => setPreviewPhoto(item)}
-                        className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-white hover:bg-slate-800 transition-colors shadow-lg cursor-pointer"
-                        title="Zoom / Fullscreen Lightbox"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeletePhoto(item.id);
+                        }}
+                        className="p-2.5 rounded-xl bg-red-950/90 border border-red-800 text-red-300 hover:bg-red-900 transition-colors shadow-xl cursor-pointer"
+                        title="Delete Photo"
                       >
-                        <ZoomIn className="w-4 h-4 text-amber-400" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
-
-                      {!isSubmitted && (
-                        <button
-                          type="button"
-                          onClick={() => handleDeletePhoto(item.id)}
-                          className="p-2.5 rounded-xl bg-red-950/90 border border-red-800 text-red-300 hover:bg-red-900 transition-colors shadow-lg cursor-pointer"
-                          title="Delete Photo"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Clean Card Body (NO individual Save Original button) */}
-                  <div className="p-3.5 space-y-2 flex-1 flex flex-col justify-between">
-                    <div>
-                      <p className="text-xs font-semibold text-white truncate" title={item.filename}>
-                        {item.filename}
-                      </p>
-                    </div>
-
-                    {/* CLIENT RETOUCHING / SELECTION NOTE */}
-                    {hasClientNote ? (
-                      <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500/15 to-amber-500/5 border border-amber-500/35 text-amber-200 space-y-1 shadow-sm">
-                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-300">
-                          <MessageSquare className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-                          <span>Client Request:</span>
-                        </div>
-                        <p className="text-xs text-white leading-relaxed font-medium whitespace-pre-wrap">
-                          "{item.client_notes || item.client_note}"
-                        </p>
-                      </div>
-                    ) : item.is_selected ? (
-                      <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 text-[11px] text-slate-400 flex items-center gap-1.5 italic">
-                        <Check className="w-3 h-3 text-emerald-400 shrink-0" />
-                        <span>Client Pick (standard color grade)</span>
-                      </div>
-                    ) : (
-                      <div className="text-[11px] text-slate-500 italic py-0.5">
-                        Proof in review
-                      </div>
                     )}
                   </div>
                 </div>

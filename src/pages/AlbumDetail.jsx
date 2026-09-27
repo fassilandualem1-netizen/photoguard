@@ -29,7 +29,8 @@ import {
   Check,
   CheckSquare,
   FolderCheck,
-  ExternalLink
+  ExternalLink,
+  ShieldCheck
 } from "lucide-react";
 
 export default function AlbumDetail() {
@@ -41,14 +42,13 @@ export default function AlbumDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Tab View state: "all" (All Uploaded Proofs) | "selections" (Review Client Selections)
-  // Default is "all" so photographer immediately sees what they upload
+  // Tab View state: "all" (All Proofs) | "selections" (Review Selections)
+  // Default is "all" so photographer immediately sees all uploaded photos
   const [activeViewTab, setActiveViewTab] = useState("all");
 
   // Bulk Upload state
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
-  const [uploadError, setUploadError] = useState(null);
   const fileInputRef = useRef(null);
 
   // Extend Expiration state (Studio plan)
@@ -110,10 +110,10 @@ export default function AlbumDetail() {
     }
   }, [id]);
 
-  // Bulk Upload Handler
+  // HIGH-SPEED CONCURRENT BULK UPLOAD (Pool of 4 parallel workers)
   const handleFileUpload = async (e) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+    const fileList = Array.from(e.target.files || []);
+    if (!fileList || fileList.length === 0) return;
 
     if (album?.is_submitted) {
       alert("This gallery is submitted & locked by the client. Proof uploads are permanently disabled.");
@@ -121,35 +121,65 @@ export default function AlbumDetail() {
     }
 
     setUploading(true);
-    setUploadError(null);
     setLastUploadSummary(null);
-    setUploadProgress({ current: 0, total: files.length });
+    setUploadProgress({ current: 0, total: fileList.length });
 
-    const totalBatchFiles = files.length;
+    const totalBatchFiles = fileList.length;
+    let currentIndex = 0;
+    let completedCount = 0;
     let successfulUploads = 0;
     let failedUploads = 0;
-    let failureReasons = [];
+    const failureReasons = [];
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      setUploadProgress({ current: i + 1, total: files.length });
-
+    // Worker that uploads one file with 1 retry on network glitch
+    const uploadSingleFile = async (file) => {
       const formData = new FormData();
       formData.append("file", file);
 
-      try {
-        // Primary media upload route with fallback alias
-        await api.post(`/api/v1/media/upload/${id}`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        successfulUploads++;
-      } catch (err) {
-        console.error(`Failed to upload ${file.name}:`, err);
-        failedUploads++;
-        const detail = err.response?.data?.detail || err.message || "Upload error";
-        failureReasons.push(`${file.name} (${detail})`);
+      let attempts = 0;
+      while (attempts < 2) {
+        try {
+          await api.post(`/api/v1/media/upload/${id}`, formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+          successfulUploads++;
+          break;
+        } catch (err) {
+          attempts++;
+          if (attempts >= 2) {
+            failedUploads++;
+            const detail = err.response?.data?.detail || err.message || "Upload error";
+            failureReasons.push(`${file.name} (${detail})`);
+          } else {
+            // Brief backoff before single retry
+            await new Promise((r) => setTimeout(r, 300));
+          }
+        }
       }
+
+      completedCount++;
+      setUploadProgress({
+        current: completedCount,
+        total: totalBatchFiles,
+      });
+    };
+
+    // Concurrency limit = 4 parallel streams (prevents rate-limit & maximizes speed)
+    const concurrency = Math.min(4, fileList.length);
+    const workers = [];
+
+    for (let i = 0; i < concurrency; i++) {
+      workers.push(
+        (async () => {
+          while (currentIndex < fileList.length) {
+            const file = fileList[currentIndex++];
+            await uploadSingleFile(file);
+          }
+        })()
+      );
     }
+
+    await Promise.all(workers);
 
     setUploading(false);
     if (fileInputRef.current) {
@@ -163,7 +193,7 @@ export default function AlbumDetail() {
       reasons: failureReasons,
     });
 
-    // Refresh album and ensure we stay on "all" tab to show newly uploaded photos
+    // Stay on "all" tab so newly uploaded photos appear immediately
     fetchAlbumDetail(false);
   };
 
@@ -195,7 +225,7 @@ export default function AlbumDetail() {
       return;
     }
 
-    const confirmed = window.confirm("Are you sure you want to delete this photo from the gallery?");
+    const confirmed = window.confirm("Are you sure you want to remove this photo from the gallery?");
     if (!confirmed) return;
 
     try {
@@ -219,6 +249,7 @@ export default function AlbumDetail() {
 
   const mediaItems = album?.media_items || [];
   const selectedItems = mediaItems.filter((m) => m.is_selected);
+  const isSubmitted = album?.is_submitted || false;
 
   // Client Invite Text & Deep Linking
   const albumPin = album?.pin || album?.client_pin || "";
@@ -254,7 +285,7 @@ export default function AlbumDetail() {
     const albumTitle = albumObj?.title || "Gallery Proofs";
 
     let out = "========================================================================\n";
-    out += "                 PHOTOGUARD STUDIO — CLIENT SELECTION SHEET             \n";
+    out += "                 PHOTOGUARD STUDIO — CLIENT SELECTIONS SHEET            \n";
     out += "========================================================================\n\n";
     out += `GALLERY ALBUM : ${albumTitle}\n`;
     out += `GENERATED ON  : ${dateStr}\n`;
@@ -267,7 +298,7 @@ export default function AlbumDetail() {
 
     photosList.forEach((photo, idx) => {
       const fn = (photo.filename || `Photo_${idx + 1}.jpg`).padEnd(32, " ");
-      const note = photo.client_notes || photo.client_note || "[No specific note — standard edit / color grade]";
+      const note = photo.client_notes || photo.client_note || "[Standard edit / color grade]";
       out += `${fn} | ${note}\n`;
     });
 
@@ -277,14 +308,14 @@ export default function AlbumDetail() {
   };
 
   // NATIVE FOLDER DOWNLOAD (window.showDirectoryPicker)
-  const handleDownloadAllOriginals = async () => {
-    const targetPhotos = selectedItems.length > 0 ? selectedItems : mediaItems;
-
-    if (targetPhotos.length === 0) {
-      alert("No photos in this gallery to download.");
+  // ONLY downloads client selected photos once submitted
+  const handleDownloadAll = async () => {
+    if (!isSubmitted || selectedItems.length === 0) {
+      alert("Download All unlocks once the client submits their selections.");
       return;
     }
 
+    const targetPhotos = selectedItems;
     const supportsDirectoryPicker = typeof window !== "undefined" && "showDirectoryPicker" in window;
 
     if (!supportsDirectoryPicker) {
@@ -382,22 +413,6 @@ export default function AlbumDetail() {
     }
   };
 
-  const handleDownloadSinglePhoto = async (item) => {
-    try {
-      const blob = await fetchPhotoBlob(item.url, item.id);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = item.filename || "photo.jpg";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      window.open(item.url, "_blank");
-    }
-  };
-
   // Lightbox navigation
   const activeList = activeViewTab === "selections" ? selectedItems : mediaItems;
 
@@ -437,7 +452,7 @@ export default function AlbumDetail() {
       <div id="album-detail-loading" className="flex flex-col items-center justify-center py-28 text-slate-400">
         <div className="w-9 h-9 rounded-full border-2 border-amber-400 border-t-transparent animate-spin mb-4" />
         <p className="text-xs font-mono uppercase tracking-wider text-slate-500">
-          Loading gallery details & proofs...
+          Loading gallery proofs...
         </p>
       </div>
     );
@@ -464,9 +479,11 @@ export default function AlbumDetail() {
     );
   }
 
-  const isSubmitted = album.is_submitted || false;
   const daysLeft = calculateDaysLeft(album.expires_at);
   const displayPhotos = activeViewTab === "selections" ? selectedItems : mediaItems;
+
+  // Download All button enablement: ONLY active once submitted with selections
+  const canDownloadAll = isSubmitted && selectedItems.length > 0;
 
   return (
     <div id="album-detail-page" className="space-y-6 max-w-7xl mx-auto pb-16">
@@ -490,7 +507,7 @@ export default function AlbumDetail() {
         )}
       </div>
 
-      {/* Main Album Header Card — Note: NO overflow-hidden so Share PIN dropdown is NEVER clipped */}
+      {/* Main Album Header Card (NO overflow-hidden to prevent clipping dropdowns) */}
       <div className="p-6 sm:p-8 rounded-3xl bg-[#0e121a]/95 border border-slate-800/90 shadow-2xl backdrop-blur-xl relative z-30">
         
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
@@ -544,17 +561,17 @@ export default function AlbumDetail() {
             </div>
           </div>
 
-          {/* Header Action Buttons: Share PIN & Download Originals */}
+          {/* Header Action Buttons: Share PIN & Download All */}
           <div className="flex flex-wrap items-center gap-3 shrink-0">
             
-            {/* ONE-CLICK SHARE PIN DROPDOWN (WhatsApp, Telegram, Copy) */}
+            {/* ONE-CLICK SHARE PIN DROPDOWN */}
             <div className="relative z-50" ref={shareDropdownRef}>
               <button
                 type="button"
                 id="share-pin-dropdown-btn"
                 onClick={() => setIsShareOpen(!isShareOpen)}
                 className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-emerald-500/20 cursor-pointer"
-                title="Share PIN and private gallery link directly with client via WhatsApp, Telegram, or message"
+                title="Share PIN directly with client via WhatsApp, Telegram, or message"
               >
                 <Share2 className="w-4 h-4 text-slate-950 stroke-[2.5]" />
                 <span>Share PIN</span>
@@ -573,7 +590,7 @@ export default function AlbumDetail() {
                     </p>
                   </div>
 
-                  {/* Direct WhatsApp Deep Link */}
+                  {/* WhatsApp Direct Link */}
                   <a
                     id="share-whatsapp-btn"
                     href={`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`}
@@ -592,7 +609,7 @@ export default function AlbumDetail() {
                     <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-300 transition-colors" />
                   </a>
 
-                  {/* Direct Telegram Deep Link */}
+                  {/* Telegram Direct Link */}
                   <a
                     id="share-telegram-btn"
                     href={`https://t.me/share/url?url=${encodeURIComponent("https://photoguard.com/app")}&text=${encodeURIComponent(shareText)}`}
@@ -612,7 +629,6 @@ export default function AlbumDetail() {
                   </a>
 
                   <div className="border-t border-slate-800/80 pt-2 space-y-2">
-                    {/* Copy Invitation Text */}
                     <button
                       type="button"
                       id="copy-invite-text-btn"
@@ -623,7 +639,6 @@ export default function AlbumDetail() {
                       <span>{copiedInvite ? "Copied to Clipboard!" : "Copy Invitation Message"}</span>
                     </button>
 
-                    {/* Preview snippet */}
                     <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80 text-[10px] text-slate-400 font-mono leading-relaxed select-all">
                       "{shareText}"
                     </div>
@@ -651,26 +666,32 @@ export default function AlbumDetail() {
               </button>
             )}
 
-            {/* DOWNLOAD ALL ORIGINALS (Native Folder Picker) */}
+            {/* DOWNLOAD ALL BUTTON: Active ONLY once client submits selections */}
             <button
-              id="download-all-originals-btn"
+              id="download-all-btn"
               type="button"
-              onClick={handleDownloadAllOriginals}
-              disabled={isDownloadingFolder || mediaItems.length === 0}
-              className="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-200 text-slate-950 font-bold text-xs sm:text-sm hover:brightness-110 active:scale-[0.98] transition-all shadow-xl shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              title="Select a local folder on your computer to save all original high-res photos without ZIP extraction"
+              onClick={handleDownloadAll}
+              disabled={!canDownloadAll || isDownloadingFolder}
+              className={`inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all shadow-xl ${
+                canDownloadAll
+                  ? "bg-gradient-to-r from-amber-500 via-amber-400 to-amber-200 text-slate-950 hover:brightness-110 active:scale-[0.98] shadow-amber-500/20 cursor-pointer"
+                  : "bg-slate-800/70 border border-slate-700/60 text-slate-500 cursor-not-allowed opacity-60 shadow-none"
+              }`}
+              title={
+                canDownloadAll
+                  ? `Download all ${selectedItems.length} client-selected photos to a local folder`
+                  : "Download All unlocks once the client submits their selections"
+              }
             >
               {isDownloadingFolder ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                  <span>Saving to Folder ({downloadProgress.current}/{downloadProgress.total})...</span>
+                  <span>Downloading ({downloadProgress.current}/{downloadProgress.total})...</span>
                 </>
               ) : (
                 <>
-                  <FolderDown className="w-4 h-4 text-slate-950 stroke-[2.4]" />
-                  <span>
-                    Download All Originals ({selectedItems.length > 0 ? selectedItems.length : mediaItems.length})
-                  </span>
+                  <FolderDown className={`w-4 h-4 stroke-[2.4] ${canDownloadAll ? "text-slate-950" : "text-slate-500"}`} />
+                  <span>Download All {canDownloadAll ? `(${selectedItems.length})` : ""}</span>
                 </>
               )}
             </button>
@@ -699,11 +720,11 @@ export default function AlbumDetail() {
                 </h3>
               </div>
               <p className="text-xs text-amber-300/80 mt-1 max-w-xl leading-relaxed">
-                The client has submitted their final selections ({selectedItems.length} photos). Review their selections below or download all originals directly into your local editing folder.
+                The client has submitted their final selections ({selectedItems.length} photos). Click "Review Selections" to view their requests or use "Download All" to save the chosen photos directly to your local folder.
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setActiveViewTab("selections")}
@@ -714,17 +735,17 @@ export default function AlbumDetail() {
             </button>
             <button
               type="button"
-              onClick={handleDownloadAllOriginals}
+              onClick={handleDownloadAll}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shadow-md transition-colors cursor-pointer"
             >
               <FolderDown className="w-4 h-4 stroke-[2.4]" />
-              <span>Download Originals</span>
+              <span>Download All</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* Bulk Upload Section (Visible when not submitted) */}
+      {/* Upload Section: Streamlined, End-to-End Encrypted Copy */}
       {!isSubmitted && (
         <div
           id="bulk-upload-section"
@@ -734,10 +755,14 @@ export default function AlbumDetail() {
             <div className="space-y-1">
               <h2 className="text-sm font-semibold text-white flex items-center gap-2">
                 <UploadCloud className="w-4 h-4 text-amber-400" />
-                <span>Upload Original Shoot Proofs</span>
+                <span>Upload Client Proofs</span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono">
+                  <ShieldCheck className="w-3 h-3" />
+                  <span>End-to-End Encrypted</span>
+                </span>
               </h2>
               <p className="text-xs text-slate-400">
-                Drag and drop original high-res photos. PhotoGuard stores high-res originals while serving encrypted proof streams to clients.
+                End-to-end encrypted proof delivery. Photos are watermarked and protected from unauthorized downloads.
               </p>
             </div>
 
@@ -764,11 +789,14 @@ export default function AlbumDetail() {
             </div>
           </div>
 
-          {/* Upload Progress Bar */}
+          {/* High-Speed Upload Progress Bar */}
           {uploading && (
             <div className="mt-4 space-y-2">
               <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
-                <span>Uploading batch...</span>
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                  <span>Turbo batch uploading (4x concurrency)...</span>
+                </span>
                 <span>
                   {uploadProgress.current} / {uploadProgress.total} (
                   {Math.round((uploadProgress.current / uploadProgress.total) * 100)}%)
@@ -776,14 +804,14 @@ export default function AlbumDetail() {
               </div>
               <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-amber-500 to-amber-300 transition-all duration-300"
+                  className="h-full bg-gradient-to-r from-amber-500 to-amber-300 transition-all duration-200"
                   style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
                 />
               </div>
             </div>
           )}
 
-          {/* Upload Summary Feedback Banner */}
+          {/* Upload Summary Feedback */}
           {lastUploadSummary && (
             <div className="mt-4 p-4 rounded-xl border border-slate-800 bg-slate-900/60 text-xs space-y-1.5">
               <div className="flex items-center gap-2 font-semibold text-white">
@@ -812,7 +840,7 @@ export default function AlbumDetail() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
           
           <div className="flex items-center gap-2">
-            {/* Tab 1: All Proofs (Default) */}
+            {/* Tab 1: All Proofs (Default active tab) */}
             <button
               type="button"
               id="tab-all-photos-btn"
@@ -850,7 +878,6 @@ export default function AlbumDetail() {
             </button>
           </div>
 
-          {/* Counter info */}
           <div className="text-xs text-slate-400 flex items-center gap-2">
             <span>
               Showing {displayPhotos.length} of {mediaItems.length} photos
@@ -916,7 +943,7 @@ export default function AlbumDetail() {
                       : "border-slate-800/80 bg-slate-900/60 hover:border-slate-700"
                   }`}
                 >
-                  {/* Photo Preview Container */}
+                  {/* Photo Preview Container (Clicking opens Lightbox) */}
                   <div className="relative aspect-[4/3] bg-black overflow-hidden group cursor-pointer" onClick={() => setPreviewPhoto(item)}>
                     <img
                       src={item.thumbnail_url || item.url}
@@ -925,7 +952,7 @@ export default function AlbumDetail() {
                       className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
 
-                    {/* Selection Badge */}
+                    {/* Client Selection Badge */}
                     {item.is_selected && (
                       <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 text-[11px] font-bold flex items-center gap-1 shadow-lg backdrop-blur-md">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
@@ -933,14 +960,14 @@ export default function AlbumDetail() {
                       </div>
                     )}
 
-                    {/* Original Size Badge */}
+                    {/* File Size Badge */}
                     {originalMb && (
                       <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/80 border border-slate-700/70 text-[10px] font-mono text-slate-300 backdrop-blur-sm">
                         {originalMb} MB
                       </div>
                     )}
 
-                    {/* Quick Hover Controls */}
+                    {/* Zoom / Lightbox Quick Action on Hover */}
                     <div
                       className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[2px]"
                       onClick={(e) => e.stopPropagation()}
@@ -952,15 +979,6 @@ export default function AlbumDetail() {
                         title="Zoom / Fullscreen Lightbox"
                       >
                         <ZoomIn className="w-4 h-4 text-amber-400" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadSinglePhoto(item)}
-                        className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-white hover:bg-slate-800 transition-colors shadow-lg cursor-pointer"
-                        title="Download Original High-Res"
-                      >
-                        <Download className="w-4 h-4 text-emerald-400" />
                       </button>
 
                       {!isSubmitted && (
@@ -976,15 +994,15 @@ export default function AlbumDetail() {
                     </div>
                   </div>
 
-                  {/* Photo Card Body & Client Notes */}
-                  <div className="p-3.5 space-y-2.5 flex-1 flex flex-col justify-between">
+                  {/* Clean Card Body (NO individual Save Original button) */}
+                  <div className="p-3.5 space-y-2 flex-1 flex flex-col justify-between">
                     <div>
                       <p className="text-xs font-semibold text-white truncate" title={item.filename}>
                         {item.filename}
                       </p>
                     </div>
 
-                    {/* CLIENT RETOUCHING / SELECTION NOTE DISPLAY */}
+                    {/* CLIENT RETOUCHING / SELECTION NOTE */}
                     {hasClientNote ? (
                       <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500/15 to-amber-500/5 border border-amber-500/35 text-amber-200 space-y-1 shadow-sm">
                         <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-300">
@@ -998,25 +1016,13 @@ export default function AlbumDetail() {
                     ) : item.is_selected ? (
                       <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 text-[11px] text-slate-400 flex items-center gap-1.5 italic">
                         <Check className="w-3 h-3 text-emerald-400 shrink-0" />
-                        <span>Standard selection (no specific note)</span>
+                        <span>Client Pick (standard color grade)</span>
                       </div>
                     ) : (
-                      <div className="text-[11px] text-slate-500 italic py-1">
+                      <div className="text-[11px] text-slate-500 italic py-0.5">
                         Proof in review
                       </div>
                     )}
-
-                    {/* Card Footer */}
-                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadSinglePhoto(item)}
-                        className="w-full inline-flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-slate-800/90 hover:bg-slate-700/80 border border-slate-700/80 text-xs font-semibold text-slate-200 hover:text-white transition-colors cursor-pointer"
-                      >
-                        <Download className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Save Original</span>
-                      </button>
-                    </div>
                   </div>
                 </div>
               );
@@ -1046,7 +1052,7 @@ export default function AlbumDetail() {
 
             <div>
               <h3 className="text-lg font-bold text-white">
-                {downloadProgress.completed ? "Originals Saved to Folder!" : "Writing to Local Folder"}
+                {downloadProgress.completed ? "Client Selections Saved to Folder!" : "Saving to Local Folder"}
               </h3>
               <p className="text-xs text-slate-400 mt-1">
                 Folder: <span className="font-mono text-amber-300 font-bold">{downloadProgress.folderName || "Selected Folder"}</span>
@@ -1072,10 +1078,13 @@ export default function AlbumDetail() {
               <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 text-xs text-emerald-200 space-y-2 text-left">
                 <div className="font-bold flex items-center gap-1.5 text-emerald-400">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Direct Download Complete</span>
+                  <span>Download Complete</span>
                 </div>
                 <p>
                   • <strong>{downloadProgress.successCount} photos</strong> saved directly to your local folder without ZIP extraction.
+                </p>
+                <p>
+                  • <strong>Job_Sheet.txt</strong> included with client retouching instructions.
                 </p>
               </div>
             )}
@@ -1110,7 +1119,7 @@ export default function AlbumDetail() {
                 type="button"
                 id="lightbox-prev-btn"
                 onClick={handlePrevPhoto}
-                className="fixed left-3 sm:left-6 top-1/2 -translate-y-1/2 z-50 p-3 sm:p-3.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-white hover:text-amber-400 transition-all shadow-2xl backdrop-blur-md group"
+                className="fixed left-3 sm:left-6 top-1/2 -translate-y-1/2 z-50 p-3 sm:p-3.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-white hover:text-amber-400 transition-all shadow-2xl backdrop-blur-md group cursor-pointer"
                 title="Previous Photo (Left Arrow)"
               >
                 <ChevronLeft className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" />
@@ -1119,7 +1128,7 @@ export default function AlbumDetail() {
                 type="button"
                 id="lightbox-next-btn"
                 onClick={handleNextPhoto}
-                className="fixed right-3 sm:right-6 top-1/2 -translate-y-1/2 z-50 p-3 sm:p-3.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-white hover:text-amber-400 transition-all shadow-2xl backdrop-blur-md group"
+                className="fixed right-3 sm:right-6 top-1/2 -translate-y-1/2 z-50 p-3 sm:p-3.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-white hover:text-amber-400 transition-all shadow-2xl backdrop-blur-md group cursor-pointer"
                 title="Next Photo (Right Arrow)"
               >
                 <ChevronRight className="w-6 h-6 group-hover:translate-x-0.5 transition-transform" />
@@ -1148,15 +1157,6 @@ export default function AlbumDetail() {
               </div>
 
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleDownloadSinglePhoto(previewPhoto)}
-                  className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs transition-colors flex items-center gap-1.5 shadow-md cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5 stroke-[2.4]" />
-                  <span>Download Original</span>
-                </button>
-
                 <button
                   type="button"
                   onClick={() => setPreviewPhoto(null)}

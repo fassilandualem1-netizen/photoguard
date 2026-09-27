@@ -1,52 +1,51 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
+import { useAuth } from "../context/AuthContext";
 import {
   ArrowLeft,
-  Upload,
-  Download,
+  UploadCloud,
   CheckCircle2,
   Lock,
-  Clock,
-  AlertCircle,
-  RefreshCw,
-  FileText,
-  ExternalLink,
-  Copy,
-  Check,
-  Trash2,
-  Loader2,
-  ChevronDown,
+  Calendar,
   Sparkles,
-  Sliders,
-  Eye,
-  KeyRound,
-  CalendarPlus,
+  Download,
   Share2,
-  Send,
+  Trash2,
+  FolderPlus,
+  AlertCircle,
+  Copy,
+  ChevronDown,
+  CalendarPlus,
+  Loader2,
   MessageCircle,
-  X,
+  Send,
   ZoomIn,
   ChevronLeft,
   ChevronRight,
-  Palette,
-  Camera,
-  Film,
-  Scissors,
+  X,
+  FolderDown,
+  FileText,
+  MessageSquare,
+  Check,
+  CheckSquare,
+  FolderCheck,
+  Folder
 } from "lucide-react";
 
 export default function AlbumDetail() {
   const { id } = useParams();
   const { user } = useAuth();
+  const isStudio = user?.plan_tier === "studio";
+
   const [album, setAlbum] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Live Sync version tracking ref
-  const lastVersionRef = useRef(null);
+  // Tab View state: "all" (All Proofs) | "selections" (Review Client Selections)
+  const [activeViewTab, setActiveViewTab] = useState("all");
 
-  // Upload state
+  // Bulk Upload state
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [uploadError, setUploadError] = useState(null);
@@ -56,10 +55,22 @@ export default function AlbumDetail() {
   const [extending, setExtending] = useState(false);
   const [extendSuccessMsg, setExtendSuccessMsg] = useState(false);
 
-  // Export dropdown state
-  const [isExportOpen, setIsExportOpen] = useState(false);
-  const [copiedUrls, setCopiedUrls] = useState(false);
-  const exportDropdownRef = useRef(null);
+  // Native Folder Download state (File System Access API)
+  const [isDownloadingFolder, setIsDownloadingFolder] = useState(false);
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState({
+    current: 0,
+    total: 0,
+    currentFilename: "",
+    folderName: "",
+    completed: false,
+    successCount: 0,
+    failedFiles: [],
+  });
+
+  // Automated Job Sheet Modal
+  const [showJobSheetModal, setShowJobSheetModal] = useState(false);
+  const [copiedJobSheet, setCopiedJobSheet] = useState(false);
 
   // One-Click Client Share dropdown state
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -72,28 +83,9 @@ export default function AlbumDetail() {
   // Lightbox Preview Modal state
   const [previewPhoto, setPreviewPhoto] = useState(null);
 
-  // Studio Editor Suite state
-  const [activeEditorMenuId, setActiveEditorMenuId] = useState(null);
-  const [editorCopiedToast, setEditorCopiedToast] = useState("");
-
-  const handleOpenInEditor = (toolName, photoUrl, filename) => {
-    if (navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(photoUrl).catch(() => {});
-    }
-    setEditorCopiedToast(`Copied proof URL for ${toolName}! Ready for ingest.`);
-    setTimeout(() => setEditorCopiedToast(""), 3500);
-
-    // Open high-fidelity proof stream in focused new tab for editing/ingest
-    window.open(photoUrl, "_blank", "noopener,noreferrer");
-    setActiveEditorMenuId(null);
-  };
-
   // Close dropdowns on click outside
   useEffect(() => {
     function handleClickOutside(event) {
-      if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target)) {
-        setIsExportOpen(false);
-      }
       if (shareDropdownRef.current && !shareDropdownRef.current.contains(event.target)) {
         setIsShareOpen(false);
       }
@@ -109,9 +101,8 @@ export default function AlbumDetail() {
       const response = await api.get(`/api/v1/albums/${id}`);
       setAlbum(response.data);
     } catch (err) {
-      const msg =
-        err.response?.data?.detail || "Failed to load album details. Please try again.";
-      if (showLoading) setError(msg);
+      console.error("Failed to fetch album details:", err);
+      setError(err.response?.data?.detail || "Failed to load album.");
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -123,160 +114,100 @@ export default function AlbumDetail() {
     }
   }, [id]);
 
-  // LIVE SYNC ENGINE: Smart polling every 5s using Upstash Redis version counter
-  useEffect(() => {
-    const pin = album?.pin || album?.client_pin;
-    if (!pin) return;
+  // Bulk Upload Handler
+  const handleFileUpload = async (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    const syncInterval = setInterval(async () => {
-      try {
-        const syncRes = await api.get(`/api/v1/client/sync/${pin}`);
-        const currentVersion = syncRes.data?.version;
-        const isLocked = syncRes.data?.is_locked;
-
-        if (lastVersionRef.current === null) {
-          lastVersionRef.current = currentVersion;
-        } else if (lastVersionRef.current !== currentVersion) {
-          // Version updated by client selections: silently refresh state to accumulate changes
-          lastVersionRef.current = currentVersion;
-          await fetchAlbumDetail(false);
-        } else if (isLocked && !album.is_locked) {
-          // Locked by client submission or expiration: silently update album
-          await fetchAlbumDetail(false);
-        }
-      } catch (err) {
-        console.error("Live Sync polling error:", err);
-      }
-    }, 5000);
-
-    return () => clearInterval(syncInterval);
-  }, [album?.pin, album?.client_pin, album?.is_locked, id]);
-
-  // Bulk Upload Handler using Promise.allSettled for concurrency & partial failure resilience
-  const handleFileChange = async (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
-    setUploading(true);
-    setUploadProgress({ current: 0, total: files.length });
-    setUploadError(null);
-
-    const uploadedItems = [];
-    const failedFiles = [];
-
-    // High-performance Concurrent Worker Pool (up to 6 simultaneous uploads)
-    const CONCURRENCY_LIMIT = 6;
-    let completedCount = 0;
-    let fileIndex = 0;
-
-    const worker = async () => {
-      while (fileIndex < files.length) {
-        const currentIndex = fileIndex++;
-        const file = files[currentIndex];
-        const formData = new FormData();
-        formData.append("file", file);
-
-        try {
-          const res = await api.post(`/api/v1/media/upload/${id}`, formData, {
-            headers: { "Content-Type": "multipart/form-data" },
-          });
-          uploadedItems.push(res.data);
-        } catch (err) {
-          failedFiles.push(file.name);
-        } finally {
-          completedCount++;
-          setUploadProgress({ current: completedCount, total: files.length });
-        }
-      }
-    };
-
-    const workerCount = Math.min(CONCURRENCY_LIMIT, files.length);
-    const workers = Array.from({ length: workerCount }, () => worker());
-    await Promise.all(workers);
-
-    // Refresh album state with newly uploaded media items
-    if (uploadedItems.length > 0) {
-      setAlbum((prev) => {
-        if (!prev) return prev;
-        const currentItems = prev.media_items || [];
-        const combined = [...uploadedItems, ...currentItems];
-        return {
-          ...prev,
-          media_items: combined,
-          media_count: (prev.media_count || 0) + uploadedItems.length,
-        };
-      });
-
-      // Calculate total original size uploaded in this batch
-      const totalBatchBytes = uploadedItems.reduce((acc, curr) => {
-        const sz = curr?.original_size || 0;
-        return acc + sz;
-      }, 0);
-      const totalBatchMb = (totalBatchBytes / (1024 * 1024)).toFixed(1);
-
-      setLastUploadSummary({
-        count: uploadedItems.length,
-        totalMb: totalBatchMb,
-        timestamp: Date.now(),
-      });
+    if (album?.is_submitted) {
+      alert("This gallery is submitted & locked by the client. Proof uploads are permanently disabled.");
+      return;
     }
 
-    if (failedFiles.length > 0) {
-      setUploadError(
-        `Failed to upload ${failedFiles.length} file(s): ${failedFiles.slice(0, 3).join(", ")}${
-          failedFiles.length > 3 ? "..." : ""
-        }. Check file size and format.`
-      );
+    setUploading(true);
+    setUploadError(null);
+    setLastUploadSummary(null);
+    setUploadProgress({ current: 0, total: files.length });
+
+    const totalBatchFiles = files.length;
+    let successfulUploads = 0;
+    let failedUploads = 0;
+    let failureReasons = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      setUploadProgress({ current: i + 1, total: files.length });
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        await api.post(`/api/v1/albums/${id}/upload`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        successfulUploads++;
+      } catch (err) {
+        console.error(`Failed to upload ${file.name}:`, err);
+        failedUploads++;
+        const detail = err.response?.data?.detail || "Upload error";
+        failureReasons.push(`${file.name} (${detail})`);
+      }
     }
 
     setUploading(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+
+    setLastUploadSummary({
+      total: totalBatchFiles,
+      success: successfulUploads,
+      failed: failedUploads,
+      reasons: failureReasons,
+    });
+
+    fetchAlbumDetail(false);
   };
 
-  // Studio Tier: Extend Expiration by 7 days
+  // Extend lifespan handler (Studio plan only)
   const handleExtendExpiration = async () => {
+    if (!isStudio) return;
     try {
       setExtending(true);
-      const res = await api.put(`/api/v1/albums/${id}/extend`, { days: 7 });
-      setAlbum(res.data);
+      setExtendSuccessMsg(false);
+      const response = await api.post(`/api/v1/albums/${id}/extend-expiration`);
+      setAlbum((prev) => ({
+        ...prev,
+        expires_at: response.data.expires_at,
+        days_remaining: response.data.days_remaining,
+      }));
       setExtendSuccessMsg(true);
-      setTimeout(() => setExtendSuccessMsg(false), 3000);
+      setTimeout(() => setExtendSuccessMsg(false), 4000);
     } catch (err) {
-      const status = err.response?.status;
-      if (status === 423 || status === 409) {
-        setAlbum((prev) => (prev ? { ...prev, is_locked: true } : prev));
-      }
-      const msg =
-        err.response?.data?.detail || "Failed to extend album lifespan. Please try again.";
-      alert(msg);
+      console.error("Failed to extend album lifespan:", err);
+      alert(err.response?.data?.detail || "Failed to extend gallery lifespan.");
     } finally {
       setExtending(false);
     }
   };
 
-  const handleDeletePhoto = async (mediaId) => {
-    if (!window.confirm("Are you sure you want to remove this photo from the album?")) {
+  const handleDeletePhoto = async (photoId) => {
+    if (album?.is_submitted) {
+      alert("This gallery is submitted & locked by the client. Photos cannot be deleted.");
       return;
     }
+
+    const confirmed = window.confirm("Are you sure you want to delete this photo from the gallery?");
+    if (!confirmed) return;
+
     try {
-      await api.delete(`/api/v1/media/${mediaId}`);
-      setAlbum((prev) => {
-        if (!prev) return prev;
-        const updatedItems = prev.media_items.filter((item) => item.id !== mediaId);
-        return {
-          ...prev,
-          media_items: updatedItems,
-          media_count: Math.max(0, (prev.media_count || updatedItems.length) - 1),
-          selected_count: updatedItems.filter((i) => i.is_selected).length,
-        };
-      });
-    } catch (err) {
-      const status = err.response?.status;
-      if (status === 423 || status === 409) {
-        setAlbum((prev) => (prev ? { ...prev, is_locked: true } : prev));
+      await api.delete(`/api/v1/media/${photoId}`);
+      if (previewPhoto && previewPhoto.id === photoId) {
+        setPreviewPhoto(null);
       }
+      fetchAlbumDetail(false);
+    } catch (err) {
+      console.error("Failed to delete photo:", err);
       alert(err.response?.data?.detail || "Failed to delete photo.");
     }
   };
@@ -288,15 +219,12 @@ export default function AlbumDetail() {
     return days > 0 ? days : 0;
   };
 
-  // Filter selected items, or fallback to all items if none selected
   const mediaItems = album?.media_items || [];
-  const media = mediaItems;
   const selectedItems = mediaItems.filter((m) => m.is_selected);
-  const exportItems = selectedItems.length > 0 ? selectedItems : mediaItems;
 
-  // ONE-CLICK CLIENT SHARE HANDLERS
+  // Client Invite Text
   const albumPin = album?.pin || album?.client_pin || "";
-  const shareText = `Your private proof gallery is ready! Access PIN: ${albumPin}. Download the PhotoGuard app here: https://photoguard.com/app`;
+  const shareText = `Your private proof gallery is ready! Access PIN: ${albumPin}. Review proofs & mark your selections here: https://photoguard.com/app`;
 
   const handleWhatsAppShare = () => {
     const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
@@ -321,65 +249,209 @@ export default function AlbumDetail() {
     setIsShareOpen(false);
   };
 
-  // RAW TXT MANIFEST EXPORT: Pure high-res URLs, one per line (\n). No JSON, no quotes, no commas.
-  const handleExportRawManifest = () => {
-    if (exportItems.length === 0) {
-      alert("No photos in this gallery to export.");
+  // Generate automated Job_Sheet.txt content
+  const generateJobSheetText = (albumObj, photosList) => {
+    const dateStr = new Date().toLocaleString("en-US", { dateStyle: "full", timeStyle: "medium" });
+    const selectedCount = photosList.filter((p) => p.is_selected).length;
+    const pin = albumObj?.pin || albumObj?.client_pin || "N/A";
+    const albumTitle = albumObj?.title || "Gallery Proofs";
+
+    let out = "========================================================================\n";
+    out += "                 PHOTOGUARD STUDIO — CLIENT JOB SHEET                   \n";
+    out += "========================================================================\n\n";
+    out += `GALLERY ALBUM : ${albumTitle}\n`;
+    out += `GENERATED ON  : ${dateStr}\n`;
+    out += `CLIENT PIN    : ${pin}\n`;
+    out += `TOTAL PHOTOS  : ${photosList.length} (${selectedCount} client-selected)\n`;
+    out += `STATUS        : ${albumObj?.is_submitted ? "CLIENT SELECTION SUBMITTED & LOCKED" : "IN REVIEW / DRAFT"}\n\n`;
+    out += "========================================================================\n";
+    out += "  PHOTO FILENAME                  | CLIENT RETOUCHING / SELECTION NOTE   \n";
+    out += "========================================================================\n";
+
+    photosList.forEach((photo, idx) => {
+      const fn = (photo.filename || `Photo_${idx + 1}.jpg`).padEnd(32, " ");
+      const note = photo.client_notes || photo.client_note || "[No specific note — standard color grade]";
+      out += `${fn} | ${note}\n`;
+    });
+
+    out += "========================================================================\n";
+    out += "Generated automatically by PhotoGuard Studio Suite.\n";
+    return out;
+  };
+
+  // Helper to fetch blob with proxy fallback
+  const fetchPhotoBlob = async (url, mediaId) => {
+    try {
+      const res = await fetch(url, { mode: "cors" });
+      if (res.ok) return await res.blob();
+    } catch (corsErr) {
+      console.warn("Direct image fetch blocked, using studio download route:", corsErr);
+    }
+    const proxyRes = await api.get(`/api/v1/media/${mediaId}/download`, { responseType: "blob" });
+    return proxyRes.data;
+  };
+
+  // NATIVE FOLDER DOWNLOAD (File System Access API: window.showDirectoryPicker)
+  const handleDownloadAllOriginals = async () => {
+    // If in selections tab or if client made selections, download selected; else download all
+    const targetPhotos = selectedItems.length > 0 ? selectedItems : mediaItems;
+
+    if (targetPhotos.length === 0) {
+      alert("No photos in this gallery to download.");
       return;
     }
-    // Clean raw URLs only: one URL per line separated by \n
-    // STRICTLY NO JSON brackets, NO quotes, NO commas.
-    const rawUrls = exportItems
-      .map((item) => item.url)
-      .filter((u) => Boolean(u && typeof u === "string"))
-      .join("\n");
 
-    const blob = new Blob([rawUrls], { type: "text/plain;charset=utf-8" });
-    const downloadUrl = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = downloadUrl;
-    const cleanAlbumTitle = (album?.title || "gallery").replace(/[^a-zA-Z0-9_-]/g, "_");
-    link.download = `${cleanAlbumTitle}_highres_urls.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(downloadUrl);
-    setIsExportOpen(false);
-  };
+    const supportsDirectoryPicker = typeof window !== "undefined" && "showDirectoryPicker" in window;
 
-  const handleCopyOriginalUrls = async () => {
-    if (exportItems.length === 0) return;
-    const rawUrls = exportItems
-      .map((item) => item.url)
-      .filter((u) => Boolean(u && typeof u === "string"))
-      .join("\n");
-    try {
-      await navigator.clipboard.writeText(rawUrls);
-      setCopiedUrls(true);
-      setTimeout(() => setCopiedUrls(false), 2500);
-    } catch {
-      console.warn("Clipboard access denied. Falling back to prompt.");
+    if (!supportsDirectoryPicker) {
+      // Fallback for browsers without File System Access API
+      handleFallbackMultiDownload(targetPhotos);
+      return;
     }
-    setIsExportOpen(false);
+
+    try {
+      // 1. Browser prompts photographer to select or create a specific local folder
+      const dirHandle = await window.showDirectoryPicker({
+        id: "photoguard_studio_downloads",
+        mode: "readwrite",
+        startIn: "downloads",
+      });
+
+      setIsDownloadingFolder(true);
+      setDownloadModalOpen(true);
+      setDownloadProgress({
+        current: 0,
+        total: targetPhotos.length,
+        currentFilename: "Preparing local folder stream...",
+        folderName: dirHandle.name,
+        completed: false,
+        successCount: 0,
+        failedFiles: [],
+      });
+
+      let successCount = 0;
+      const failedFiles = [];
+
+      // 2. Iterate through photos, fetch original blobs, and write directly into selected folder
+      for (let i = 0; i < targetPhotos.length; i++) {
+        const item = targetPhotos[i];
+        const filename = item.filename || `Photo_${i + 1}.jpg`;
+
+        setDownloadProgress((prev) => ({
+          ...prev,
+          current: i + 1,
+          currentFilename: filename,
+        }));
+
+        try {
+          const blob = await fetchPhotoBlob(item.url, item.id);
+          const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          successCount++;
+        } catch (fileErr) {
+          console.error(`Failed to write ${filename}:`, fileErr);
+          failedFiles.push(filename);
+        }
+      }
+
+      // 3. Automated Job Sheet: Save Job_Sheet.txt in the same selected folder
+      setDownloadProgress((prev) => ({
+        ...prev,
+        currentFilename: "Saving Job_Sheet.txt...",
+      }));
+
+      const jobSheetText = generateJobSheetText(album, targetPhotos);
+      const jobSheetHandle = await dirHandle.getFileHandle("Job_Sheet.txt", { create: true });
+      const jobSheetWritable = await jobSheetHandle.createWritable();
+      await jobSheetWritable.write(jobSheetText);
+      await jobSheetWritable.close();
+
+      setDownloadProgress((prev) => ({
+        ...prev,
+        completed: true,
+        successCount,
+        failedFiles,
+      }));
+    } catch (err) {
+      if (err.name === "AbortError") {
+        console.log("Folder selection cancelled by photographer.");
+      } else {
+        console.error("Native folder download error:", err);
+        alert(`Folder download error: ${err.message || "Unknown error"}`);
+      }
+      setDownloadModalOpen(false);
+    } finally {
+      setIsDownloadingFolder(false);
+    }
   };
+
+  // Fallback download for browsers without File System Access API
+  const handleFallbackMultiDownload = async (targetPhotos) => {
+    alert("Your browser does not support direct directory write. Files will be downloaded individually, along with Job_Sheet.txt.");
+    
+    // Download Job Sheet
+    const jobSheetText = generateJobSheetText(album, targetPhotos);
+    const jobBlob = new Blob([jobSheetText], { type: "text/plain;charset=utf-8" });
+    const jobUrl = URL.createObjectURL(jobBlob);
+    const jobLink = document.createElement("a");
+    jobLink.href = jobUrl;
+    jobLink.download = `${(album?.title || "Gallery").replace(/\s+/g, "_")}_Job_Sheet.txt`;
+    document.body.appendChild(jobLink);
+    jobLink.click();
+    document.body.removeChild(jobLink);
+    URL.revokeObjectURL(jobUrl);
+
+    // Download Photos
+    for (const item of targetPhotos) {
+      const a = document.createElement("a");
+      a.href = item.url;
+      a.download = item.filename || "photo.jpg";
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  };
+
+  // Single photo download helper
+  const handleDownloadSinglePhoto = async (item) => {
+    try {
+      const blob = await fetchPhotoBlob(item.url, item.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = item.filename || "photo.jpg";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      window.open(item.url, "_blank");
+    }
+  };
+
+  // Lightbox navigation
+  const activeList = activeViewTab === "selections" ? selectedItems : mediaItems;
 
   const handlePrevPhoto = () => {
-    if (!previewPhoto || mediaItems.length === 0) return;
-    const currentIndex = mediaItems.findIndex((p) => p.id === previewPhoto.id);
+    if (!previewPhoto || activeList.length === 0) return;
+    const currentIndex = activeList.findIndex((p) => p.id === previewPhoto.id);
     if (currentIndex === -1) return;
-    const prevIndex = (currentIndex - 1 + mediaItems.length) % mediaItems.length;
-    setPreviewPhoto(mediaItems[prevIndex]);
+    const prevIndex = (currentIndex - 1 + activeList.length) % activeList.length;
+    setPreviewPhoto(activeList[prevIndex]);
   };
 
   const handleNextPhoto = () => {
-    if (!previewPhoto || mediaItems.length === 0) return;
-    const currentIndex = mediaItems.findIndex((p) => p.id === previewPhoto.id);
+    if (!previewPhoto || activeList.length === 0) return;
+    const currentIndex = activeList.findIndex((p) => p.id === previewPhoto.id);
     if (currentIndex === -1) return;
-    const nextIndex = (currentIndex + 1) % mediaItems.length;
-    setPreviewPhoto(mediaItems[nextIndex]);
+    const nextIndex = (currentIndex + 1) % activeList.length;
+    setPreviewPhoto(activeList[nextIndex]);
   };
 
-  // Keyboard navigation for Lightbox Photo Scanner (ArrowLeft, ArrowRight, Escape)
   useEffect(() => {
     if (!previewPhoto) return;
     const handleKeyDown = (e) => {
@@ -393,18 +465,11 @@ export default function AlbumDetail() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [previewPhoto, mediaItems]);
-
-  const handleDownloadManifest = () => {
-    handleExportRawManifest();
-  };
+  }, [previewPhoto, activeList]);
 
   if (loading) {
     return (
-      <div
-        id="album-detail-loading"
-        className="flex flex-col items-center justify-center py-28 text-slate-400"
-      >
+      <div id="album-detail-loading" className="flex flex-col items-center justify-center py-28 text-slate-400">
         <div className="w-9 h-9 rounded-full border-2 border-amber-400 border-t-transparent animate-spin mb-4" />
         <p className="text-xs font-mono uppercase tracking-wider text-slate-500">
           Loading gallery details & proofs...
@@ -415,311 +480,215 @@ export default function AlbumDetail() {
 
   if (error || !album) {
     return (
-      <div
-        id="album-detail-error"
-        className="p-8 rounded-2xl border border-red-500/20 bg-red-950/40 text-red-300 max-w-xl mx-auto my-12 flex flex-col items-start gap-4"
-      >
+      <div id="album-detail-error" className="p-8 rounded-2xl border border-red-500/20 bg-red-950/40 text-red-300 max-w-xl mx-auto my-12 flex flex-col items-start gap-4">
         <div className="flex items-center gap-3">
           <AlertCircle className="w-6 h-6 text-red-400 shrink-0" />
-          <div>
-            <h3 className="text-base font-semibold text-white">Failed to load gallery</h3>
-            <p className="text-xs text-red-300/90 mt-1">{error || "Album not found."}</p>
-          </div>
+          <h2 className="text-base font-bold text-white">Gallery Access Issue</h2>
         </div>
-        <div className="flex items-center gap-3 mt-2">
-          <Link
-            to="/dashboard"
-            className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-semibold text-white transition-colors"
-          >
-            Return to Dashboard
-          </Link>
-          <button
-            type="button"
-            onClick={() => fetchAlbumDetail(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-900/60 hover:bg-red-800/60 border border-red-700/60 text-xs font-semibold text-white transition-colors"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Retry</span>
-          </button>
-        </div>
+        <p className="text-xs text-red-200 leading-relaxed">
+          {error || "Album not found or access denied."}
+        </p>
+        <Link
+          to="/dashboard"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Return to Dashboard</span>
+        </Link>
       </div>
     );
   }
 
+  const isSubmitted = album.is_submitted || false;
   const daysLeft = calculateDaysLeft(album.expires_at);
-  const isSubmitted = album.status === "submitted" || album.is_locked;
-  const isStudio = user?.subscription_plan === "studio";
+  const displayPhotos = activeViewTab === "selections" ? selectedItems : mediaItems;
 
   return (
-    <div id="album-detail-container" className="space-y-8">
-      {/* Navigation Breadcrumb & Back Action */}
-      <div className="flex items-center justify-between flex-wrap gap-4 pb-2 border-b border-slate-800/60">
-        <div className="flex items-center gap-3">
-          <Link
-            to="/dashboard"
-            id="back-to-galleries-link"
-            className="inline-flex items-center gap-2.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-xs sm:text-sm font-semibold text-slate-200 hover:text-white transition-all group shadow-md shadow-black/40 hover:border-amber-500/50"
-          >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform text-amber-400 shrink-0" />
-            <span>Back to Galleries</span>
-          </Link>
-          <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 font-medium">
-            <span>/</span>
-            <span className="text-slate-300 truncate max-w-xs">{album.title}</span>
-          </div>
-        </div>
+    <div id="album-detail-page" className="space-y-6 max-w-7xl mx-auto pb-16">
+      
+      {/* Top Navigation & Breadcrumbs */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <Link
+          to="/dashboard"
+          className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors group"
+        >
+          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform text-amber-400" />
+          <span>Back to All Galleries</span>
+        </Link>
 
-        <div className="flex items-center gap-3">
-          {extendSuccessMsg && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-950/90 border border-amber-500/40 text-amber-300 text-xs animate-in fade-in">
-              <Check className="w-3.5 h-3.5 text-amber-400" />
-              <span>Lifespan extended by +7 days!</span>
-            </div>
-          )}
-          {copiedUrls && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 text-xs animate-in fade-in">
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Original URLs copied to clipboard!</span>
-            </div>
-          )}
-          {copiedInvite && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 text-xs animate-in fade-in">
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Client invitation copied to clipboard!</span>
-            </div>
-          )}
-        </div>
+        {/* Studio Plan Badge */}
+        {isStudio && (
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-semibold">
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>Studio Tier Active</span>
+          </div>
+        )}
       </div>
 
-      {/* Top Header Section */}
-      <div className="relative z-40 p-6 sm:p-8 rounded-3xl border border-slate-800/90 bg-gradient-to-br from-slate-900/90 via-slate-900/50 to-[#0d0f12] backdrop-blur-xl shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-              {album.title}
-            </h1>
+      {/* Main Album Header Card */}
+      <div className="p-6 sm:p-8 rounded-3xl bg-[#0e121a]/95 border border-slate-800/90 shadow-2xl backdrop-blur-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
 
-            {/* Lock Status */}
-            {isSubmitted ? (
-              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-950/80 border border-amber-500/40 text-amber-300 text-xs font-medium">
-                <Lock className="w-3.5 h-3.5 text-amber-400" />
-                Selection Finalized & Locked
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-medium">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Client Selecting (Live Sync Active)
-              </span>
-            )}
-          </div>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                {album.title}
+              </h1>
 
-          <div className="flex flex-wrap items-center gap-y-2 gap-x-6 text-xs text-slate-400">
-            <div>
-              Client: <span className="text-slate-200 font-medium">{album.client_name}</span>
-            </div>
-            <div>
-              Total Proofs:{" "}
-              <span className="text-slate-200 font-mono font-medium">
-                {album.media_count || mediaItems.length}
-              </span>
-            </div>
-            <div>
-              Client Selections:{" "}
-              <span className="text-amber-400 font-mono font-semibold">
-                {album.selected_count ?? selectedItems.length}
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5 text-slate-500" />
-              <span>
-                {daysLeft !== null
-                  ? album.is_expired || daysLeft === 0
-                    ? "Expired"
-                    : `${daysLeft} days left`
-                  : "Permanent"}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Prominent Client PIN & Action Buttons */}
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4 relative z-50">
-          {/* Prominent 6-Digit PIN Pill */}
-          <div
-            id="client-pin-banner"
-            className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 shadow-lg shadow-amber-500/5"
-          >
-            <div className="w-8 h-8 rounded-xl bg-amber-400/20 flex items-center justify-center">
-              <KeyRound className="w-4 h-4 text-amber-400" />
-            </div>
-            <div>
-              <p className="text-[10px] uppercase font-mono tracking-widest text-slate-400">
-                Client Access PIN
-              </p>
-              <p className="text-xl font-mono font-extrabold tracking-widest text-amber-400">
-                {albumPin}
-              </p>
-            </div>
-          </div>
-
-          {/* ONE-CLICK CLIENT SHARE DROPDOWN */}
-          <div className="relative z-50" ref={shareDropdownRef}>
-            <button
-              id="share-client-dropdown-btn"
-              type="button"
-              onClick={() => setIsShareOpen((prev) => !prev)}
-              className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-semibold text-xs transition-all shadow-lg shadow-emerald-500/20 cursor-pointer"
-              title="Share PIN and app download link directly with client via WhatsApp, Telegram, or message"
-            >
-              <Share2 className="w-4 h-4 text-slate-950" />
-              <span>One-Click Share</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isShareOpen ? "rotate-180" : ""}`} />
-            </button>
-
-            {isShareOpen && (
-              <div className="absolute right-0 top-full mt-2 w-80 sm:w-88 rounded-2xl border border-slate-700/80 bg-[#12161f] p-3 shadow-2xl shadow-black/95 z-50 space-y-2 animate-in fade-in zoom-in-95 duration-150">
-                <div className="px-3 py-2 border-b border-slate-800/80">
-                  <p className="text-xs font-semibold text-white flex items-center gap-1.5">
-                    <Share2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Client Invitation Dispatch</span>
-                  </p>
-                  <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                    Instantly share this private proof gallery with pre-filled PIN <span className="font-mono font-bold text-amber-400">{albumPin}</span>.
-                  </p>
-                </div>
-
-                {/* WhatsApp Share Direct Anchor */}
-                <a
-                  id="share-whatsapp-btn"
-                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setIsShareOpen(false)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-emerald-200 hover:text-white bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/20 hover:border-emerald-500/50 transition-all text-left group cursor-pointer relative z-10"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0 group-hover:scale-105 transition-transform">
-                    <MessageCircle className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-semibold text-white">Share via WhatsApp</div>
-                    <div className="text-[10px] text-emerald-400/80">Direct pre-filled chat invite</div>
-                  </div>
-                  <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-300 transition-colors" />
-                </a>
-
-                {/* Telegram Share Direct Anchor */}
-                <a
-                  id="share-telegram-btn"
-                  href={`https://t.me/share/url?url=${encodeURIComponent("https://photoguard.com/app")}&text=${encodeURIComponent(shareText)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setIsShareOpen(false)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-sky-200 hover:text-white bg-sky-950/40 hover:bg-sky-900/60 border border-sky-500/20 hover:border-sky-500/50 transition-all text-left group cursor-pointer relative z-10"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-sky-500/20 flex items-center justify-center text-sky-400 shrink-0 group-hover:scale-105 transition-transform">
-                    <Send className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-semibold text-white">Share via Telegram</div>
-                    <div className="text-[10px] text-sky-400/80">Instant messenger broadcast</div>
-                  </div>
-                  <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-sky-300 transition-colors" />
-                </a>
-
-                <div className="my-1 border-t border-slate-800/80" />
-
-                {/* Copy Template Text */}
-                <button
-                  type="button"
-                  id="copy-invite-text-btn"
-                  onClick={handleCopyInviteMessage}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/70 transition-colors text-left cursor-pointer relative z-10"
-                >
-                  <Copy className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span>Copy Full Invitation Text</span>
-                </button>
-
-                {/* Text preview box */}
-                <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 text-[10px] text-slate-400 font-mono leading-relaxed select-all">
-                  "{shareText}"
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* STUDIO PLAN ONLY: Extend Expiration Button */}
-          {isStudio && (
-            <button
-              id="extend-expiration-btn"
-              type="button"
-              onClick={handleExtendExpiration}
-              disabled={extending}
-              className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 hover:text-amber-200 font-semibold text-xs transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              title="Add 7 days to this album's lifespan (Studio plan feature)"
-            >
-              {extending ? (
-                <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+              {/* Status Badges */}
+              {isSubmitted ? (
+                <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-semibold border border-amber-500/40 flex items-center gap-1.5 shadow-sm">
+                  <Lock className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Selection Submitted & Locked</span>
+                </span>
               ) : (
-                <CalendarPlus className="w-4 h-4 text-amber-400" />
+                <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 text-xs font-semibold border border-emerald-500/30 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Client In Review</span>
+                </span>
               )}
-              <span>{extending ? "Extending..." : "Extend Lifespan (+7 Days)"}</span>
-            </button>
-          )}
+            </div>
 
-          {/* Export Selections Dropdown (Raw TXT Manifest & URLs) */}
-          <div className="relative z-50" ref={exportDropdownRef}>
-            <button
-              id="export-selections-dropdown-btn"
-              type="button"
-              onClick={() => setIsExportOpen((prev) => !prev)}
-              className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700/80 border border-slate-700/80 text-white font-semibold text-xs transition-all shadow-lg cursor-pointer"
-            >
-              <Sliders className="w-4 h-4 text-amber-400" />
-              <span>Export Selections ({selectedItems.length})</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExportOpen ? "rotate-180" : ""}`} />
-            </button>
-
-            {isExportOpen && (
-              <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-slate-700/80 bg-[#12161f] p-3 shadow-2xl shadow-black/95 z-50 space-y-2 animate-in fade-in zoom-in-95 duration-150">
-                <div className="px-3 py-2 border-b border-slate-800/80">
-                  <p className="text-xs font-semibold text-white flex items-center gap-1.5">
-                    <Download className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Export Original Shoot Proofs</span>
-                  </p>
-                  <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
-                    Generates clean, verified shoot proofs (.txt) ready for direct ingest into Adobe Lightroom, Photoshop, Premiere Pro, CapCut, Capture One & download managers.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  id="download-raw-txt-btn"
-                  onClick={handleExportRawManifest}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold text-amber-300 hover:text-white bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-colors text-left cursor-pointer relative z-10"
-                >
-                  <Download className="w-4 h-4 text-amber-400 shrink-0" />
-                  <div className="flex-1">
-                    <div>Export Original Shoot Proofs (.txt)</div>
-                    <div className="text-[10px] text-amber-400/80 font-normal">Lightroom / Photoshop / Premiere / CapCut Ingest</div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  id="copy-raw-urls-btn"
-                  onClick={handleCopyOriginalUrls}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/70 transition-colors text-left cursor-pointer relative z-10"
-                >
-                  <Copy className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span>Copy Shoot Proof URLs (Line Separated)</span>
-                </button>
+            {/* Gallery Meta Info */}
+            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400">
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500 font-medium">Access PIN:</span>
+                <span className="font-mono font-bold text-amber-400 px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 tracking-wider">
+                  {albumPin}
+                </span>
               </div>
+
+              <div className="flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                <span>
+                  {daysLeft !== null ? `${daysLeft} days remaining` : "Permanent storage"}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
+                <span>{mediaItems.length} total proofs uploaded</span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="font-semibold text-emerald-300">
+                  {selectedItems.length} client selections
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Header Action Buttons: Native Folder Download & Workflow Controls */}
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            
+            {/* One-Click Client Invite Button */}
+            <div className="relative" ref={shareDropdownRef}>
+              <button
+                type="button"
+                id="share-client-dropdown-btn"
+                onClick={() => setIsShareOpen(!isShareOpen)}
+                className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700/80 border border-slate-700/80 text-white font-semibold text-xs transition-all shadow-md cursor-pointer"
+              >
+                <Share2 className="w-4 h-4 text-amber-400" />
+                <span>Send Gallery to Client</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isShareOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {isShareOpen && (
+                <div className="absolute right-0 top-full mt-2 w-72 rounded-2xl border border-slate-700/80 bg-[#12161f] p-2 shadow-2xl z-50 space-y-1 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-3 py-2 border-b border-slate-800/80 text-[11px] text-slate-400">
+                    Share PIN <span className="font-mono text-amber-300 font-bold">{albumPin}</span> with client:
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleWhatsAppShare}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-200 hover:text-white hover:bg-emerald-950/40 hover:border-emerald-500/30 border border-transparent transition-colors text-left"
+                  >
+                    <MessageCircle className="w-4 h-4 text-emerald-400" />
+                    <span>Send via WhatsApp</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleTelegramShare}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-200 hover:text-white hover:bg-sky-950/40 hover:border-sky-500/30 border border-transparent transition-colors text-left"
+                  >
+                    <Send className="w-4 h-4 text-sky-400" />
+                    <span>Send via Telegram</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyInviteMessage}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-amber-300 hover:text-white hover:bg-amber-500/10 transition-colors text-left"
+                  >
+                    <Copy className="w-4 h-4 text-amber-400" />
+                    <span>{copiedInvite ? "Copied to Clipboard!" : "Copy Invite Message"}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Studio Plan Lifespan Extension */}
+            {isStudio && (
+              <button
+                id="extend-expiration-btn"
+                type="button"
+                onClick={handleExtendExpiration}
+                disabled={extending}
+                className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 hover:text-amber-200 font-semibold text-xs transition-all shadow-md disabled:opacity-50 cursor-pointer"
+                title="Extend Lifespan (+7 Days)"
+              >
+                {extending ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+                ) : (
+                  <CalendarPlus className="w-4 h-4 text-amber-400" />
+                )}
+                <span>{extending ? "Extending..." : "Extend Lifespan (+7 Days)"}</span>
+              </button>
             )}
+
+            {/* View Job Sheet Button */}
+            <button
+              type="button"
+              id="view-job-sheet-btn"
+              onClick={() => setShowJobSheetModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700/80 border border-slate-700/80 text-white font-semibold text-xs transition-all shadow-md cursor-pointer"
+              title="View automated client job sheet mapping notes to filenames"
+            >
+              <FileText className="w-4 h-4 text-amber-400" />
+              <span>Job Sheet</span>
+            </button>
+
+            {/* MAGIC NATIVE FOLDER DOWNLOAD BUTTON */}
+            <button
+              id="download-all-originals-btn"
+              type="button"
+              onClick={handleDownloadAllOriginals}
+              disabled={isDownloadingFolder || mediaItems.length === 0}
+              className="inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-200 text-slate-950 font-bold text-xs sm:text-sm hover:brightness-110 active:scale-[0.98] transition-all shadow-xl shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              title="Select a local folder on your computer to save all original high-res photos and Job_Sheet.txt"
+            >
+              {isDownloadingFolder ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                  <span>Saving to Folder ({downloadProgress.current}/{downloadProgress.total})...</span>
+                </>
+              ) : (
+                <>
+                  <FolderDown className="w-4 h-4 text-slate-950 stroke-[2.4]" />
+                  <span>
+                    Download All Originals ({selectedItems.length > 0 ? selectedItems.length : mediaItems.length})
+                  </span>
+                </>
+              )}
+            </button>
+
           </div>
         </div>
       </div>
 
-      {/* SINGLE SUBMIT LOCK PROMINENT BANNER */}
+      {/* SINGLE SUBMIT LOCKED BANNER */}
       {isSubmitted && (
         <div
           id="single-submit-locked-banner"
@@ -735,165 +704,238 @@ export default function AlbumDetail() {
                   Single Submit Lock Active
                 </span>
                 <h3 className="text-base font-bold tracking-tight text-white uppercase">
-                  SUBMITTED & LOCKED
+                  SUBMITTED & READY FOR RETOUCHING
                 </h3>
               </div>
               <p className="text-xs text-amber-300/80 mt-1 max-w-xl leading-relaxed">
-                The client has submitted their final selections. All collaborative modifications are permanently locked and photo proof uploads are blocked.
+                The client has submitted their final selections ({selectedItems.length} photos). Use "Download All Originals" above to save them straight into your editing folder alongside the automated Job_Sheet.txt.
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black/40 border border-amber-500/30 text-xs font-mono text-amber-400 shrink-0">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>Ready for Export Engine</span>
-          </div>
+          <button
+            type="button"
+            onClick={handleDownloadAllOriginals}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shadow-md transition-colors shrink-0 cursor-pointer"
+          >
+            <FolderDown className="w-4 h-4 stroke-[2.4]" />
+            <span>Download Selected Originals</span>
+          </button>
         </div>
       )}
 
-      {/* Bulk Upload Section */}
-      <div
-        id="bulk-upload-section"
-        className="p-6 rounded-3xl border border-dashed border-slate-800 bg-slate-900/30 backdrop-blur-sm"
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-              <Upload className="w-4 h-4 text-amber-400" />
-              <span>Bulk Proof Upload Engine</span>
-            </h2>
-            <p className="text-xs text-slate-400">
-              {isSubmitted
-                ? "This gallery is submitted and locked. New photo uploads are blocked."
-                : "Select multiple RAW or JPEG photos. Photos are uploaded in original full-resolution quality."}
-            </p>
-          </div>
-
-          <div>
-            <input
-              ref={fileInputRef}
-              id="bulk-photo-input"
-              type="file"
-              multiple
-              accept="image/*"
-              onChange={handleFileChange}
-              disabled={uploading || isSubmitted}
-              className="hidden"
-            />
-
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading || isSubmitted}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-xs transition-all shadow-lg shadow-amber-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>
-                    Uploading ({uploadProgress.current}/{uploadProgress.total})...
-                  </span>
-                </>
-              ) : (
-                <>
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>{isSubmitted ? "Album Locked" : "Select Photos to Upload"}</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Upload Success Feedback Banner */}
-        {lastUploadSummary && (
-          <div className="mt-4 p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-950/40 text-emerald-200 text-xs flex items-center justify-between gap-2.5 animate-in fade-in">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>
-                Successfully uploaded <strong className="text-white">{lastUploadSummary.count} photo{lastUploadSummary.count === 1 ? "" : "s"}</strong> ({lastUploadSummary.totalMb} MB total original size).
-              </span>
+      {/* Bulk Upload Section (Visible when not submitted) */}
+      {!isSubmitted && (
+        <div
+          id="bulk-upload-section"
+          className="p-6 rounded-3xl border border-dashed border-slate-800 bg-slate-900/30 backdrop-blur-sm"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                <UploadCloud className="w-4 h-4 text-amber-400" />
+                <span>Upload Original Shoot Proofs</span>
+              </h2>
+              <p className="text-xs text-slate-400">
+                Drag and drop original high-res RAW or JPEG photos. PhotoGuard stores high-res originals while serving encrypted proof streams to clients.
+              </p>
             </div>
+
+            <div className="flex items-center gap-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={handleFileUpload}
+                disabled={uploading}
+                className="hidden"
+                id="photo-upload-input"
+              />
+              <label
+                htmlFor="photo-upload-input"
+                className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700/90 border border-slate-700 text-white font-semibold text-xs transition-colors cursor-pointer ${
+                  uploading ? "opacity-50 cursor-not-allowed" : ""
+                }`}
+              >
+                <FolderPlus className="w-4 h-4 text-amber-400" />
+                <span>{uploading ? `Uploading (${uploadProgress.current}/${uploadProgress.total})...` : "Select Photos"}</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Upload Progress Bar */}
+          {uploading && (
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
+                <span>Uploading batch...</span>
+                <span>
+                  {uploadProgress.current} / {uploadProgress.total} (
+                  {Math.round((uploadProgress.current / uploadProgress.total) * 100)}%)
+                </span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-500 to-amber-300 transition-all duration-300"
+                  style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Upload Summary Feedback Banner */}
+          {lastUploadSummary && (
+            <div className="mt-4 p-4 rounded-xl border border-slate-800 bg-slate-900/60 text-xs space-y-1.5">
+              <div className="flex items-center gap-2 font-semibold text-white">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span>
+                  Batch Complete: {lastUploadSummary.success} uploaded successfully
+                  {lastUploadSummary.failed > 0 && `, ${lastUploadSummary.failed} failed`}
+                </span>
+              </div>
+              {lastUploadSummary.reasons?.length > 0 && (
+                <div className="text-red-400 space-y-0.5 pt-1">
+                  {lastUploadSummary.reasons.map((r, i) => (
+                    <div key={i}>• {r}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* GALLERY WORKFLOW SECTION: View Switcher (All Photos vs Review Selections) */}
+      <div id="gallery-workflow-section" className="space-y-4">
+        
+        {/* Navigation Tabs */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          
+          <div className="flex items-center gap-2">
+            {/* Tab 1: All Photos */}
             <button
               type="button"
-              onClick={() => setLastUploadSummary(null)}
-              className="text-slate-400 hover:text-white p-1"
+              id="tab-all-photos-btn"
+              onClick={() => setActiveViewTab("all")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeViewTab === "all"
+                  ? "bg-slate-800 text-white border border-slate-700 shadow-sm"
+                  : "text-slate-400 hover:text-white hover:bg-slate-900/50"
+              }`}
             >
-              <X className="w-3.5 h-3.5" />
+              <span>All Proofs</span>
+              <span className="px-2 py-0.5 rounded-full bg-slate-900 text-slate-300 text-[10px] font-mono">
+                {mediaItems.length}
+              </span>
+            </button>
+
+            {/* Tab 2: Review Selections */}
+            <button
+              type="button"
+              id="tab-review-selections-btn"
+              onClick={() => setActiveViewTab("selections")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeViewTab === "selections"
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-lg shadow-amber-500/10"
+                  : "text-slate-400 hover:text-amber-300 hover:bg-slate-900/50"
+              }`}
+            >
+              <CheckSquare className="w-3.5 h-3.5 text-amber-400" />
+              <span>Review Selections</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                selectedItems.length > 0 ? "bg-amber-400 text-slate-950" : "bg-slate-900 text-slate-400"
+              }`}>
+                {selectedItems.length}
+              </span>
             </button>
           </div>
-        )}
 
-        {/* Upload Error feedback */}
-        {uploadError && (
-          <div className="mt-4 p-3.5 rounded-xl border border-red-500/20 bg-red-950/40 text-red-300 text-xs flex items-center gap-2.5">
-            <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-            <span>{uploadError}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Gallery Section - Masonry Grid Layout */}
-      <div id="gallery-masonry-section" className="space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-white">Gallery Proofs</h3>
-            <span className="text-xs font-mono text-slate-400">
-              ({mediaItems.length} photos)
+          {/* Quick Counter / Helper */}
+          <div className="text-xs text-slate-400 flex items-center gap-2">
+            <span>
+              Showing {displayPhotos.length} of {mediaItems.length} photos
             </span>
-          </div>
-          <div className="text-xs text-slate-500">
-            {selectedItems.length} selected by client
+            {selectedItems.length > 0 && activeViewTab === "all" && (
+              <span className="text-amber-400 font-semibold cursor-pointer hover:underline" onClick={() => setActiveViewTab("selections")}>
+                ({selectedItems.length} selected by client)
+              </span>
+            )}
           </div>
         </div>
 
-        {mediaItems.length === 0 ? (
-          <div className="py-16 text-center rounded-2xl border border-slate-800/60 bg-slate-900/20">
-            <p className="text-sm text-slate-400">No photos in this gallery yet.</p>
-            <p className="text-xs text-slate-600 mt-1">
-              Use the bulk upload section above to upload original proof images.
-            </p>
+        {/* Gallery Content Area */}
+        {displayPhotos.length === 0 ? (
+          <div className="py-16 text-center rounded-3xl border border-slate-800/60 bg-slate-900/20 max-w-xl mx-auto p-8 space-y-3">
+            {activeViewTab === "selections" ? (
+              <>
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+                  <CheckSquare className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-bold text-white">No Selections Yet</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  The client has not marked their photo selections yet. Once they open their private mobile app using PIN <span className="font-mono text-amber-300 font-bold">{albumPin}</span>, their favorited proofs and retouching notes will appear here.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveViewTab("all")}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition-colors mt-2"
+                >
+                  View All Uploaded Proofs
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="w-12 h-12 rounded-2xl bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                  <UploadCloud className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-bold text-white">Gallery is Empty</h3>
+                <p className="text-xs text-slate-400">
+                  Upload original shoot proofs using the upload section above.
+                </p>
+              </>
+            )}
           </div>
         ) : (
-          <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
-            {mediaItems.map((item) => {
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {displayPhotos.map((item) => {
               const rawSize = Number(item.original_size || 0);
               const originalMb = rawSize > 0 ? (rawSize / (1024 * 1024)).toFixed(1) : null;
-              const hasValidSize = originalMb && Number(originalMb) > 0;
+              const hasClientNote = Boolean(item.client_notes || item.client_note);
 
               return (
                 <div
                   key={item.id}
                   id={`media-item-${item.id}`}
-                  className="break-inside-avoid rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden group hover:border-slate-700 transition-all shadow-md relative"
+                  className={`rounded-2xl border transition-all duration-200 overflow-hidden shadow-lg flex flex-col justify-between ${
+                    item.is_selected
+                      ? "border-amber-500/40 bg-[#12161f] shadow-amber-500/5 ring-1 ring-amber-500/20"
+                      : "border-slate-800/80 bg-slate-900/60 hover:border-slate-700"
+                  }`}
                 >
-                  {/* Photo Container */}
-                  <div
-                    className="relative overflow-hidden bg-slate-950 cursor-pointer"
-                    onClick={() => setPreviewPhoto(item)}
-                    title="Click to view in Photo Scanner"
-                  >
+                  {/* Photo Preview Container */}
+                  <div className="relative aspect-[4/3] bg-black overflow-hidden group cursor-pointer" onClick={() => setPreviewPhoto(item)}>
                     <img
                       src={item.thumbnail_url || item.url}
                       alt={item.filename}
                       loading="lazy"
-                      className="w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
 
-                    {/* Selection Badge if selected by client */}
+                    {/* Selection Star / Badge */}
                     {item.is_selected && (
-                      <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 text-[11px] font-semibold flex items-center gap-1 shadow-lg backdrop-blur-md">
+                      <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-emerald-950/90 border border-emerald-500/60 text-emerald-300 text-[11px] font-bold flex items-center gap-1 shadow-lg backdrop-blur-md">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Selected</span>
+                        <span>Client Pick</span>
                       </div>
                     )}
 
-                    {/* Original Badge - only shown if actual original_size > 0 */}
-                    {hasValidSize && (
-                      <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/75 border border-slate-700/60 text-[10px] font-mono text-slate-300 backdrop-blur-sm shadow-sm">
-                        {originalMb} MB Original
+                    {/* Original Size Badge */}
+                    {originalMb && (
+                      <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/80 border border-slate-700/70 text-[10px] font-mono text-slate-300 backdrop-blur-sm">
+                        {originalMb} MB
                       </div>
                     )}
 
-                    {/* Hover Quick Actions */}
+                    {/* Quick Hover Controls */}
                     <div
                       className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[2px]"
                       onClick={(e) => e.stopPropagation()}
@@ -901,74 +943,26 @@ export default function AlbumDetail() {
                       <button
                         type="button"
                         onClick={() => setPreviewPhoto(item)}
-                        className="p-2 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-200 hover:text-white hover:bg-slate-800 transition-colors"
-                        title="Preview Photo"
+                        className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-white hover:bg-slate-800 transition-colors shadow-lg"
+                        title="Zoom / Fullscreen Lightbox"
                       >
                         <ZoomIn className="w-4 h-4 text-amber-400" />
                       </button>
-                      <div className="relative">
-                        <button
-                          type="button"
-                          onClick={() => setActiveEditorMenuId(activeEditorMenuId === item.id ? null : item.id)}
-                          className="p-2 rounded-xl bg-slate-900/90 border border-slate-700 text-slate-200 hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-1"
-                          title="Open in Photoshop / Direct Edit"
-                        >
-                          <Palette className="w-4 h-4 text-amber-400" />
-                          <ChevronDown className="w-3 h-3 text-slate-400" />
-                        </button>
-                        {activeEditorMenuId === item.id && (
-                          <div className="absolute right-0 top-full mt-1.5 w-60 rounded-xl border border-slate-700/80 bg-[#12161f] p-2 shadow-2xl shadow-black/95 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-100 text-left">
-                            <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-500 border-b border-slate-800/80">
-                              Studio Editor Suite
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenInEditor("Photoshop", item.url, item.filename)}
-                              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-200 hover:text-white hover:bg-slate-800/70 transition-colors text-left"
-                            >
-                              <Palette className="w-3.5 h-3.5 text-sky-400" />
-                              <span>Adobe Photoshop</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenInEditor("Lightroom", item.url, item.filename)}
-                              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-200 hover:text-white hover:bg-slate-800/70 transition-colors text-left"
-                            >
-                              <Camera className="w-3.5 h-3.5 text-amber-400" />
-                              <span>Adobe Lightroom</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenInEditor("Premiere", item.url, item.filename)}
-                              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-200 hover:text-white hover:bg-slate-800/70 transition-colors text-left"
-                            >
-                              <Film className="w-3.5 h-3.5 text-purple-400" />
-                              <span>Adobe Premiere Pro</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenInEditor("CapCut", item.url, item.filename)}
-                              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-200 hover:text-white hover:bg-slate-800/70 transition-colors text-left"
-                            >
-                              <Scissors className="w-3.5 h-3.5 text-emerald-400" />
-                              <span>CapCut / Video Edit</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenInEditor("Direct Proof", item.url, item.filename)}
-                              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-amber-300 hover:text-amber-200 hover:bg-amber-500/10 transition-colors text-left border-t border-slate-800/60 mt-1 pt-1.5"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>Direct Studio Proof</span>
-                            </button>
-                          </div>
-                        )}
-                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadSinglePhoto(item)}
+                        className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-700 text-white hover:bg-slate-800 transition-colors shadow-lg"
+                        title="Download Original High-Res"
+                      >
+                        <Download className="w-4 h-4 text-emerald-400" />
+                      </button>
+
                       {!isSubmitted && (
                         <button
                           type="button"
                           onClick={() => handleDeletePhoto(item.id)}
-                          className="p-2 rounded-xl bg-red-950/90 border border-red-800 text-red-300 hover:bg-red-900 transition-colors"
+                          className="p-2.5 rounded-xl bg-red-950/90 border border-red-800 text-red-300 hover:bg-red-900 transition-colors shadow-lg"
                           title="Delete Photo"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -977,19 +971,47 @@ export default function AlbumDetail() {
                     </div>
                   </div>
 
-                  {/* Card Footer Details */}
-                  <div className="p-3 bg-slate-900/80 border-t border-slate-800/80 space-y-1.5">
-                    <p className="text-xs font-medium text-slate-200 truncate">
-                      {item.filename}
-                    </p>
+                  {/* Photo Card Body & Prominent Client Notes */}
+                  <div className="p-3.5 space-y-2.5 flex-1 flex flex-col justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-white truncate" title={item.filename}>
+                        {item.filename}
+                      </p>
+                    </div>
 
-                    {/* Client Notes / Retouching Feedback */}
-                    {item.client_notes && (
-                      <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 leading-tight">
-                        <span className="font-semibold text-white">Client Note: </span>
-                        {item.client_notes}
+                    {/* CRITICAL: PROMINENT CLIENT RETOUCHING / SELECTION NOTE */}
+                    {hasClientNote ? (
+                      <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500/15 to-amber-500/5 border border-amber-500/35 text-amber-200 space-y-1 shadow-sm">
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-300">
+                          <MessageSquare className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                          <span>Client Request:</span>
+                        </div>
+                        <p className="text-xs text-white leading-relaxed font-medium whitespace-pre-wrap">
+                          "{item.client_notes || item.client_note}"
+                        </p>
+                      </div>
+                    ) : item.is_selected ? (
+                      <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 text-[11px] text-slate-400 flex items-center gap-1.5 italic">
+                        <Check className="w-3 h-3 text-emerald-400 shrink-0" />
+                        <span>Standard selection (no specific note)</span>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-slate-500 italic py-1">
+                        Proof in review
                       </div>
                     )}
+
+                    {/* Card Footer: Quick Save Action */}
+                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadSinglePhoto(item)}
+                        className="w-full inline-flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-slate-800/90 hover:bg-slate-700/80 border border-slate-700/80 text-xs font-semibold text-slate-200 hover:text-white transition-colors cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Save Original</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -998,15 +1020,148 @@ export default function AlbumDetail() {
         )}
       </div>
 
-      {/* Full Resolution Photo Scanner Lightbox */}
+      {/* =========================================================================
+          NATIVE FOLDER DOWNLOAD PROGRESS MODAL
+          ========================================================================= */}
+      {downloadModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in">
+          <div className="max-w-md w-full rounded-3xl bg-[#0e121a] border border-amber-500/30 p-6 sm:p-8 space-y-6 shadow-2xl relative text-center">
+            
+            {/* Icon Header */}
+            <div className={`w-14 h-14 rounded-2xl mx-auto flex items-center justify-center shadow-lg ${
+              downloadProgress.completed
+                ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-400"
+                : "bg-amber-500/20 border border-amber-500/40 text-amber-400"
+            }`}>
+              {downloadProgress.completed ? (
+                <FolderCheck className="w-7 h-7" />
+              ) : (
+                <FolderDown className="w-7 h-7 animate-bounce" />
+              )}
+            </div>
+
+            {/* Modal Titles */}
+            <div>
+              <h3 className="text-lg font-bold text-white">
+                {downloadProgress.completed ? "Originals Saved Successfully!" : "Writing to Local Folder"}
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Folder: <span className="font-mono text-amber-300 font-bold">{downloadProgress.folderName || "Selected Folder"}</span>
+              </p>
+            </div>
+
+            {/* Progress Bar & Status */}
+            {!downloadProgress.completed ? (
+              <div className="space-y-3">
+                <div className="w-full h-2.5 rounded-full bg-slate-800 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-500 to-amber-300 transition-all duration-200"
+                    style={{
+                      width: `${downloadProgress.total > 0 ? (downloadProgress.current / downloadProgress.total) * 100 : 0}%`,
+                    }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
+                  <span className="truncate max-w-[200px]">{downloadProgress.currentFilename}</span>
+                  <span>{downloadProgress.current} / {downloadProgress.total}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 text-xs text-emerald-200 space-y-2 text-left">
+                <div className="font-bold flex items-center gap-1.5 text-emerald-400">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Folder Download Complete</span>
+                </div>
+                <p>
+                  • <strong>{downloadProgress.successCount} photos</strong> written directly into your selected folder without ZIP extraction.
+                </p>
+                <p>
+                  • <strong>Job_Sheet.txt</strong> created with all client retouching notes mapped to filenames.
+                </p>
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setDownloadModalOpen(false)}
+                disabled={!downloadProgress.completed}
+                className="w-full py-3 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {downloadProgress.completed ? "Done" : "Downloading..."}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          AUTOMATED JOB SHEET MODAL (View / Copy)
+          ========================================================================= */}
+      {showJobSheetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in select-none" onClick={() => setShowJobSheetModal(false)}>
+          <div className="max-w-2xl w-full rounded-3xl bg-[#0e121a] border border-slate-800 p-6 sm:p-8 space-y-5 shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-2.5">
+                <FileText className="w-5 h-5 text-amber-400" />
+                <h3 className="text-base font-bold text-white">Client Job Sheet</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowJobSheetModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400">
+              This Job Sheet is automatically generated and written to your local folder as <strong className="text-amber-300">Job_Sheet.txt</strong> when downloading originals.
+            </p>
+
+            <pre className="p-4 rounded-2xl bg-black/60 border border-slate-800 text-amber-200/90 font-mono text-[11px] leading-relaxed max-h-72 overflow-y-auto whitespace-pre-wrap select-text">
+              {generateJobSheetText(album, selectedItems.length > 0 ? selectedItems : mediaItems)}
+            </pre>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  const text = generateJobSheetText(album, selectedItems.length > 0 ? selectedItems : mediaItems);
+                  await navigator.clipboard.writeText(text);
+                  setCopiedJobSheet(true);
+                  setTimeout(() => setCopiedJobSheet(false), 2000);
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <Copy className="w-4 h-4 text-amber-400" />
+                <span>{copiedJobSheet ? "Copied to Clipboard!" : "Copy Job Sheet Text"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowJobSheetModal(false)}
+                className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-bold transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          HIGH RESOLUTION PHOTO SCANNER LIGHTBOX
+          ========================================================================= */}
       {previewPhoto && (
         <div
           id="photo-lightbox-modal"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-2 sm:p-4 animate-in fade-in select-none"
           onClick={() => setPreviewPhoto(null)}
         >
-          {/* Navigation Arrows for Scanner */}
-          {mediaItems.length > 1 && (
+          {/* Navigation Arrows */}
+          {activeList.length > 1 && (
             <>
               <button
                 type="button"
@@ -1030,130 +1185,70 @@ export default function AlbumDetail() {
           )}
 
           <div
-            className="relative max-w-6xl w-full max-h-[92vh] flex flex-col items-center justify-center gap-2"
+            className="relative max-w-6xl w-full max-h-[92vh] flex flex-col items-center justify-center gap-3"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Scanner Controls & Info Header */}
-            <div className="w-full flex items-center justify-between px-3 py-2 rounded-2xl bg-slate-900/80 border border-slate-800 backdrop-blur-md text-slate-300">
+            {/* Top Lightbox Header */}
+            <div className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl bg-slate-900/90 border border-slate-800 backdrop-blur-md text-slate-300">
               <div className="flex items-center gap-3">
                 <span className="text-xs sm:text-sm font-semibold text-white truncate max-w-[180px] sm:max-w-md">
                   {previewPhoto.filename}
                 </span>
-                {mediaItems.length > 0 && (
-                  <span className="px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[11px] font-mono text-slate-300">
-                    {mediaItems.findIndex((p) => p.id === previewPhoto.id) + 1} / {mediaItems.length}
-                  </span>
-                )}
-                {Number(previewPhoto.original_size || 0) > 0 && (
-                  <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[11px] font-mono text-amber-400">
-                    {(Number(previewPhoto.original_size) / (1024 * 1024)).toFixed(1)} MB Original
-                  </span>
-                )}
+                <span className="px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[11px] font-mono text-slate-300">
+                  {activeList.findIndex((p) => p.id === previewPhoto.id) + 1} / {activeList.length}
+                </span>
                 {previewPhoto.is_selected && (
                   <span className="px-2.5 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-[11px] font-semibold flex items-center gap-1">
                     <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                    <span>Selected</span>
+                    <span>Selected Proof</span>
                   </span>
                 )}
               </div>
 
               <div className="flex items-center gap-2">
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setActiveEditorMenuId(activeEditorMenuId === "lightbox" ? null : "lightbox")}
-                    className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-xs text-amber-300 hover:text-white transition-colors flex items-center gap-1.5"
-                    title="Open in Photoshop / Direct Edit"
-                  >
-                    <Palette className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Open in Photoshop / Direct Edit</span>
-                    <ChevronDown className="w-3 h-3 text-amber-400/80" />
-                  </button>
-                  {activeEditorMenuId === "lightbox" && (
-                    <div className="absolute right-0 top-full mt-1.5 w-64 rounded-xl border border-slate-700/80 bg-[#12161f] p-2 shadow-2xl shadow-black/95 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-100 text-left">
-                      <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-500 border-b border-slate-800/80">
-                        Launch Studio Editor
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenInEditor("Photoshop", previewPhoto.url, previewPhoto.filename)}
-                        className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-200 hover:text-white hover:bg-slate-800/70 transition-colors text-left"
-                      >
-                        <Palette className="w-3.5 h-3.5 text-sky-400" />
-                        <span>Adobe Photoshop</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenInEditor("Lightroom", previewPhoto.url, previewPhoto.filename)}
-                        className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-200 hover:text-white hover:bg-slate-800/70 transition-colors text-left"
-                      >
-                        <Camera className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Adobe Lightroom</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenInEditor("Premiere", previewPhoto.url, previewPhoto.filename)}
-                        className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-200 hover:text-white hover:bg-slate-800/70 transition-colors text-left"
-                      >
-                        <Film className="w-3.5 h-3.5 text-purple-400" />
-                        <span>Adobe Premiere Pro</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenInEditor("CapCut", previewPhoto.url, previewPhoto.filename)}
-                        className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-200 hover:text-white hover:bg-slate-800/70 transition-colors text-left"
-                      >
-                        <Scissors className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>CapCut / Video Suites</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenInEditor("Direct Proof", previewPhoto.url, previewPhoto.filename)}
-                        className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-amber-300 hover:text-amber-200 hover:bg-amber-500/10 transition-colors text-left border-t border-slate-800/60 mt-1 pt-1.5"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>Direct Studio Proof</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadSinglePhoto(previewPhoto)}
+                  className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs transition-colors flex items-center gap-1.5 shadow-md cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 stroke-[2.4]" />
+                  <span>Download Original</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setPreviewPhoto(null)}
-                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white transition-colors"
-                  title="Close (Escape)"
+                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            {/* Photo View Display */}
-            <div className="relative rounded-2xl overflow-hidden border border-slate-800/80 bg-slate-950 flex items-center justify-center max-h-[75vh] w-full shadow-2xl">
+            {/* Photo Container */}
+            <div className="relative max-h-[72vh] flex items-center justify-center overflow-hidden rounded-2xl bg-black/60 border border-slate-800/80">
               <img
-                src={previewPhoto.url || previewPhoto.thumbnail_url}
+                src={previewPhoto.url}
                 alt={previewPhoto.filename}
-                className="max-h-[75vh] w-auto max-w-full object-contain rounded-xl"
+                className="max-h-[72vh] w-auto object-contain"
               />
             </div>
 
-            {/* Client Notes / Retouching Instructions Bar */}
-            {previewPhoto.client_notes && (
-              <div className="w-full p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex items-center gap-2">
-                <span className="font-semibold text-white shrink-0">Client Selection Note:</span>
-                <span className="truncate">{previewPhoto.client_notes}</span>
+            {/* Bottom Client Note Display in Lightbox */}
+            {(previewPhoto.client_notes || previewPhoto.client_note) && (
+              <div className="w-full p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 flex items-start gap-3 backdrop-blur-md">
+                <MessageSquare className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-xs">
+                  <span className="font-bold text-amber-300">Client Instruction / Retouching Note: </span>
+                  <span className="text-white">{previewPhoto.client_notes || previewPhoto.client_note}</span>
+                </div>
               </div>
             )}
+
           </div>
         </div>
       )}
-      {/* Floating Editor URL Ingest Toast */}
-      {editorCopiedToast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-amber-500 text-slate-950 font-bold text-xs shadow-2xl shadow-amber-500/30 animate-in slide-in-from-bottom-5">
-          <Check className="w-4 h-4 stroke-[3]" />
-          <span>{editorCopiedToast}</span>
-        </div>
-      )}
+
     </div>
   );
 }

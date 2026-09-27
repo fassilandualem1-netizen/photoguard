@@ -303,3 +303,36 @@ def delete_media_item(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error deleting media item: {str(exc)}"
         )
+
+@router.get("/{media_id}/download")
+def download_media_item(
+    media_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Directly streams or redirects to the original media proof for local studio download.
+    """
+    from fastapi.responses import FileResponse, RedirectResponse
+
+    item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media item not found.")
+    album = db.query(Album).filter(Album.id == item.album_id).first()
+    if not album or not check_media_album_access(album, current_user, db):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    
+    if item.url and item.url.startswith("/uploads/"):
+        clean_fn = os.path.basename(item.url)
+        local_path = os.path.join(os.getcwd(), "uploads", clean_fn)
+        if os.path.exists(local_path):
+            return FileResponse(
+                local_path,
+                media_type="image/jpeg",
+                filename=item.filename or clean_fn
+            )
+            
+    if not item.url:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file URL not found.")
+
+    return RedirectResponse(url=item.url)

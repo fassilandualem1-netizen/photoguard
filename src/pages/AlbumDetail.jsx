@@ -919,7 +919,7 @@ export default function AlbumDetail() {
               <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
                 <span className="flex items-center gap-2">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                  <span>Turbo batch uploading (4x concurrency)...</span>
+                  <span>Direct-to-Cloud Ultra Speed (6x parallel streams)...</span>
                 </span>
                 <span>
                   {uploadProgress.current} / {uploadProgress.total} (

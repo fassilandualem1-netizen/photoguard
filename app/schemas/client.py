@@ -26,9 +26,3 @@ class ClientDownloadResponse(BaseModel):
     pin: str
     allow_download: bool
     download_urls: List[str] = []
-
-class FaceSearchResponse(BaseModel):
-    pin: str
-    total_matched: int
-    matched_media_ids: List[int]
-    message: str

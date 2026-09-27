@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, BigInteger, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, BigInteger, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -26,9 +26,6 @@ class MediaItem(Base):
     # Selection and review
     is_selected = Column(Boolean, default=False, nullable=False)
     client_notes = Column(String(1000), nullable=True)
-    
-    # AI Face Recognition: Stores extracted face encodings for instant face search (JSON array of float vectors)
-    face_encodings = Column(JSON, nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

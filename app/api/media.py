@@ -10,6 +10,9 @@ from app.core.storage import (
     is_cloudinary_configured,
     upload_file_to_cloudinary,
     delete_file_from_cloudinary,
+    generate_cloudinary_signature,
+    CLOUDINARY_CLOUD_NAME,
+    CLOUDINARY_API_KEY,
     upload_file_to_s3,
     generate_cdn_urls,
     save_file_locally,
@@ -20,7 +23,7 @@ from app.core.redis import increment_album_version
 from app.models.user import User, UserRole
 from app.models.album import Album
 from app.models.media import MediaItem
-from app.schemas.media import MediaItemResponse
+from app.schemas.media import MediaItemResponse, DirectUploadSignatureResponse, DirectSaveUrlRequest
 from app.services.image_processor import image_processor
 
 logger = logging.getLogger("photoguard.media")
@@ -55,6 +58,130 @@ def check_media_album_access(album: Album, current_user: User, db: Session) -> b
         return True
 
     return False
+
+
+@router.get("/upload-signature", response_model=DirectUploadSignatureResponse, status_code=status.HTTP_200_OK)
+def get_upload_signature(
+    album_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Generates a secure, cryptographically signed Cloudinary upload signature.
+    Allows frontend clients to upload photos directly to Cloudinary edge nodes,
+    bypassing the FastAPI backend server completely for lightning-fast speeds.
+    """
+    album = db.query(Album).filter(Album.id == album_id).first()
+    if not album:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Album not found."
+        )
+
+    if not check_media_album_access(album, current_user, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. You do not have permission to upload to this album."
+        )
+
+    if album.is_locked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Album is locked. Client has finalized selection."
+        )
+
+    import time
+    timestamp = int(time.time())
+    folder = f"photoguard_vault/{album.pin}"
+    signature = generate_cloudinary_signature(folder=folder, timestamp=timestamp)
+    cloud_name = str(CLOUDINARY_CLOUD_NAME or "photoguard").strip()
+
+    return DirectUploadSignatureResponse(
+        signature=signature,
+        timestamp=timestamp,
+        api_key=str(CLOUDINARY_API_KEY or "").strip(),
+        cloud_name=cloud_name,
+        folder=folder,
+        upload_url=f"https://api.cloudinary.com/v1_1/{cloud_name}/image/upload"
+    )
+
+
+@router.post("/save-url", response_model=MediaItemResponse, status_code=status.HTTP_201_CREATED)
+def save_direct_upload_url(
+    payload: DirectSaveUrlRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Instantly registers a photo in PostgreSQL after direct client-to-cloud upload.
+    Generates high-fidelity AVIF/Retina thumbnail URL, records SaaS virtual quota,
+    and increments Redis live version. Zero CPU load on the backend.
+    """
+    album = db.query(Album).filter(Album.id == payload.album_id).first()
+    if not album:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Album not found."
+        )
+
+    if not check_media_album_access(album, current_user, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. You do not have permission to save photos to this album."
+        )
+
+    if album.is_locked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Album is locked. Client has finalized selection."
+        )
+
+    original_size = payload.original_size or 0
+    effective_owner_id = current_user.effective_owner_id
+    owner = db.query(User).filter(User.id == effective_owner_id).first() or current_user
+
+    # Generate retina AVIF thumbnail delivery URL if Cloudinary URL
+    high_res_url = payload.url
+    thumbnail_url = payload.thumbnail_url or high_res_url
+    if high_res_url and "/upload/" in high_res_url and not payload.thumbnail_url:
+        thumbnail_url = high_res_url.replace(
+            "/upload/",
+            "/upload/f_avif,q_auto:best,dpr_2.0,w_1200,c_limit/"
+        )
+
+    compressed_size = payload.compressed_size or (int(original_size * 0.15) if original_size else 0)
+
+    media_item = MediaItem(
+        album_id=album.id,
+        filename=payload.filename or "photo.jpg",
+        url=high_res_url,
+        thumbnail_url=thumbnail_url,
+        original_size=original_size,
+        compressed_size=compressed_size,
+        is_selected=False,
+        client_notes=None
+    )
+
+    try:
+        if owner and original_size > 0:
+            owner.storage_used += original_size
+        db.add(media_item)
+        db.commit()
+        db.refresh(media_item)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error saving photo: {str(exc)}"
+        )
+
+    try:
+        increment_album_version(album.pin)
+    except Exception as redis_err:
+        logger.warning(f"Redis increment_album_version notice: {redis_err}")
+
+    return media_item
+
 
 @router.post("/upload/{album_id}", response_model=MediaItemResponse, status_code=status.HTTP_201_CREATED)
 async def upload_album_photo(
@@ -162,17 +289,14 @@ async def upload_album_photo(
         storage_provider = "local"
         logger.info(f"[Storage Info] Saved to local storage fallback: {high_res_url}")
 
-    # Silent AI Compression & Face Recognition
-    face_encodings = []
+    # Silent AI Compression
     compressed_bytes = None
     try:
         compressed_bytes = image_processor.compress_image_silent_ai(file_bytes)
         compressed_size = len(compressed_bytes) if compressed_bytes else int(original_size * 0.15)
-        face_encodings = image_processor.extract_face_encodings(file_bytes)
     except Exception as ai_exc:
         logger.warning(f"AI image processing warning: {ai_exc}")
         compressed_size = int(original_size * 0.15)
-        face_encodings = []
 
     # If local fallback storage was used, store the crystal-clear compressed WebP as thumbnail_url
     if storage_provider == "local" and compressed_bytes:
@@ -191,7 +315,6 @@ async def upload_album_photo(
         compressed_size=compressed_size,
         is_selected=False,
         client_notes=None,
-        face_encodings=face_encodings if face_encodings else None
     )
 
     try:

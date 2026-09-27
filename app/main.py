@@ -167,7 +167,6 @@ def run_db_migrations():
         safe_execute_ddl("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS compressed_size BIGINT DEFAULT 0;", "media_items.compressed_size")
         safe_execute_ddl("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS is_selected BOOLEAN DEFAULT FALSE;", "media_items.is_selected")
         safe_execute_ddl("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS client_notes VARCHAR(1000);", "media_items.client_notes")
-        safe_execute_ddl("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS face_encodings JSON;", "media_items.face_encodings")
         safe_execute_ddl("ALTER TABLE media_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;", "media_items.created_at")
 
         # Sanitize existing NULLs in media items

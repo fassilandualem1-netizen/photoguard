@@ -255,3 +255,14 @@ def generate_cdn_urls(object_path: str) -> Dict[str, str]:
         "high_res_url": high_res_url,
         "thumbnail_url": thumbnail_url
     }
+
+def generate_cloudinary_signature(folder: str, timestamp: int) -> str:
+    """
+    Generates a secure SHA-1 signature for client-side direct-to-cloud upload to Cloudinary.
+    Signature covers the folder and timestamp parameters.
+    """
+    import hashlib
+    secret = str(CLOUDINARY_API_SECRET or '').strip()
+    # Parameters must be sorted alphabetically: folder, timestamp
+    to_sign = f"folder={folder}&timestamp={timestamp}{secret}"
+    return hashlib.sha1(to_sign.encode('utf-8')).hexdigest()

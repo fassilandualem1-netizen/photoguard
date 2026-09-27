@@ -8,7 +8,6 @@ class MediaItemBase(BaseModel):
     thumbnail_url: Optional[str] = Field(default=None, description="WebP preview/thumbnail URL")
     original_size: Optional[int] = Field(default=0, description="Virtual original file size in bytes")
     compressed_size: Optional[int] = Field(default=0, description="Actual compressed storage size in bytes")
-    face_encodings: Optional[Any] = Field(default=None, description="Optional face feature vectors")
 
 class MediaItemCreate(MediaItemBase):
     pass
@@ -27,8 +26,23 @@ class MediaItemResponse(BaseModel):
     compressed_size: Optional[int] = Field(default=0)
     is_selected: Optional[bool] = Field(default=False)
     client_notes: Optional[str] = Field(default=None)
-    face_encodings: Optional[Any] = Field(default=None)
     created_at: Optional[datetime] = Field(default=None)
 
     class Config:
         from_attributes = True
+
+class DirectUploadSignatureResponse(BaseModel):
+    signature: str
+    timestamp: int
+    api_key: str
+    cloud_name: str
+    folder: str
+    upload_url: str
+
+class DirectSaveUrlRequest(BaseModel):
+    album_id: int
+    filename: str
+    url: str
+    thumbnail_url: Optional[str] = None
+    original_size: Optional[int] = 0
+    compressed_size: Optional[int] = 0

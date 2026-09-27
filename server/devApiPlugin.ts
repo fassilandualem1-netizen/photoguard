@@ -973,6 +973,86 @@ export function devApiPlugin(): Plugin {
             }
           }
 
+
+          // 8.1 Direct-to-Cloud Upload Signature API
+          if (url.startsWith('/api/v1/media/upload-signature') && method === 'GET') {
+            const urlObj = new URL(url, 'http://localhost');
+            const albumId = urlObj.searchParams.get('album_id') || '1';
+            const timestamp = Math.floor(Date.now() / 1000);
+            const folder = `photoguard_vault/${albumId}`;
+            const cloudName = process.env.CLOUDINARY_CLOUD_NAME || 'photoguard';
+            const apiKey = process.env.CLOUDINARY_API_KEY || 'dev_key';
+            const apiSecret = process.env.CLOUDINARY_API_SECRET || 'dev_secret';
+            const toSign = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;
+            const signature = crypto.createHash('sha1').update(toSign).digest('hex');
+
+            return sendJson(res, 200, {
+              signature,
+              timestamp,
+              api_key: apiKey,
+              cloud_name: cloudName,
+              folder,
+              upload_url: `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`
+            });
+          }
+
+          // 8.2 Direct-to-Cloud Save URL API
+          if (url.startsWith('/api/v1/media/save-url') && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const albumId = parseInt(body.album_id, 10);
+            const originalSize = Number(body.original_size) || 0;
+            const compressedSize = Number(body.compressed_size) || Math.round(originalSize * 0.15);
+            let highResUrl = body.url;
+            let thumbUrl = body.thumbnail_url || highResUrl;
+            if (highResUrl && highResUrl.includes('/upload/') && !body.thumbnail_url) {
+              thumbUrl = highResUrl.replace('/upload/', '/upload/f_avif,q_auto:best,dpr_2.0,w_1200,c_limit/');
+            }
+
+            let savedItem: any = {
+              id: Date.now() + Math.floor(Math.random() * 1000),
+              album_id: albumId,
+              filename: body.filename || 'photo.jpg',
+              url: highResUrl,
+              thumbnail_url: thumbUrl,
+              original_size: originalSize,
+              compressed_size: compressedSize,
+              is_selected: false,
+              client_notes: null,
+              created_at: new Date().toISOString()
+            };
+
+            if (client) {
+              await client.connect();
+              try {
+                await client.query(`
+                  CREATE TABLE IF NOT EXISTS media_items (
+                    id SERIAL PRIMARY KEY,
+                    album_id INTEGER NOT NULL,
+                    filename VARCHAR(255) NOT NULL,
+                    url VARCHAR(1024) NOT NULL,
+                    thumbnail_url VARCHAR(1024),
+                    original_size BIGINT DEFAULT 0,
+                    compressed_size BIGINT DEFAULT 0,
+                    is_selected BOOLEAN DEFAULT FALSE,
+                    client_notes VARCHAR(1000),
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                  );
+                `);
+                const q = await client.query(
+                  'INSERT INTO media_items (album_id, filename, url, thumbnail_url, original_size, compressed_size, is_selected) VALUES ($1, $2, $3, $4, $5, $6, FALSE) RETURNING *',
+                  [albumId, savedItem.filename, highResUrl, thumbUrl, originalSize, compressedSize]
+                );
+                if (q.rows.length > 0) savedItem = q.rows[0];
+                if (originalSize > 0) {
+                  await client.query('UPDATE users SET storage_used = COALESCE(storage_used, 0) + $1 WHERE id = (SELECT photographer_id FROM albums WHERE id = $2)', [originalSize, albumId]);
+                }
+              } catch {}
+              await client.end();
+            }
+
+            return sendJson(res, 201, savedItem);
+          }
+
           // 8. Albums API
           if (url.startsWith('/api/v1/albums')) {
             if (method === 'GET') {

@@ -26,7 +26,6 @@ from app.schemas.client import (
     ClientMediaUpdateRequest,
     ClientDownloadRequest,
     ClientDownloadResponse,
-    FaceSearchResponse,
 )
 from app.services.image_processor import image_processor
 
@@ -669,82 +668,3 @@ def get_client_gallery_download(
         allow_download=True,
         download_urls=urls
     )
-
-@router.post("/album/{pin}/face-search", response_model=FaceSearchResponse, status_code=status.HTTP_200_OK)
-async def search_photos_by_face(
-    pin: str,
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db)
-):
-    """
-    Client Mobile App (Kotlin/Jetpack Compose) AI Face Recognition Search:
-    1. Validates the 6-digit album PIN.
-    2. Studio Plan Check: Confirms the album photographer is subscribed to the Studio Plan.
-    3. Extracts face encodings from the client's uploaded selfie.
-    4. Compares against all media items in the album using vector face distance (tolerance=0.6).
-    5. Returns matching media item IDs instantly for RAM-only client rendering.
-    """
-    clean_pin = pin.strip()
-    album = db.query(Album).filter(Album.pin == clean_pin).first()
-    if not album:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Album not found."
-        )
-
-    # Expiration check
-    now_utc = datetime.now(timezone.utc)
-    if album.expires_at is not None:
-        album_expires_utc = (
-            album.expires_at if album.expires_at.tzinfo is not None
-            else album.expires_at.replace(tzinfo=timezone.utc)
-        )
-        if album_expires_utc < now_utc:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Album has expired."
-            )
-
-    # Studio Plan check on the photographer who owns this album
-    photographer = album.photographer
-    if not photographer or photographer.subscription_plan != "studio":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="AI Face Search is an exclusive Studio Plan feature. Please ask your photographer to upgrade to the Studio Plan."
-        )
-
-    # Read selfie image bytes
-    try:
-        selfie_bytes = await file.read()
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to read selfie image: {str(exc)}"
-        )
-
-    if not selfie_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Selfie image file is empty."
-        )
-
-    # Collect media records with face encodings
-    media_records = [
-        {"id": item.id, "face_encodings": item.face_encodings}
-        for item in album.media_items
-        if item.face_encodings
-    ]
-
-    matched_ids = image_processor.search_faces_in_album(
-        selfie_bytes=selfie_bytes,
-        media_records=media_records,
-        tolerance=0.6
-    )
-
-    return FaceSearchResponse(
-        pin=clean_pin,
-        total_matched=len(matched_ids),
-        matched_media_ids=matched_ids,
-        message=f"Found {len(matched_ids)} matching photo(s) in album." if matched_ids else "No matching faces found in this album."
-    )
-

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../api/axios";
+import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import {
   ArrowLeft,
@@ -136,32 +137,69 @@ export default function AlbumDetail() {
     let failedUploads = 0;
     const failureReasons = [];
 
-    // Worker that uploads one file with 1 retry on network glitch
-    const uploadSingleFile = async (file) => {
-      const formData = new FormData();
-      formData.append("file", file);
+    // Step 1: Request presigned Cloudinary upload signature from backend
+    let sigConfig = null;
+    try {
+      const sigRes = await api.get(`/api/v1/media/upload-signature?album_id=${id}`);
+      sigConfig = sigRes.data;
+    } catch (err) {
+      console.warn("Direct-to-cloud signature unavailable, fallback to backend proxy.", err);
+    }
 
+    // Direct-to-Cloud Upload Worker (High-Speed Edge Upload)
+    const uploadSingleFileDirect = async (file) => {
       let attempts = 0;
       while (attempts < 2) {
         try {
-          await api.post(`/api/v1/media/upload/${id}`, formData, {
-            headers: { "Content-Type": "multipart/form-data" },
-          });
+          let highResUrl = "";
+          let originalSize = file.size;
+
+          if (sigConfig?.signature && sigConfig?.upload_url) {
+            // DIRECT TO CLOUDINARY EDGE (Bypasses backend server completely)
+            const cldFormData = new FormData();
+            cldFormData.append("file", file);
+            cldFormData.append("api_key", sigConfig.api_key);
+            cldFormData.append("timestamp", sigConfig.timestamp);
+            cldFormData.append("signature", sigConfig.signature);
+            cldFormData.append("folder", sigConfig.folder);
+
+            const cldRes = await axios.post(sigConfig.upload_url, cldFormData, {
+              headers: { "Content-Type": "multipart/form-data" },
+            });
+            highResUrl = cldRes.data.secure_url;
+          } else {
+            // Fallback to backend multipart upload if signature absent
+            const fallbackData = new FormData();
+            fallbackData.append("file", file);
+            const fbRes = await api.post(`/api/v1/media/upload/${id}`, fallbackData, {
+              headers: { "Content-Type": "multipart/form-data" },
+            });
+            highResUrl = fbRes.data.url;
+          }
+
+          if (highResUrl && sigConfig?.signature) {
+            // Instantly register photo metadata into PostgreSQL
+            await api.post(`/api/v1/media/save-url`, {
+              album_id: parseInt(id, 10),
+              filename: file.name,
+              url: highResUrl,
+              original_size: originalSize,
+            });
+          }
+
           successfulUploads++;
           break;
         } catch (err) {
           attempts++;
           if (attempts >= 2) {
             failedUploads++;
-            const detail = err.response?.data?.detail || err.message || "Upload error";
+            const detail = err.response?.data?.error?.message || err.response?.data?.detail || err.message || "Upload error";
             failureReasons.push(`${file.name} (${detail})`);
           } else {
-            // Brief backoff before single retry
             await new Promise((r) => setTimeout(r, 300));
           }
         }
       }
-
       completedCount++;
       setUploadProgress({
         current: completedCount,
@@ -169,8 +207,8 @@ export default function AlbumDetail() {
       });
     };
 
-    // Concurrency limit = 4 parallel streams (prevents rate-limit & maximizes speed)
-    const concurrency = Math.min(4, fileList.length);
+    // Concurrency limit = 6 parallel direct-to-cloud streams for blazing speed
+    const concurrency = Math.min(6, fileList.length);
     const workers = [];
 
     for (let i = 0; i < concurrency; i++) {
@@ -178,12 +216,11 @@ export default function AlbumDetail() {
         (async () => {
           while (currentIndex < fileList.length) {
             const file = fileList[currentIndex++];
-            await uploadSingleFile(file);
+            await uploadSingleFileDirect(file);
           }
         })()
       );
     }
-
     await Promise.all(workers);
 
     setUploading(false);

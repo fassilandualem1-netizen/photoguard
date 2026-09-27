@@ -1,30 +1,21 @@
-import React, { Component, ErrorInfo, ReactNode } from "react";
+import React, { Component } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
-interface Props {
-  children: ReactNode;
-}
-
-interface State {
-  hasError: boolean;
-  errorMessage: string;
-}
-
-export class GlobalErrorBoundary extends Component<Props, State> {
-  public state: State = {
+export class GlobalErrorBoundary extends Component {
+  state = {
     hasError: false,
     errorMessage: "",
   };
 
-  public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, errorMessage: error.message || "An unexpected error occurred." };
+  static getDerivedStateFromError(error) {
+    return { hasError: true, errorMessage: error?.message || "An unexpected error occurred." };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  componentDidCatch(error, errorInfo) {
     console.error("[PhotoGuard Enterprise ErrorBoundary]", error, errorInfo);
   }
 
-  public render() {
+  render() {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-[#06080d] flex items-center justify-center p-6 text-white">

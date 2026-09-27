@@ -35,6 +35,23 @@ import {
   ShieldCheck
 } from "lucide-react";
 
+// Upgrade Cloudinary/CDN URLs to pristine crisp high-res retina grid thumbnails
+const getCrispThumbnailUrl = (item) => {
+  if (!item) return "";
+  const rawUrl = item.thumbnail_url || item.url || "";
+  if (!rawUrl) return "";
+
+  // If already an optimized Cloudinary URL, ensure crisp w_1000,dpr_2.0,q_auto:best,f_avif
+  if (rawUrl.includes("res.cloudinary.com") && rawUrl.includes("/upload/")) {
+    // Replace any legacy transformation or standard /upload/ with high-res parameters
+    return rawUrl.replace(
+      /\/upload\/(?:[a-zA-Z0-9_:,.-]+\/)?/,
+      "/upload/f_avif,q_auto:best,dpr_2.0,w_1000,c_limit/"
+    );
+  }
+  return rawUrl;
+};
+
 export default function AlbumDetail() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -1064,7 +1081,7 @@ export default function AlbumDetail() {
                 >
                   {/* Pure Photo */}
                   <img
-                    src={item.thumbnail_url || item.url}
+                    src={getCrispThumbnailUrl(item)}
                     alt={item.filename || "Photo"}
                     loading="lazy"
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"

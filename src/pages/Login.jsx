@@ -342,109 +342,30 @@ function LoginContent({ onLoginSuccess }) {
         </div>
       </div>
 
-      {/* Right Column: World-Class Studio Hero Section with High-Tech Viewfinder UI & Distinct Color-Coded Feature Cards */}
-      {/* FULLY RESPONSIVE & VISIBLE ON ALL SCREENS: Stacks vertically on mobile, side-by-side on desktop */}
-      <div className="flex flex-1 relative overflow-hidden bg-[#05070a] items-center justify-center p-6 sm:p-10 lg:p-14 min-h-[640px] lg:min-h-screen">
+      {/* Right Column: Premium Abstract Cloud Security & SaaS Hero Section with 4 Color-Coded Feature Cards */}
+      <div className="flex flex-1 relative overflow-hidden bg-[#06080e] items-center justify-center p-6 sm:p-10 lg:p-14 min-h-[580px] lg:min-h-screen">
         
-        {/* Crystal-Clear, High-Quality Studio Strobe / Softbox Photography Background */}
+        {/* Sleek Abstract Dark Premium Cloud Security Background */}
         <div 
-          className="absolute inset-0 bg-cover bg-center transition-transform duration-1000 ease-out"
+          className="absolute inset-0 bg-cover bg-center transition-transform duration-1000 ease-out opacity-45 scale-105"
           style={{
-            backgroundImage: `url('https://images.unsplash.com/photo-1542038784456-1ea8e935640e?q=85&w=2160&auto=format&fit=crop')`,
+            backgroundImage: `url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop')`,
           }}
         />
 
-        {/* Cinematic Vignette Overlay (Dark studio gradient vignette) */}
+        {/* Deep Abstract Vignette & Gradient Overlays */}
         <div 
           className="absolute inset-0 pointer-events-none"
           style={{
-            background: "radial-gradient(circle at 55% 45%, rgba(6,9,14,0.35) 0%, rgba(5,7,11,0.82) 65%, rgba(3,4,7,0.98) 100%)",
+            background: "radial-gradient(circle at 60% 40%, rgba(10,14,24,0.4) 0%, rgba(6,8,14,0.85) 65%, rgba(3,4,8,0.98) 100%)",
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#090c12] via-transparent to-[#040609]/90 pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#040609] via-transparent to-[#040609]/80 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#090c12] via-transparent to-[#04060a]/90 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#04060a] via-transparent to-[#04060a]/80 pointer-events-none" />
 
-        {/* Anti-Piracy Diagonal Security Watermark Mesh */}
-        <div 
-          className="absolute inset-0 pointer-events-none opacity-[0.035] mix-blend-overlay"
-          style={{
-            backgroundImage: `repeating-linear-gradient(45deg, #ffffff 0, #ffffff 1px, transparent 0, transparent 48px)`,
-          }}
-        />
-
-        {/* =========================================================================
-            HIGH-TECH VIEWFINDER UI (Digital EVF Screen Watermark)
-            ========================================================================= */}
-        <div className="absolute inset-2 sm:inset-4 xl:inset-8 pointer-events-none z-10 flex flex-col justify-between select-none">
-          
-          {/* Viewfinder Top Bar: Golden/White Corner Focus Brackets & Live Studio Data Overlay */}
-          <div className="flex items-start justify-between gap-2">
-            {/* Top-Left Corner Focus Bracket */}
-            <div className="relative w-8 h-8 sm:w-12 sm:h-12 border-t-2 border-l-2 border-amber-400/85 shrink-0">
-              <div className="absolute top-1 left-1 sm:top-1.5 sm:left-1.5 w-2 h-2 sm:w-3 sm:h-3 border-t border-l border-white/60" />
-            </div>
-
-            {/* Live Studio EVF Data Monospace Overlay */}
-            <div className="inline-flex items-center gap-2 sm:gap-2.5 px-2.5 py-1 sm:px-4 sm:py-2 rounded-lg bg-black/80 border border-amber-500/40 backdrop-blur-md shadow-[0_0_20px_rgba(245,158,11,0.2)] text-center">
-              <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_#ef4444] shrink-0" />
-              <span className="font-mono text-[10px] sm:text-xs xl:text-[13px] tracking-tight sm:tracking-wider text-amber-300 font-bold">
-                [ ] REC RAW | 85mm f/1.2 L | 1/250s | ISO 100 | AES-256 VAULT LOCK
-              </span>
-            </div>
-
-            {/* Top-Right Corner Focus Bracket */}
-            <div className="relative w-8 h-8 sm:w-12 sm:h-12 border-t-2 border-r-2 border-amber-400/85 shrink-0">
-              <div className="absolute top-1 right-1 sm:top-1.5 sm:right-1.5 w-2 h-2 sm:w-3 sm:h-3 border-t border-r border-white/60" />
-            </div>
-          </div>
-
-          {/* Viewfinder Center: Optical Lens Ring Outlines & Autofocus Crosshairs */}
-          <div className="relative flex items-center justify-center my-auto py-4">
-            {/* Optical Lens Ring Outlines */}
-            <div className="absolute w-[280px] h-[280px] sm:w-[380px] sm:h-[380px] lg:w-[440px] lg:h-[440px] rounded-full border border-white/[0.08] pointer-events-none" />
-            <div className="absolute w-[220px] h-[220px] sm:w-[300px] sm:h-[300px] lg:w-[360px] lg:h-[360px] rounded-full border border-amber-400/[0.12] border-dashed pointer-events-none" />
-            <div className="absolute w-[160px] h-[160px] sm:w-[220px] sm:h-[220px] lg:w-[260px] lg:h-[260px] rounded-full border border-white/[0.06] pointer-events-none" />
-
-            {/* Center Autofocus Reticle & Precision Crosshairs */}
-            <div className="relative w-20 h-20 sm:w-28 sm:h-28 flex items-center justify-center pointer-events-none">
-              {/* AF Target Box in Gold/White */}
-              <div className="w-12 h-12 sm:w-16 sm:h-16 border border-amber-400/60 rounded-md relative flex items-center justify-center">
-                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-[2px] bg-amber-400" />
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-[2px] bg-amber-400" />
-                <div className="absolute -left-1 top-1/2 -translate-y-1/2 h-2 w-[2px] bg-amber-400" />
-                <div className="absolute -right-1 top-1/2 -translate-y-1/2 h-2 w-[2px] bg-amber-400" />
-                {/* Center AF Dot */}
-                <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-                <div className="w-1.5 h-1.5 rounded-full bg-amber-300" />
-              </div>
-
-              {/* Horizontal Crosshair Hairlines */}
-              <div className="absolute -left-8 sm:-left-12 top-1/2 -translate-y-1/2 w-7 sm:w-10 h-[1px] bg-gradient-to-r from-transparent via-amber-400/50 to-white/70" />
-              <div className="absolute -right-8 sm:-right-12 top-1/2 -translate-y-1/2 w-7 sm:w-10 h-[1px] bg-gradient-to-l from-transparent via-amber-400/50 to-white/70" />
-              {/* Vertical Crosshair Hairlines */}
-              <div className="absolute left-1/2 -translate-x-1/2 -top-8 sm:-top-12 h-7 sm:h-10 w-[1px] bg-gradient-to-b from-transparent via-amber-400/50 to-white/70" />
-              <div className="absolute left-1/2 -translate-x-1/2 -bottom-8 sm:-bottom-12 h-7 sm:h-10 w-[1px] bg-gradient-to-t from-transparent via-amber-400/50 to-white/70" />
-            </div>
-          </div>
-
-          {/* Viewfinder Bottom Bar: Corner Focus Brackets & Technical Metering Data */}
-          <div className="flex items-end justify-between gap-2">
-            {/* Bottom-Left Corner Focus Bracket */}
-            <div className="relative w-8 h-8 sm:w-12 sm:h-12 border-b-2 border-l-2 border-amber-400/85 shrink-0">
-              <div className="absolute bottom-1 left-1 sm:bottom-1.5 sm:left-1.5 w-2 h-2 sm:w-3 sm:h-3 border-b border-l border-white/60" />
-            </div>
-
-            {/* EVF Framing & AF Mode Indicator */}
-            <div className="font-mono text-[9px] sm:text-[11px] tracking-wider sm:tracking-widest text-slate-300/80 bg-black/60 px-2.5 py-1 rounded border border-white/10 backdrop-blur-sm text-center">
-              <span>AF-C [WIDE] | SPOT 100% | 14-BIT UNCOMPRESSED</span>
-            </div>
-
-            {/* Bottom-Right Corner Focus Bracket */}
-            <div className="relative w-8 h-8 sm:w-12 sm:h-12 border-b-2 border-r-2 border-amber-400/85 shrink-0">
-              <div className="absolute bottom-1 right-1 sm:bottom-1.5 sm:right-1.5 w-2 h-2 sm:w-3 sm:h-3 border-b border-r border-white/60" />
-            </div>
-          </div>
-        </div>
+        {/* Subtle Ambient Glow Blobs */}
+        <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-[#FF1A4B]/10 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-[#6366F1]/10 blur-3xl pointer-events-none" />
 
         {/* Foreground Content: Editorial Headline & 4 Color-Coded Feature Cards */}
         <div className="relative w-full max-w-xl z-20 flex flex-col justify-between h-full py-4 space-y-6">

@@ -71,9 +71,11 @@ def build_client_album_response(album: Album, db: Session) -> AlbumDetailRespons
     ).lower() if root_photographer else "basic"
     is_studio = (raw_plan == "studio")
 
+    # Allow download is authoritative from the album state
+    final_allow_download = bool(album.allow_download or False)
+
     if is_studio and root_photographer:
-        # Studio Plan: Include social links and actual photographer-configured allow_download flag
-        final_allow_download = bool(album.allow_download or False)
+        # Studio Plan: Include social links
         social_links_data = SocialLinksResponse(
             contact_phone=root_photographer.contact_phone,
             tiktok_url=root_photographer.tiktok_url,
@@ -90,8 +92,7 @@ def build_client_album_response(album: Album, db: Session) -> AlbumDetailRespons
         brand_color = root_photographer.brand_color or "#F59E0B"
         photographer_name = root_photographer.full_name
     else:
-        # Basic Plan: Strictly return null for all social links and explicitly force allow_download = False
-        final_allow_download = False
+        # Basic Plan: Return null for social links, but allow_download reflects album state
         social_links_data = None
         contact_phone = getattr(root_photographer, "contact_phone", None) if root_photographer else None
         tiktok_url = None
@@ -205,8 +206,8 @@ def verify_client_pin(
                 detail="This album has expired and is no longer accessible. Access is permanently locked."
             )
 
-    # 3. Check if locked either in PostgreSQL or Upstash Redis
-    if album.is_locked or is_album_locked(pin):
+    # 3. Check if locked either in PostgreSQL or Upstash Redis (Delivery mode bypasses submission lock)
+    if (album.is_locked or is_album_locked(pin)) and not album.allow_download:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This album has already been submitted and locked. Selections are final."
@@ -272,8 +273,8 @@ def get_client_album_by_pin(
                 detail="This album has expired and is no longer accessible. Access is permanently locked."
             )
 
-    # 3. Check Lock State
-    if album.is_locked or is_album_locked(clean_pin):
+    # 3. Check Lock State (Delivery mode bypasses submission lock)
+    if (album.is_locked or is_album_locked(clean_pin)) and not album.allow_download:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This album has already been submitted and locked. Selections are final."

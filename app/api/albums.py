@@ -731,6 +731,12 @@ def toggle_album_client_download(
     db.commit()
     db.refresh(album)
 
+    try:
+        from app.core.redis import increment_album_version
+        increment_album_version(album.pin)
+    except Exception as e:
+        logger.warning(f"Failed to increment Redis version on toggle-download: {e}")
+
     return {
         "album_id": album.id,
         "allow_download": album.allow_download,

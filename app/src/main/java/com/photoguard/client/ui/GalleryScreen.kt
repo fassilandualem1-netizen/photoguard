@@ -5,6 +5,11 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
@@ -71,6 +76,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -143,6 +149,7 @@ fun GalleryScreen(
 
     var showConfirmDialog by remember { mutableStateOf(false) }
     var showSignOutDialog by remember { mutableStateOf(false) }
+    var showStudioInfoDialog by remember { mutableStateOf(false) }
     var activeEditingMedia by remember { mutableStateOf<MediaItemResponse?>(null) }
 
     // Full screen horizontal pager index (-1 means lightbox is closed)
@@ -176,6 +183,7 @@ fun GalleryScreen(
                 selectedCount = uiState.selectedCount,
                 totalCount = uiState.totalCount,
                 onBackToStep1 = { currentStep = 1 },
+                onStudioClick = { showStudioInfoDialog = true },
                 onSignOutClick = { showSignOutDialog = true }
             )
         },
@@ -486,90 +494,126 @@ fun GalleryScreen(
 
     // FULL SCREEN HORIZONTAL PAGER LIGHTBOX (Instagram / Google Photos Swipe Experience)
     if (fullScreenInitialIndex in uiState.mediaItems.indices) {
-        val pagerState = rememberPagerState(
-            initialPage = fullScreenInitialIndex,
-            pageCount = { uiState.mediaItems.size }
-        )
-
-        Dialog(
-            onDismissRequest = { fullScreenInitialIndex = -1 },
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = false
+        key(fullScreenInitialIndex) {
+            val pagerState = rememberPagerState(
+                initialPage = fullScreenInitialIndex,
+                pageCount = { uiState.mediaItems.size }
             )
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black)
+
+            Dialog(
+                onDismissRequest = { fullScreenInitialIndex = -1 },
+                properties = DialogProperties(
+                    usePlatformDefaultWidth = false,
+                    dismissOnBackPress = true,
+                    dismissOnClickOutside = false
+                )
             ) {
-                val currentMedia = uiState.mediaItems.getOrNull(pagerState.currentPage)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black)
+                ) {
+                    val currentMedia = uiState.mediaItems.getOrNull(pagerState.currentPage)
 
-                // The Horizontal Pager allows effortless left/right swiping without exiting
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier.fillMaxSize(),
-                    key = { page -> uiState.mediaItems[page].id }
-                ) { page ->
-                    val media = uiState.mediaItems[page]
-                    val context = LocalContext.current
-                    val fullRequest = remember(media.url) {
-                        ImageRequest.Builder(context)
-                            .data(media.url)
-                            .crossfade(true)
-                            .precision(Precision.EXACT)
-                            .diskCachePolicy(CachePolicy.DISABLED)
-                            .memoryCachePolicy(CachePolicy.ENABLED)
-                            .build()
-                    }
-
-                    var scale by remember { mutableFloatStateOf(1f) }
-                    var offset by remember { mutableStateOf(Offset.Zero) }
-
-                    // Reset zoom & pan when navigating to another photo
-                    LaunchedEffect(page, pagerState.currentPage) {
-                        if (pagerState.currentPage != page) {
-                            scale = 1f
-                            offset = Offset.Zero
+                    // The Horizontal Pager allows effortless left/right swiping without exiting
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize(),
+                        key = { page -> uiState.mediaItems[page].id }
+                    ) { page ->
+                        val media = uiState.mediaItems[page]
+                        val context = LocalContext.current
+                        val fullRequest = remember(media.url) {
+                            ImageRequest.Builder(context)
+                                .data(media.url)
+                                .crossfade(true)
+                                .precision(Precision.EXACT)
+                                .diskCachePolicy(CachePolicy.DISABLED)
+                                .memoryCachePolicy(CachePolicy.ENABLED)
+                                .build()
                         }
-                    }
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .pointerInput(page) {
+                        var scale by remember(page) { mutableFloatStateOf(1f) }
+                        var offset by remember(page) { mutableStateOf(Offset.Zero) }
+
+                        // Reset zoom & pan when navigating to another photo
+                        LaunchedEffect(pagerState.currentPage) {
+                            if (pagerState.currentPage != page) {
+                                scale = 1f
+                                offset = Offset.Zero
+                            }
+                        }
+
+                        val zoomModifier = if (scale > 1.05f) {
+                            Modifier.pointerInput(page) {
                                 detectTransformGestures { _, pan, zoom, _ ->
                                     val newScale = (scale * zoom).coerceIn(1f, 5f)
                                     scale = newScale
-                                    offset = if (newScale > 1f) {
-                                        Offset(
-                                            x = offset.x + pan.x,
-                                            y = offset.y + pan.y
-                                        )
+                                    if (newScale > 1.05f) {
+                                        offset = Offset(offset.x + pan.x, offset.y + pan.y)
                                     } else {
-                                        Offset.Zero
+                                        scale = 1f
+                                        offset = Offset.Zero
                                     }
                                 }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AsyncImage(
-                            model = fullRequest,
-                            contentDescription = media.filename,
-                            contentScale = ContentScale.Fit,
-                            imageLoader = context.imageLoader,
+                            }
+                        } else {
+                            Modifier.pointerInput(page) {
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    do {
+                                        val event = awaitPointerEvent()
+                                        if (event.changes.size >= 2) {
+                                            val zoom = event.calculateZoom()
+                                            val newScale = (scale * zoom).coerceIn(1f, 5f)
+                                            if (newScale > 1.05f) {
+                                                scale = newScale
+                                                val pan = event.calculatePan()
+                                                offset = Offset(pan.x, pan.y)
+                                                event.changes.forEach { it.consume() }
+                                            }
+                                        }
+                                    } while (event.changes.any { it.pressed })
+                                }
+                            }
+                        }
+
+                        val doubleTapModifier = Modifier.pointerInput(page) {
+                            detectTapGestures(
+                                onDoubleTap = {
+                                    if (scale > 1.05f) {
+                                        scale = 1f
+                                        offset = Offset.Zero
+                                    } else {
+                                        scale = 2.5f
+                                    }
+                                }
+                            )
+                        }
+
+                        Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .graphicsLayer(
-                                    scaleX = scale,
-                                    scaleY = scale,
-                                    translationX = offset.x,
-                                    translationY = offset.y
-                                )
-                        )
+                                .then(doubleTapModifier)
+                                .then(zoomModifier),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = fullRequest,
+                                contentDescription = media.filename,
+                                contentScale = ContentScale.Fit,
+                                imageLoader = context.imageLoader,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer(
+                                        scaleX = scale,
+                                        scaleY = scale,
+                                        translationX = offset.x,
+                                        translationY = offset.y
+                                    )
+                            )
+                        }
                     }
-                }
 
                 // Top control bar showing Position Counter ("5 of 45")
                 Row(
@@ -762,6 +806,18 @@ fun GalleryScreen(
             }
         )
     }
+
+    if (showStudioInfoDialog) {
+        StudioInfoDialog(
+            studioName = uiState.studioName,
+            studioLogoUrl = uiState.studioLogoUrl,
+            brandAccent = brandAccent,
+            contactPhone = uiState.album.contactPhone ?: uiState.album.socialLinks?.contactPhone,
+            telegramUrl = uiState.album.telegramUrl ?: uiState.album.socialLinks?.telegramUrl,
+            instagramUrl = uiState.album.instagramUrl ?: uiState.album.socialLinks?.instagramUrl,
+            onDismiss = { showStudioInfoDialog = false }
+        )
+    }
 }
 
 /**
@@ -776,12 +832,13 @@ fun StudioBrandedTopBar(
     selectedCount: Int,
     totalCount: Int,
     onBackToStep1: () -> Unit,
+    onStudioClick: () -> Unit,
     onSignOutClick: () -> Unit
 ) {
     Surface(
         color = Color(0xFF0F172A),
         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E293B)),
-        shadowElevation = 6.dp,
+        shadowElevation = 8.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -803,69 +860,89 @@ fun StudioBrandedTopBar(
                         onClick = onBackToStep1,
                         modifier = Modifier
                             .padding(end = 6.dp)
-                            .size(32.dp)
+                            .size(36.dp)
+                            .background(Color(0xFF1E293B), CircleShape)
                     ) {
                         Icon(
                             Icons.Default.ArrowBack,
                             contentDescription = "Back to all proofs",
-                            tint = Color.White
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
 
-                // Studio circular avatar/logo
-                Box(
+                // Clickable Studio Logo + Bold Name layout (YouTube-style prominent branding)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .border(1.5.dp, brandAccent, CircleShape)
-                        .background(Color(0xFF1E293B)),
-                    contentAlignment = Alignment.Center
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onStudioClick() }
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
                 ) {
-                    if (!studioLogoUrl.isNullOrBlank()) {
-                        val context = LocalContext.current
-                        AsyncImage(
-                            model = studioLogoUrl,
-                            contentDescription = studioName,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        // Elegant Initial
+                    // Studio prominent circular avatar/logo (46dp)
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(CircleShape)
+                            .border(2.dp, brandAccent, CircleShape)
+                            .background(Color(0xFF1E293B)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (!studioLogoUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = studioLogoUrl,
+                                contentDescription = studioName,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            // Elegant Initial
+                            Text(
+                                text = studioName.take(1).uppercase(),
+                                color = brandAccent,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = studioName,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 16.sp,
+                                    letterSpacing = 0.2.sp
+                                ),
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Icon(
+                                Icons.Default.Verified,
+                                contentDescription = "Verified Studio",
+                                tint = Color(0xFFF59E0B),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                         Text(
-                            text = studioName.take(1).uppercase(),
-                            color = brandAccent,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Black
+                            text = if (currentStep == 1) {
+                                "Premium Client Gallery • $totalCount Proofs"
+                            } else {
+                                "Premium Client Gallery • $selectedCount Chosen"
+                            },
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            ),
+                            color = Color(0xFF94A3B8)
                         )
                     }
-                }
-
-                Spacer(modifier = Modifier.width(10.dp))
-
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = studioName,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            Icons.Default.Verified,
-                            contentDescription = "Verified Studio",
-                            tint = brandAccent,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                    Text(
-                        text = if (currentStep == 1) "Proofs ($totalCount)" else "Selected ($selectedCount)",
-                        fontSize = 11.sp,
-                        color = Color(0xFF94A3B8)
-                    )
                 }
             }
 
@@ -873,7 +950,7 @@ fun StudioBrandedTopBar(
             IconButton(
                 onClick = onSignOutClick,
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(38.dp)
                     .background(Color(0xFF1E293B), CircleShape)
             ) {
                 Icon(

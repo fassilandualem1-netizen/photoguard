@@ -7,6 +7,12 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +31,8 @@ import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -52,6 +60,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -59,8 +70,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -71,6 +86,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import coil.imageLoader
+import coil.request.CachePolicy
+import coil.request.ImageRequest
+import coil.size.Precision
 import com.photoguard.client.data.model.MediaItemResponse
 import kotlinx.coroutines.launch
 
@@ -84,7 +103,8 @@ fun DeliveryScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    var activePreviewItem by remember { mutableStateOf<MediaItemResponse?>(null) }
+    var activePreviewIndex by remember { mutableIntStateOf(-1) }
+    var showStudioInfoDialog by remember { mutableStateOf(false) }
     val totalPhotos = uiState.mediaItems.size
 
     LaunchedEffect(uiState.errorMessage) {
@@ -107,77 +127,86 @@ fun DeliveryScreen(
             Surface(
                 color = Color(0xFF0F172A),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E293B)),
-                shadowElevation = 6.dp,
+                shadowElevation = 8.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Studio Logo & Studio Name (NOT Album Name)
+                    val studioDisplayName = uiState.photographerName ?: "PhotoGuard Studio"
+
+                    // Clickable Studio Logo & Bold Name Layout (YouTube-style prominent branding)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { showStudioInfoDialog = true }
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
                     ) {
-                        val studioDisplayName = uiState.photographerName ?: "PhotoGuard Studio"
-
                         if (!uiState.studioLogoUrl.isNullOrBlank()) {
                             AsyncImage(
                                 model = uiState.studioLogoUrl,
                                 contentDescription = studioDisplayName,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(46.dp)
                                     .clip(CircleShape)
-                                    .border(1.5.dp, Color(0xFF3B82F6), CircleShape)
+                                    .border(2.dp, Color(0xFF3B82F6), CircleShape)
                                     .background(Color(0xFF1E293B))
                             )
-                            Spacer(modifier = Modifier.width(12.dp))
                         } else {
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(46.dp)
                                     .clip(CircleShape)
-                                    .border(1.5.dp, Color(0xFF3B82F6), CircleShape)
+                                    .border(2.dp, Color(0xFF3B82F6), CircleShape)
                                     .background(Color(0xFF1E293B)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = studioDisplayName.take(1).uppercase(),
                                     color = Color(0xFF60A5FA),
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Black
                                 )
                             }
-                            Spacer(modifier = Modifier.width(12.dp))
                         }
+
+                        Spacer(modifier = Modifier.width(12.dp))
 
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     text = studioDisplayName,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 16.sp,
+                                        letterSpacing = 0.2.sp
+                                    ),
                                     color = Color.White,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                if (uiState.isStudioTier) {
-                                    Spacer(modifier = Modifier.width(5.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.Verified,
-                                        contentDescription = "Verified Studio",
-                                        tint = Color(0xFFF59E0B),
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Verified,
+                                    contentDescription = "Verified Studio",
+                                    tint = Color(0xFFF59E0B),
+                                    modifier = Modifier.size(16.dp)
+                                )
                             }
                             Text(
-                                text = "Client Gallery Delivery",
-                                style = MaterialTheme.typography.bodySmall,
+                                text = "Premium Client Gallery",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                ),
                                 color = Color(0xFF94A3B8)
                             )
                         }
@@ -326,10 +355,10 @@ fun DeliveryScreen(
             itemsIndexed(
                 items = uiState.mediaItems,
                 key = { _, item -> item.id }
-            ) { _, media ->
+            ) { index, media ->
                 DeliveryPhotoItem(
                     media = media,
-                    onClick = { activePreviewItem = media }
+                    onClick = { activePreviewIndex = index }
                 )
             }
 
@@ -409,43 +438,192 @@ fun DeliveryScreen(
         }
     }
 
-    // CLEAN FULL-SCREEN LIGHTBOX DIALOG (NO SELECTION BUTTONS)
-    activePreviewItem?.let { previewMedia ->
-        Dialog(
-            onDismissRequest = { activePreviewItem = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center
-            ) {
-                AsyncImage(
-                    model = previewMedia.url,
-                    contentDescription = previewMedia.filename ?: "Photo",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize()
-                )
+    // FULL-SCREEN HORIZONTAL PAGER LIGHTBOX (SMOOTH SWIPING RESTORATION)
+    if (activePreviewIndex in uiState.mediaItems.indices) {
+        key(activePreviewIndex) {
+            val pagerState = rememberPagerState(
+                initialPage = activePreviewIndex,
+                pageCount = { uiState.mediaItems.size }
+            )
 
-                IconButton(
-                    onClick = { activePreviewItem = null },
+            Dialog(
+                onDismissRequest = { activePreviewIndex = -1 },
+                properties = DialogProperties(
+                    usePlatformDefaultWidth = false,
+                    dismissOnBackPress = true,
+                    dismissOnClickOutside = false
+                )
+            ) {
+                Box(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .statusBarsPadding()
-                        .padding(18.dp)
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.6f))
+                        .fillMaxSize()
+                        .background(Color.Black)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close Lightbox",
-                        tint = Color.White
-                    )
+                    val currentMedia = uiState.mediaItems.getOrNull(pagerState.currentPage)
+
+                    // The Horizontal Pager allows effortless left/right swiping across all delivered photos
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize(),
+                        key = { page -> uiState.mediaItems[page].id }
+                    ) { page ->
+                        val media = uiState.mediaItems[page]
+                        val fullRequest = remember(media.url) {
+                            ImageRequest.Builder(context)
+                                .data(media.url)
+                                .crossfade(true)
+                                .precision(Precision.EXACT)
+                                .diskCachePolicy(CachePolicy.DISABLED)
+                                .memoryCachePolicy(CachePolicy.ENABLED)
+                                .build()
+                        }
+
+                        var scale by remember(page) { mutableFloatStateOf(1f) }
+                        var offset by remember(page) { mutableStateOf(Offset.Zero) }
+
+                        // Reset zoom & pan when navigating to another photo
+                        LaunchedEffect(pagerState.currentPage) {
+                            if (pagerState.currentPage != page) {
+                                scale = 1f
+                                offset = Offset.Zero
+                            }
+                        }
+
+                        val zoomModifier = if (scale > 1.05f) {
+                            Modifier.pointerInput(page) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    val newScale = (scale * zoom).coerceIn(1f, 5f)
+                                    scale = newScale
+                                    if (newScale > 1.05f) {
+                                        offset = Offset(offset.x + pan.x, offset.y + pan.y)
+                                    } else {
+                                        scale = 1f
+                                        offset = Offset.Zero
+                                    }
+                                }
+                            }
+                        } else {
+                            Modifier.pointerInput(page) {
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    do {
+                                        val event = awaitPointerEvent()
+                                        if (event.changes.size >= 2) {
+                                            val zoom = event.calculateZoom()
+                                            val newScale = (scale * zoom).coerceIn(1f, 5f)
+                                            if (newScale > 1.05f) {
+                                                scale = newScale
+                                                val pan = event.calculatePan()
+                                                offset = Offset(pan.x, pan.y)
+                                                event.changes.forEach { it.consume() }
+                                            }
+                                        }
+                                    } while (event.changes.any { it.pressed })
+                                }
+                            }
+                        }
+
+                        val doubleTapModifier = Modifier.pointerInput(page) {
+                            detectTapGestures(
+                                onDoubleTap = {
+                                    if (scale > 1.05f) {
+                                        scale = 1f
+                                        offset = Offset.Zero
+                                    } else {
+                                        scale = 2.5f
+                                    }
+                                }
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(doubleTapModifier)
+                                .then(zoomModifier),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = fullRequest,
+                                contentDescription = media.filename ?: "Photo",
+                                contentScale = ContentScale.Fit,
+                                imageLoader = context.imageLoader,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer(
+                                        scaleX = scale,
+                                        scaleY = scale,
+                                        translationX = offset.x,
+                                        translationY = offset.y
+                                    )
+                            )
+                        }
+                    }
+
+                    // Top control bar showing Position Counter ("5 of 45") & Close Button
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.TopCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(Color(0xEE000000), Color.Transparent)
+                                )
+                            )
+                            .statusBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { activePreviewIndex = -1 },
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.6f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close Lightbox",
+                                tint = Color.White
+                            )
+                        }
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "${pagerState.currentPage + 1} of ${uiState.mediaItems.size}",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            currentMedia?.filename?.let { fname ->
+                                Text(
+                                    text = fname,
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 11.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.size(42.dp))
+                    }
                 }
             }
         }
+    }
+
+    if (showStudioInfoDialog) {
+        StudioInfoDialog(
+            studioName = uiState.photographerName ?: "PhotoGuard Studio",
+            studioLogoUrl = uiState.studioLogoUrl,
+            brandAccent = Color(0xFF3B82F6),
+            contactPhone = uiState.contactPhone,
+            telegramUrl = uiState.telegramUrl,
+            instagramUrl = uiState.instagramUrl,
+            onDismiss = { showStudioInfoDialog = false }
+        )
     }
 }
 

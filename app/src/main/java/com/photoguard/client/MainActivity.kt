@@ -120,7 +120,9 @@ fun PhotoGuardNavHost() {
 
     NavHost(
         navController = navController,
-        startDestination = if (currentAlbum != null) "gallery" else "login",
+        startDestination = if (currentAlbum != null) {
+            if (currentAlbum?.allowDownload == true || currentAlbum?.isLocked == true || currentAlbum?.isSubmitted == true) "delivery" else "gallery"
+        } else "login",
         enterTransition = { fadeIn(animationSpec = tween(300)) },
         exitTransition = { fadeOut(animationSpec = tween(300)) }
     ) {
@@ -133,7 +135,16 @@ fun PhotoGuardNavHost() {
                 onLoginSuccess = { verifiedAlbum ->
                     ActiveAlbumHolder.album = verifiedAlbum
                     currentAlbum = verifiedAlbum
-                    navController.navigate("gallery") {
+                    // When allowDownload is true (Final Delivery Mode) or album is locked/submitted:
+                    // Navigate directly to delivery for direct-to-gallery download.
+                    // When allowDownload is false and unlocked:
+                    // Navigate to gallery for proof selection & submit.
+                    val destination = if (verifiedAlbum.allowDownload || verifiedAlbum.isLocked || verifiedAlbum.isSubmitted) {
+                        "delivery"
+                    } else {
+                        "gallery"
+                    }
+                    navController.navigate(destination) {
                         popUpTo("login") { inclusive = true }
                     }
                 }

@@ -117,6 +117,8 @@ data class AlbumDetailResponse(
     val isExpired: Boolean = false,
     @SerialName("submitted_at")
     val submittedAt: String? = null,
+    @SerialName("is_submitted")
+    val isSubmitted: Boolean = false,
     @SerialName("media_count")
     val mediaCount: Int = 0,
     @SerialName("selected_count")

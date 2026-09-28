@@ -41,6 +41,7 @@ class DeliveryViewModel(
             albumTitle = album.title,
             allowDownload = album.allowDownload,
             isStudioTier = album.subscriptionPlan.equals("studio", ignoreCase = true),
+            downloadUrls = if (album.allowDownload) album.mediaItems.map { it.url } else emptyList(),
             photographerName = album.creatorName ?: album.photographerName,
             studioLogoUrl = album.studioLogoUrl,
             contactPhone = album.contactPhone ?: album.socialLinks?.contactPhone,

@@ -1,5 +1,6 @@
 package com.photoguard.client.ui
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
@@ -8,32 +9,37 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
+import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -45,20 +51,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import com.photoguard.client.data.model.MediaItemResponse
 import kotlinx.coroutines.launch
 
 @Composable
@@ -71,6 +84,7 @@ fun DeliveryScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    var activePreviewItem by remember { mutableStateOf<MediaItemResponse?>(null) }
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { error ->
@@ -88,283 +102,354 @@ fun DeliveryScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         modifier = modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = Color(0xFF090D16)
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        LazyVerticalStaggeredGrid(
+            columns = StaggeredGridCells.Fixed(2),
+            contentPadding = PaddingValues(
+                start = 12.dp,
+                end = 12.dp,
+                top = paddingValues.calculateTopPadding() + 8.dp,
+                bottom = paddingValues.calculateBottomPadding() + 24.dp
+            ),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalItemSpacing = 10.dp,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Spacer(modifier = Modifier.height(28.dp))
-
-            Box(
-                modifier = Modifier
-                    .size(76.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFE8F5E9)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Success",
-                    tint = Color(0xFF2E7D32),
-                    modifier = Modifier.size(44.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            Text(
-                text = "Selections Submitted!",
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onBackground
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = "Your photographer has been notified. The album is now locked for editing.",
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (uiState.allowDownload) MaterialTheme.colorScheme.surfaceVariant
-                    else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
-                )
-            ) {
+            // HEADER & ACTION BAR (Full Span)
+            item(span = StaggeredGridItemSpan.FullLine) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .padding(bottom = 12.dp)
                 ) {
-                    if (uiState.allowDownload) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = "Download Enabled",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Direct High-Res Gallery Download",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Download your finalized photos directly to your device gallery.",
-                            style = MaterialTheme.typography.bodySmall,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
+                    // Top App Navigation Bar
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            if (!uiState.studioLogoUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = uiState.studioLogoUrl,
+                                    contentDescription = "Studio Logo",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF1E293B))
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                            }
+                            Column {
+                                Text(
+                                    text = uiState.albumTitle,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = uiState.photographerName ?: "PhotoGuard Studio",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF94A3B8)
+                                    )
+                                    if (uiState.isStudioTier) {
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.Verified,
+                                            contentDescription = "Verified Studio",
+                                            tint = Color(0xFFF59E0B),
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
 
-                        Button(
-                            onClick = { viewModel.downloadAllPhotos(context) },
-                            enabled = !uiState.isFetchingDownloads && uiState.downloadUrls.isNotEmpty(),
+                        IconButton(
+                            onClick = onSignOut,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF1E293B))
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                                contentDescription = "Sign Out",
+                                tint = Color(0xFFE2E8F0),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // PROMINENT "DOWNLOAD ALL TO GALLERY" DELIVERY HERO CARD
+                    val totalPhotos = uiState.mediaItems.size
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (uiState.allowDownload) Color(0xFF131D2E) else Color(0xFF1E1720)
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            width = 1.dp,
+                            color = if (uiState.allowDownload) Color(0xFF2563EB).copy(alpha = 0.5f) else Color(0xFF7F1D1D).copy(alpha = 0.5f)
+                        )
+                    ) {
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(12.dp)
+                                .padding(18.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            if (uiState.isFetchingDownloads) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                    strokeWidth = 2.dp
+                            if (uiState.allowDownload) {
+                                Text(
+                                    text = "Ready for Gallery Download",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = Color(0xFF60A5FA)
                                 )
-                            } else {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.Download,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "All finalized photos are available in high-resolution. Save directly to your Android Photos / Gallery.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    textAlign = TextAlign.Center,
+                                    color = Color(0xFF94A3B8)
+                                )
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                Button(
+                                    onClick = { viewModel.downloadAllPhotos(context) },
+                                    enabled = !uiState.isFetchingDownloads && totalPhotos > 0,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(52.dp),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF2563EB),
+                                        contentColor = Color.White
                                     )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Download All Photos (${uiState.downloadUrls.size})",
-                                        fontWeight = FontWeight.SemiBold
+                                ) {
+                                    if (uiState.isFetchingDownloads) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            color = Color.White,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Download,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "Download All to Gallery ($totalPhotos)",
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Downloads Restricted",
+                                    tint = Color(0xFFF87171),
+                                    modifier = Modifier.size(28.dp)
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Downloads Restricted",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = Color(0xFFFCA5A5)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Your photographer has not enabled direct downloads for this album yet.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    textAlign = TextAlign.Center,
+                                    color = Color(0xFF94A3B8)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "DELIVERED PROOFS ($totalPhotos)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF64748B),
+                        letterSpacing = 1.2.sp,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                    )
+                }
+            }
+
+            // PURE PHOTO GRID: NO CHECKBOXES, NO HEARTS, LUXURY DISPLAY
+            itemsIndexed(
+                items = uiState.mediaItems,
+                key = { _, item -> item.id }
+            ) { _, media ->
+                DeliveryPhotoItem(
+                    media = media,
+                    onClick = { activePreviewItem = media }
+                )
+            }
+
+            // STUDIO CONTACT DETAILS (Full Span Bottom Card)
+            val hasStudioBranding = uiState.isStudioTier || !uiState.contactPhone.isNullOrBlank() || !uiState.instagramUrl.isNullOrBlank() || !uiState.telegramUrl.isNullOrBlank()
+            if (hasStudioBranding) {
+                item(span = StaggeredGridItemSpan.FullLine) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 24.dp)
+                    ) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF131D2E)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E293B))
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                            ) {
+                                Text(
+                                    text = "Studio & Contact",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = Color(0xFFE2E8F0)
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                uiState.contactPhone?.takeIf { it.isNotBlank() }?.let { phone ->
+                                    SocialLinkRow(
+                                        label = "Phone / Call",
+                                        value = phone,
+                                        icon = Icons.Default.Phone,
+                                        onClick = {
+                                            runCatching {
+                                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
+                                                context.startActivity(intent)
+                                            }
+                                        }
+                                    )
+                                }
+
+                                uiState.telegramUrl?.takeIf { it.isNotBlank() }?.let { tg ->
+                                    SocialLinkRow(
+                                        label = "Telegram",
+                                        value = tg.removePrefix("https://t.me/"),
+                                        icon = Icons.Default.Share,
+                                        onClick = {
+                                            runCatching {
+                                                val url = if (tg.startsWith("http")) tg else "https://t.me/$tg"
+                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                            }
+                                        }
+                                    )
+                                }
+
+                                uiState.instagramUrl?.takeIf { it.isNotBlank() }?.let { ig ->
+                                    SocialLinkRow(
+                                        label = "Instagram",
+                                        value = ig.removePrefix("https://instagram.com/"),
+                                        icon = Icons.Default.Share,
+                                        onClick = {
+                                            runCatching {
+                                                val url = if (ig.startsWith("http")) ig else "https://instagram.com/$ig"
+                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                            }
+                                        }
                                     )
                                 }
                             }
                         }
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = "Downloads Disabled",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Downloads Restricted",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Your photographer has not enabled direct downloads for this album.",
-                            style = MaterialTheme.typography.bodySmall,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
-                        )
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            val hasStudioBranding = uiState.isStudioTier || !uiState.studioLogoUrl.isNullOrBlank() || !uiState.photographerName.isNullOrBlank()
-
-            if (hasStudioBranding) {
-                Text(
-                    text = "Studio & Contact Details",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        uiState.contactPhone?.takeIf { it.isNotBlank() }?.let { phone ->
-                            SocialLinkRow(
-                                label = "Call / SMS",
-                                value = phone,
-                                icon = Icons.Default.Phone,
-                                onClick = {
-                                    runCatching {
-                                        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
-                                        context.startActivity(intent)
-                                    }.onFailure {
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Unable to open dialer application.")
-                                        }
-                                    }
-                                }
-                            )
-                        }
-
-                        uiState.telegramUrl?.takeIf { it.isNotBlank() }?.let { tg ->
-                            SocialLinkRow(
-                                label = "Telegram",
-                                value = tg.removePrefix("https://t.me/").removePrefix("@"),
-                                icon = Icons.Default.Send,
-                                onClick = {
-                                    runCatching {
-                                        val url = if (tg.startsWith("http")) tg else "https://t.me/$tg"
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                        context.startActivity(intent)
-                                    }.onFailure {
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Unable to open Telegram link.")
-                                        }
-                                    }
-                                }
-                            )
-                        }
-
-                        uiState.instagramUrl?.takeIf { it.isNotBlank() }?.let { insta ->
-                            SocialLinkRow(
-                                label = "Instagram",
-                                value = insta.removePrefix("https://instagram.com/").removePrefix("@"),
-                                icon = Icons.Default.Share,
-                                onClick = {
-                                    runCatching {
-                                        val url = if (insta.startsWith("http")) insta else "https://instagram.com/$insta"
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                        context.startActivity(intent)
-                                    }.onFailure {
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Unable to open Instagram link.")
-                                        }
-                                    }
-                                }
-                            )
-                        }
-
-                        uiState.tiktokUrl?.takeIf { it.isNotBlank() }?.let { tiktok ->
-                            SocialLinkRow(
-                                label = "TikTok",
-                                value = tiktok.removePrefix("https://tiktok.com/@"),
-                                icon = Icons.Default.Share,
-                                onClick = {
-                                    runCatching {
-                                        val url = if (tiktok.startsWith("http")) tiktok else "https://tiktok.com/@$tiktok"
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                        context.startActivity(intent)
-                                    }.onFailure {
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Unable to open TikTok link.")
-                                        }
-                                    }
-                                }
-                            )
-                        }
-
-                        uiState.youtubeUrl?.takeIf { it.isNotBlank() }?.let { yt ->
-                            SocialLinkRow(
-                                label = "YouTube",
-                                value = "Visit Channel",
-                                icon = Icons.Default.Share,
-                                onClick = {
-                                    runCatching {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(yt))
-                                        context.startActivity(intent)
-                                    }.onFailure {
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Unable to open YouTube channel.")
-                                        }
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-
-            OutlinedButton(
-                onClick = onSignOut,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                    contentDescription = "Sign Out"
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Sign Out / Exit",
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
         }
+    }
+
+    // CLEAN FULL-SCREEN LIGHTBOX DIALOG (NO SELECTION BUTTONS)
+    activePreviewItem?.let { previewMedia ->
+        Dialog(
+            onDismissRequest = { activePreviewItem = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black),
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = previewMedia.url,
+                    contentDescription = previewMedia.filename ?: "Photo",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                IconButton(
+                    onClick = { activePreviewItem = null },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(18.dp)
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.6f))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close Lightbox",
+                        tint = Color.White
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Pure Photo Item for Delivery Mode:
+ * STRICT ENFORCEMENT:
+ * - NO CHECKBOXES
+ * - NO HEART ICONS
+ * - ONLY PURE, CRISP HIGH-RESOLUTION RENDERING
+ */
+@Composable
+private fun DeliveryPhotoItem(
+    media: MediaItemResponse,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF1E293B))
+            .clickable { onClick() }
+    ) {
+        AsyncImage(
+            model = media.thumbnailUrl ?: media.url,
+            contentDescription = media.filename ?: "Delivered Photo",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+        )
     }
 }
 
@@ -388,20 +473,20 @@ private fun SocialLinkRow(
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
+                tint = Color(0xFF60A5FA),
+                modifier = Modifier.size(16.dp)
             )
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.onSurface
+                color = Color(0xFFE2E8F0)
             )
         }
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary
+            color = Color(0xFF93C5FD)
         )
     }
 }

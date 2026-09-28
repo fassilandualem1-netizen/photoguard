@@ -121,7 +121,9 @@ fun PhotoGuardNavHost() {
     NavHost(
         navController = navController,
         startDestination = if (currentAlbum != null) {
-            if (currentAlbum?.allowDownload == true || currentAlbum?.isLocked == true || currentAlbum?.isSubmitted == true) "delivery" else "gallery"
+            if (currentAlbum?.allowDownload == true) "delivery"
+            else if (currentAlbum?.isSubmitted == true || currentAlbum?.isLocked == true) "delivery"
+            else "gallery"
         } else "login",
         enterTransition = { fadeIn(animationSpec = tween(300)) },
         exitTransition = { fadeOut(animationSpec = tween(300)) }
@@ -135,11 +137,13 @@ fun PhotoGuardNavHost() {
                 onLoginSuccess = { verifiedAlbum ->
                     ActiveAlbumHolder.album = verifiedAlbum
                     currentAlbum = verifiedAlbum
-                    // When allowDownload is true (Final Delivery Mode) or album is locked/submitted:
-                    // Navigate directly to delivery for direct-to-gallery download.
-                    // When allowDownload is false and unlocked:
-                    // Navigate to gallery for proof selection & submit.
-                    val destination = if (verifiedAlbum.allowDownload || verifiedAlbum.isLocked || verifiedAlbum.isSubmitted) {
+                    // Strict Routing Logic Enforcement:
+                    // IF allow_download == true: Completely BYPASS GalleryScreen. Route directly to DeliveryScreen.
+                    // IF allow_download == false AND is_submitted == false: Route to GalleryScreen (Standard Proofing Mode).
+                    // IF allow_download == false AND (is_submitted == true OR is_locked == true): Route to DeliveryScreen.
+                    val destination = if (verifiedAlbum.allowDownload) {
+                        "delivery"
+                    } else if (verifiedAlbum.isSubmitted || verifiedAlbum.isLocked) {
                         "delivery"
                     } else {
                         "gallery"

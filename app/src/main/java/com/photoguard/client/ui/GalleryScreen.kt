@@ -151,8 +151,8 @@ fun GalleryScreen(
         parseBrandAccentColor(uiState.brandColorHex)
     }
 
-    LaunchedEffect(uiState.isSubmitted) {
-        if (uiState.isSubmitted) {
+    LaunchedEffect(uiState.isSubmitted, uiState.album.allowDownload) {
+        if (uiState.isSubmitted || uiState.album.allowDownload) {
             onSubmitComplete()
         }
     }

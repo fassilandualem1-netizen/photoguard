@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
@@ -22,7 +22,9 @@ local.properties
 # Keystore
 *.jks
 *.keystore
--e 
 node_modules/
-dist/
+.vite/
+.github/
+
+
 

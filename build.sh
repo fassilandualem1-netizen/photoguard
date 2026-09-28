@@ -5,10 +5,10 @@ set -o errexit
 echo "==> Installing Python backend dependencies..."
 pip install -r requirements.txt
 
-echo "==> Building React frontend dashboard..."
-if command -v npm &> /dev/null; then
-  npm install
-  npm run build
+echo "==> Production Web Dashboard dist/ is verified and ready."
+if [ ! -f "dist/index.html" ]; then
+  echo "Error: dist/index.html is missing!"
+  exit 1
 fi
 
 echo "==> Build complete! dist/ is ready for FastAPI to serve on Render."

@@ -17,31 +17,31 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-/**
- * Gallery UI State representing the collaborative live selection session.
- */
 data class GalleryUiState(
-    val album: AlbumDetailResponse? = null,
+    val album: AlbumDetailResponse,
     val mediaItems: List<MediaItemResponse> = emptyList(),
     val selectedCount: Int = 0,
     val isLocked: Boolean = false,
     val isSubmitting: Boolean = false,
     val isSyncing: Boolean = false,
-    val userFeedbackMessage: String? = null,
-    val localVersion: Int = 1
-)
+    val localVersion: Int = 1,
+    val isSubmitted: Boolean = false,
+    val errorMessage: String? = null
+) {
+    val albumTitle: String get() = album.title
+    val pin: String get() = album.pin
+    val totalCount: Int get() = mediaItems.size
+    val studioLogoUrl: String? get() = album.studioLogoUrl
+    val studioName: String get() = album.photographerName ?: album.creatorName ?: "PhotoGuard Studio"
+    val brandColorHex: String get() = album.brandColor ?: "#3B82F6"
+}
 
-/**
- * ViewModel managing the Masonry photo gallery, optimistic selection updates,
- * single-submit lock enforcement, and Smart Polling live sync (every 3 seconds).
- */
 class GalleryViewModel(
     private val clientApi: ClientApi,
     initialAlbum: AlbumDetailResponse
 ) : ViewModel() {
 
     private val albumPin = initialAlbum.pin
-
     private val _uiState = MutableStateFlow(
         GalleryUiState(
             album = initialAlbum,
@@ -59,41 +59,24 @@ class GalleryViewModel(
         startSmartPolling()
     }
 
-    /**
-     * Smart Polling Loop (Redis/Upstash backed):
-     * Polls GET /api/v1/client/sync/{pin} every 3000ms.
-     * WebSockets are strictly forbidden by architecture.
-     * If remote version > local version, automatically re-fetches latest album state.
-     * If is_locked == true, freezes UI immediately.
-     */
-    fun startSmartPolling() {
-        if (pollingJob?.isActive == true) return
-
+    private fun startSmartPolling() {
+        pollingJob?.cancel()
         pollingJob = viewModelScope.launch {
             while (isActive) {
                 delay(3000L)
+                if (_uiState.value.isSubmitting) continue
 
-                // Skip polling if album is already finalized and locked
-                if (_uiState.value.isLocked) continue
-
-                val syncResult = safeApiCall {
-                    clientApi.syncAlbum(albumPin)
-                }
-
+                val syncResult = safeApiCall { clientApi.syncAlbum(albumPin) }
                 if (syncResult is NetworkResult.Success) {
                     val remoteSync = syncResult.data
-
-                    // 1. Check if another device locked/submitted the album
                     if (remoteSync.isLocked && !_uiState.value.isLocked) {
                         _uiState.update { current ->
                             current.copy(
                                 isLocked = true,
-                                userFeedbackMessage = "Album was submitted by a family member and is now locked."
+                                errorMessage = "Album was submitted by a family member and is now locked."
                             )
                         }
                     }
-
-                    // 2. Collaborative Sync: Version bumped by another device's selection
                     if (remoteSync.version > _uiState.value.localVersion) {
                         refreshAlbumDetails(newVersion = remoteSync.version)
                     }
@@ -102,16 +85,9 @@ class GalleryViewModel(
         }
     }
 
-    /**
-     * Re-fetches full album state when remote version > local version.
-     */
     private suspend fun refreshAlbumDetails(newVersion: Int) {
         _uiState.update { it.copy(isSyncing = true) }
-
-        val result = safeApiCall {
-            clientApi.getAlbumDetails(albumPin)
-        }
-
+        val result = safeApiCall { clientApi.getAlbumDetails(albumPin) }
         if (result is NetworkResult.Success) {
             val freshAlbum = result.data
             _uiState.update { current ->
@@ -129,21 +105,16 @@ class GalleryViewModel(
         }
     }
 
-    /**
-     * Toggles photo selection with Optimistic UI updates.
-     * If the server rejects the change (e.g. 403 album locked), rolls back the UI state.
-     */
-    fun togglePhotoSelection(mediaId: Int) {
+    fun toggleSelect(mediaId: Int) {
         val currentState = _uiState.value
         if (currentState.isLocked) {
-            _uiState.update { it.copy(userFeedbackMessage = "Album is locked. Selections cannot be altered.") }
+            _uiState.update { it.copy(errorMessage = "Album is locked. Selections cannot be altered.") }
             return
         }
 
         val targetItem = currentState.mediaItems.find { it.id == mediaId } ?: return
         val newSelectedState = !targetItem.isSelected
 
-        // 1. Optimistic UI update: Immediately reflect selection change
         val updatedList = currentState.mediaItems.map { item ->
             if (item.id == mediaId) item.copy(isSelected = newSelectedState) else item
         }
@@ -156,7 +127,6 @@ class GalleryViewModel(
             )
         }
 
-        // 2. Background PATCH dispatch
         viewModelScope.launch {
             val patchResult = safeApiCall {
                 clientApi.updateMedia(
@@ -170,12 +140,9 @@ class GalleryViewModel(
 
             when (patchResult) {
                 is NetworkResult.Success -> {
-                    // Selection confirmed by server. Local version increments alongside Redis version.
                     _uiState.update { it.copy(localVersion = it.localVersion + 1) }
                 }
-
                 is NetworkResult.Error -> {
-                    // Atomic rollback: Dynamically revert the targeted photo based on current state
                     _uiState.update { current ->
                         val revertedList = current.mediaItems.map { item ->
                             if (item.id == mediaId) item.copy(isSelected = !newSelectedState) else item
@@ -184,13 +151,11 @@ class GalleryViewModel(
                             mediaItems = revertedList,
                             selectedCount = revertedList.count { it.isSelected },
                             isLocked = if (patchResult.code == 403) true else current.isLocked,
-                            userFeedbackMessage = patchResult.message
+                            errorMessage = patchResult.message
                         )
                     }
                 }
-
                 is NetworkResult.NetworkException -> {
-                    // Atomic rollback on network connectivity dropout
                     _uiState.update { current ->
                         val revertedList = current.mediaItems.map { item ->
                             if (item.id == mediaId) item.copy(isSelected = !newSelectedState) else item
@@ -198,7 +163,7 @@ class GalleryViewModel(
                         current.copy(
                             mediaItems = revertedList,
                             selectedCount = revertedList.count { it.isSelected },
-                            userFeedbackMessage = "Network connection failed. Selection was not saved."
+                            errorMessage = "Network connection failed. Selection was not saved."
                         )
                     }
                 }
@@ -206,52 +171,76 @@ class GalleryViewModel(
         }
     }
 
-    /**
-     * Submits client photo selections. Enforces Single Submit Lock across all connected devices.
-     */
-    fun submitSelections(onSuccess: () -> Unit) {
+    fun updateClientNotes(mediaId: Int, note: String) {
+        val currentState = _uiState.value
+        if (currentState.isLocked) {
+            _uiState.update { it.copy(errorMessage = "Album is locked. Notes cannot be added.") }
+            return
+        }
+
+        val updatedList = currentState.mediaItems.map { item ->
+            if (item.id == mediaId) item.copy(clientNotes = note) else item
+        }
+        _uiState.update { it.copy(mediaItems = updatedList) }
+
+        viewModelScope.launch {
+            val result = safeApiCall {
+                clientApi.updateMedia(
+                    mediaId = mediaId,
+                    request = ClientMediaUpdateRequest(
+                        pin = albumPin,
+                        clientNotes = note
+                    )
+                )
+            }
+            if (result !is NetworkResult.Success) {
+                _uiState.update { current ->
+                    current.copy(
+                        mediaItems = currentState.mediaItems,
+                        errorMessage = "Failed to save note. Please check connection."
+                    )
+                }
+            }
+        }
+    }
+
+    fun submitSelection() {
         val currentState = _uiState.value
         if (currentState.isLocked || currentState.isSubmitting) return
-
         if (currentState.selectedCount == 0) {
-            _uiState.update { it.copy(userFeedbackMessage = "Please select at least one photo before submitting.") }
+            _uiState.update { it.copy(errorMessage = "Please select at least one photo before submitting.") }
             return
         }
 
         _uiState.update { it.copy(isSubmitting = true) }
-
         viewModelScope.launch {
             val submitResult = safeApiCall {
                 clientApi.submitSelections(albumPin)
             }
-
             when (submitResult) {
                 is NetworkResult.Success -> {
                     _uiState.update {
                         it.copy(
                             isLocked = true,
                             isSubmitting = false,
-                            userFeedbackMessage = "Selections submitted successfully! Album is now locked."
+                            isSubmitted = true
                         )
                     }
-                    onSuccess()
                 }
-
                 is NetworkResult.Error -> {
                     _uiState.update {
                         it.copy(
                             isSubmitting = false,
                             isLocked = if (submitResult.code == 403) true else it.isLocked,
-                            userFeedbackMessage = submitResult.message
+                            errorMessage = submitResult.message
                         )
                     }
                 }
-
                 is NetworkResult.NetworkException -> {
                     _uiState.update {
                         it.copy(
                             isSubmitting = false,
-                            userFeedbackMessage = submitResult.message
+                            errorMessage = submitResult.message
                         )
                     }
                 }
@@ -259,37 +248,8 @@ class GalleryViewModel(
         }
     }
 
-    /**
-     * Dismisses the active user feedback toast/message.
-     */
-    /**
-     * Updates or attaches client retouching notes to a photo.
-     */
-    fun updateClientNotes(mediaId: Int, notes: String) {
-        val currentState = _uiState.value
-        if (currentState.isLocked) {
-            _uiState.update { it.copy(userFeedbackMessage = "Album is locked. Notes cannot be altered.") }
-            return
-        }
-        val updatedList = currentState.mediaItems.map { item ->
-            if (item.id == mediaId) item.copy(clientNotes = notes) else item
-        }
-        _uiState.update { it.copy(mediaItems = updatedList) }
-        viewModelScope.launch {
-            safeApiCall {
-                clientApi.updateMedia(
-                    mediaId = mediaId,
-                    request = ClientMediaUpdateRequest(
-                        pin = albumPin,
-                        clientNotes = notes
-                    )
-                )
-            }
-        }
-    }
-
-    fun clearFeedbackMessage() {
-        _uiState.update { it.copy(userFeedbackMessage = null) }
+    fun clearError() {
+        _uiState.update { it.copy(errorMessage = null) }
     }
 
     override fun onCleared() {

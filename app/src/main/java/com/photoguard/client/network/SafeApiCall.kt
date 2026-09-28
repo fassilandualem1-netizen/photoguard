@@ -5,16 +5,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
 
-/**
- * Robust network result wrapper to enforce crash-free operations across all network calls.
- * Prevents fatal crashes on server errors, connectivity drops, and rate-limits (HTTP 429).
- */
 sealed interface NetworkResult<out T> {
-    /** Successful API response carrying deserialized data */
     data class Success<out T>(val data: T) : NetworkResult<T>
-
-    /** HTTP Error (4xx, 5xx), including status code and server error body or fallback message */
     data class Error(
         val code: Int,
         val message: String,
@@ -25,24 +21,12 @@ sealed interface NetworkResult<out T> {
         val isNotFound: Boolean get() = code == 404
         val isServerError: Boolean get() = code in 500..599
     }
-
-    /** Connectivity failure, timeout, or DNS resolution failure */
     data class NetworkException(
         val throwable: Throwable,
         val message: String = "No internet connection or network timeout"
     ) : NetworkResult<Nothing>
 }
 
-/**
- * Bulletproof network wrapper using Kotlin's runCatching.
- *
- * Guarantees that no unhandled HttpException, IOException, or serialization
- * exception bubbles up to cause an application crash.
- *
- * @param dispatcher CoroutineDispatcher (defaults to Dispatchers.IO)
- * @param apiCall The suspending Retrofit API block
- * @return NetworkResult<T> (Success, Error, or NetworkException)
- */
 suspend fun <T> safeApiCall(
     dispatcher: CoroutineDispatcher = Dispatchers.IO,
     apiCall: suspend () -> T
@@ -56,8 +40,25 @@ suspend fun <T> safeApiCall(
             },
             onFailure = { throwable ->
                 when (throwable) {
+                    is UnknownHostException -> {
+                        NetworkResult.NetworkException(
+                            throwable = throwable,
+                            message = "No internet connection or DNS lookup failed. Please verify your network."
+                        )
+                    }
+                    is SocketTimeoutException -> {
+                        NetworkResult.NetworkException(
+                            throwable = throwable,
+                            message = "Connection timed out. Server took too long to respond. Please try again."
+                        )
+                    }
+                    is SSLException -> {
+                        NetworkResult.NetworkException(
+                            throwable = throwable,
+                            message = "Secure connection error. Please ensure your device clock and network are secure."
+                        )
+                    }
                     is IOException -> {
-                        // Network drop, timeout, offline state
                         NetworkResult.NetworkException(
                             throwable = throwable,
                             message = throwable.localizedMessage ?: "Network connectivity unavailable. Please check your connection."
@@ -68,8 +69,8 @@ suspend fun <T> safeApiCall(
                         val errorBody = runCatching {
                             throwable.response()?.errorBody()?.string()
                         }.getOrNull()
-
                         val parsedMessage = when (statusCode) {
+                            409 -> "This album was just submitted and locked by another collaborator."
                             429 -> "Rate limit reached. Please wait a moment before trying again."
                             401 -> "Invalid credentials or session expired."
                             403 -> "Access restricted."
@@ -77,7 +78,6 @@ suspend fun <T> safeApiCall(
                             in 500..599 -> "PhotoGuard server error. Please try again shortly."
                             else -> "Unexpected server response ($statusCode)."
                         }
-
                         NetworkResult.Error(
                             code = statusCode,
                             message = parsedMessage,
@@ -85,7 +85,6 @@ suspend fun <T> safeApiCall(
                         )
                     }
                     else -> {
-                        // Catch-all for unexpected serialization or runtime issues
                         NetworkResult.NetworkException(
                             throwable = throwable,
                             message = throwable.localizedMessage ?: "An unexpected error occurred during request execution."

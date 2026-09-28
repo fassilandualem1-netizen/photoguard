@@ -1,17 +1,28 @@
-node_modules/
-build/
-coverage/
-.DS_Store
-*.log
-.env*
-!.env.example
-.dev.*
+﻿# Python
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
-.pytest_cache/
-.venv/
-venv/
-uploads/
-.aistudio/
+
+# Gradle / Android build outputs
+.gradle/
+build/
+app/build/
+*.apk
+*.aab
+local.properties
+
+# Android Studio
+*.iml
+.idea/
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Keystore
+*.jks
+*.keystore
+-e 
+node_modules/
+dist/
 

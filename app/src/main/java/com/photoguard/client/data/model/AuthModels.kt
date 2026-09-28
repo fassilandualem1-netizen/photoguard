@@ -3,19 +3,12 @@ package com.photoguard.client.data.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/**
- * Request payload for 6-digit client PIN verification.
- */
 @Serializable
 data class ClientVerifyRequest(
     @SerialName("pin")
     val pin: String
 )
 
-/**
- * Lightweight polling response for collaborative Smart Polling without WebSockets.
- * Returned by GET /api/v1/client/sync/{pin}.
- */
 @Serializable
 data class ClientSyncResponse(
     @SerialName("pin")
@@ -26,10 +19,6 @@ data class ClientSyncResponse(
     val isLocked: Boolean = false
 )
 
-/**
- * Client photo selection and retouching notes payload.
- * Submitted to PATCH /api/v1/client/media/{media_id}.
- */
 @Serializable
 data class ClientMediaUpdateRequest(
     @SerialName("pin")
@@ -40,10 +29,6 @@ data class ClientMediaUpdateRequest(
     val clientNotes: String? = null
 )
 
-/**
- * Final submission confirmation response.
- * Returned by POST /api/v1/client/submit/{pin}.
- */
 @Serializable
 data class ClientSubmitResponse(
     @SerialName("message")
@@ -54,10 +39,6 @@ data class ClientSubmitResponse(
     val isLocked: Boolean = true
 )
 
-/**
- * Direct gallery high-res download response.
- * Returned by GET /api/v1/client/{pin}/download.
- */
 @Serializable
 data class ClientDownloadResponse(
     @SerialName("pin")
@@ -68,9 +49,6 @@ data class ClientDownloadResponse(
     val downloadUrls: List<String> = emptyList()
 )
 
-/**
- * Social links and Studio tier branding for client visibility (Studio Plan only).
- */
 @Serializable
 data class SocialLinksResponse(
     @SerialName("contact_phone")
@@ -85,9 +63,6 @@ data class SocialLinksResponse(
     val youtubeUrl: String? = null
 )
 
-/**
- * Individual media item representation within an album.
- */
 @Serializable
 data class MediaItemResponse(
     @SerialName("id")
@@ -112,10 +87,6 @@ data class MediaItemResponse(
     val createdAt: String? = null
 )
 
-/**
- * Comprehensive album detail response matching FastAPI backend schema.
- * Supports both Basic and Studio subscription plan configurations.
- */
 @Serializable
 data class AlbumDetailResponse(
     @SerialName("id")
@@ -146,6 +117,8 @@ data class AlbumDetailResponse(
     val isExpired: Boolean = false,
     @SerialName("submitted_at")
     val submittedAt: String? = null,
+    @SerialName("is_submitted")
+    val isSubmitted: Boolean = false,
     @SerialName("media_count")
     val mediaCount: Int = 0,
     @SerialName("selected_count")

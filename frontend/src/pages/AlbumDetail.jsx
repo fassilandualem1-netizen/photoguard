@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../api/axios";
+import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import {
   ArrowLeft,
@@ -33,6 +34,23 @@ import {
   ExternalLink,
   ShieldCheck
 } from "lucide-react";
+
+// Upgrade Cloudinary/CDN URLs to pristine crisp high-res retina grid thumbnails
+const getCrispThumbnailUrl = (item) => {
+  if (!item) return "";
+  const rawUrl = item.thumbnail_url || item.url || "";
+  if (!rawUrl) return "";
+
+  // If already an optimized Cloudinary URL, ensure crisp w_1000,dpr_2.0,q_auto:best,f_avif
+  if (rawUrl.includes("res.cloudinary.com") && rawUrl.includes("/upload/")) {
+    // Replace any legacy transformation or standard /upload/ with high-res parameters
+    return rawUrl.replace(
+      /\/upload\/(?:[a-zA-Z0-9_:,.-]+\/)?/,
+      "/upload/f_avif,q_auto:best,dpr_2.0,w_1000,c_limit/"
+    );
+  }
+  return rawUrl;
+};
 
 export default function AlbumDetail() {
   const { id } = useParams();
@@ -136,32 +154,69 @@ export default function AlbumDetail() {
     let failedUploads = 0;
     const failureReasons = [];
 
-    // Worker that uploads one file with 1 retry on network glitch
-    const uploadSingleFile = async (file) => {
-      const formData = new FormData();
-      formData.append("file", file);
+    // Step 1: Request presigned Cloudinary upload signature from backend
+    let sigConfig = null;
+    try {
+      const sigRes = await api.get(`/api/v1/media/upload-signature?album_id=${id}`);
+      sigConfig = sigRes.data;
+    } catch (err) {
+      console.warn("Direct-to-cloud signature unavailable, fallback to backend proxy.", err);
+    }
 
+    // Direct-to-Cloud Upload Worker (High-Speed Edge Upload)
+    const uploadSingleFileDirect = async (file) => {
       let attempts = 0;
       while (attempts < 2) {
         try {
-          await api.post(`/api/v1/media/upload/${id}`, formData, {
-            headers: { "Content-Type": "multipart/form-data" },
-          });
+          let highResUrl = "";
+          let originalSize = file.size;
+
+          if (sigConfig?.signature && sigConfig?.upload_url) {
+            // DIRECT TO CLOUDINARY EDGE (Bypasses backend server completely)
+            const cldFormData = new FormData();
+            cldFormData.append("file", file);
+            cldFormData.append("api_key", sigConfig.api_key);
+            cldFormData.append("timestamp", sigConfig.timestamp);
+            cldFormData.append("signature", sigConfig.signature);
+            cldFormData.append("folder", sigConfig.folder);
+
+            const cldRes = await axios.post(sigConfig.upload_url, cldFormData, {
+              headers: { "Content-Type": "multipart/form-data" },
+            });
+            highResUrl = cldRes.data.secure_url;
+          } else {
+            // Fallback to backend multipart upload if signature absent
+            const fallbackData = new FormData();
+            fallbackData.append("file", file);
+            const fbRes = await api.post(`/api/v1/media/upload/${id}`, fallbackData, {
+              headers: { "Content-Type": "multipart/form-data" },
+            });
+            highResUrl = fbRes.data.url;
+          }
+
+          if (highResUrl && sigConfig?.signature) {
+            // Instantly register photo metadata into PostgreSQL
+            await api.post(`/api/v1/media/save-url`, {
+              album_id: parseInt(id, 10),
+              filename: file.name,
+              url: highResUrl,
+              original_size: originalSize,
+            });
+          }
+
           successfulUploads++;
           break;
         } catch (err) {
           attempts++;
           if (attempts >= 2) {
             failedUploads++;
-            const detail = err.response?.data?.detail || err.message || "Upload error";
+            const detail = err.response?.data?.error?.message || err.response?.data?.detail || err.message || "Upload error";
             failureReasons.push(`${file.name} (${detail})`);
           } else {
-            // Brief backoff before single retry
             await new Promise((r) => setTimeout(r, 300));
           }
         }
       }
-
       completedCount++;
       setUploadProgress({
         current: completedCount,
@@ -169,8 +224,8 @@ export default function AlbumDetail() {
       });
     };
 
-    // Concurrency limit = 4 parallel streams (prevents rate-limit & maximizes speed)
-    const concurrency = Math.min(4, fileList.length);
+    // Concurrency limit = 6 parallel direct-to-cloud streams for blazing speed
+    const concurrency = Math.min(6, fileList.length);
     const workers = [];
 
     for (let i = 0; i < concurrency; i++) {
@@ -178,12 +233,11 @@ export default function AlbumDetail() {
         (async () => {
           while (currentIndex < fileList.length) {
             const file = fileList[currentIndex++];
-            await uploadSingleFile(file);
+            await uploadSingleFileDirect(file);
           }
         })()
       );
     }
-
     await Promise.all(workers);
 
     setUploading(false);
@@ -284,7 +338,13 @@ export default function AlbumDetail() {
 
   const mediaItems = album?.media_items || [];
   const selectedItems = mediaItems.filter((m) => m.is_selected);
-  const isSubmitted = album?.is_submitted || false;
+  const isSubmitted = Boolean(
+    album?.is_submitted ||
+    album?.is_locked ||
+    album?.submitted_at ||
+    album?.status === "submitted" ||
+    album?.status === "locked"
+  );
 
   // Client Invite Text & Deep Linking
   const albumPin = album?.pin || album?.client_pin || "";
@@ -343,14 +403,14 @@ export default function AlbumDetail() {
   };
 
   // NATIVE FOLDER DOWNLOAD (window.showDirectoryPicker)
-  // ONLY downloads client selected photos once submitted
+  // Downloads client-selected photos (or all proofs if none specifically marked)
   const handleDownloadAll = async () => {
-    if (!isSubmitted || selectedItems.length === 0) {
-      alert("Download All unlocks once the client submits their selections.");
+    if (!canDownloadAll) {
+      alert("No photos available to download yet.");
       return;
     }
 
-    const targetPhotos = selectedItems;
+    const targetPhotos = selectedItems.length > 0 ? selectedItems : mediaItems;
     const supportsDirectoryPicker = typeof window !== "undefined" && "showDirectoryPicker" in window;
 
     if (!supportsDirectoryPicker) {
@@ -517,8 +577,8 @@ export default function AlbumDetail() {
   const daysLeft = calculateDaysLeft(album.expires_at);
   const displayPhotos = activeViewTab === "selections" ? selectedItems : mediaItems;
 
-  // Download All button enablement: ONLY active once submitted with selections
-  const canDownloadAll = isSubmitted && selectedItems.length > 0;
+  // Download All button enablement: active if client made selections OR if submitted with photos
+  const canDownloadAll = selectedItems.length > 0 || (isSubmitted && mediaItems.length > 0);
 
   return (
     <div id="album-detail-page" className="space-y-6 max-w-7xl mx-auto pb-16">
@@ -557,6 +617,11 @@ export default function AlbumDetail() {
                 <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-semibold border border-amber-500/40 flex items-center gap-1.5 shadow-sm">
                   <Lock className="w-3.5 h-3.5 text-amber-400" />
                   <span>Selection Submitted & Locked</span>
+                </span>
+              ) : selectedItems.length > 0 ? (
+                <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-semibold border border-emerald-500/40 flex items-center gap-1.5 shadow-sm">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>{selectedItems.length} Selections Ready</span>
                 </span>
               ) : (
                 <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 text-xs font-semibold border border-emerald-500/30 flex items-center gap-1.5">
@@ -745,7 +810,7 @@ export default function AlbumDetail() {
               </button>
             )}
 
-            {/* DOWNLOAD ALL BUTTON: Active ONLY once client submits selections */}
+            {/* DOWNLOAD ALL BUTTON: Active if selections exist or submitted */}
             <button
               id="download-all-btn"
               type="button"
@@ -758,8 +823,8 @@ export default function AlbumDetail() {
               }`}
               title={
                 canDownloadAll
-                  ? `Download all ${selectedItems.length} client-selected photos to a local folder`
-                  : "Download All unlocks once the client submits their selections"
+                  ? `Download ${selectedItems.length > 0 ? `${selectedItems.length} client-selected photos` : `all ${mediaItems.length} photos`} to your local folder`
+                  : "Download All activates when the client marks selections or submits the album"
               }
             >
               {isDownloadingFolder ? (
@@ -770,7 +835,7 @@ export default function AlbumDetail() {
               ) : (
                 <>
                   <FolderDown className={`w-4 h-4 stroke-[2.4] ${canDownloadAll ? "text-slate-950" : "text-slate-500"}`} />
-                  <span>Download All {canDownloadAll ? `(${selectedItems.length})` : ""}</span>
+                  <span>Download All {selectedItems.length > 0 ? `(${selectedItems.length})` : mediaItems.length > 0 ? `(${mediaItems.length})` : ""}</span>
                 </>
               )}
             </button>
@@ -882,7 +947,7 @@ export default function AlbumDetail() {
               <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
                 <span className="flex items-center gap-2">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                  <span>Turbo batch uploading (4x concurrency)...</span>
+                  <span>Uploading {uploadProgress.current} of {uploadProgress.total} photos...</span>
                 </span>
                 <span>
                   {uploadProgress.current} / {uploadProgress.total} (
@@ -1027,7 +1092,7 @@ export default function AlbumDetail() {
                 >
                   {/* Pure Photo */}
                   <img
-                    src={item.thumbnail_url || item.url}
+                    src={getCrispThumbnailUrl(item)}
                     alt={item.filename || "Photo"}
                     loading="lazy"
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"

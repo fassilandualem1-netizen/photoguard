@@ -2,26 +2,38 @@ package com.photoguard.client
 
 import android.graphics.Bitmap
 import android.os.Bundle
+import android.util.Log
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import coil.Coil
 import coil.ImageLoader
-import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import coil.size.Precision
 import com.photoguard.client.data.model.AlbumDetailResponse
+import com.photoguard.client.network.ClientApi
 import com.photoguard.client.network.RetrofitClient
 import com.photoguard.client.ui.DeliveryScreen
 import com.photoguard.client.ui.DeliveryViewModel
@@ -30,102 +42,196 @@ import com.photoguard.client.ui.GalleryViewModel
 import com.photoguard.client.ui.LoginScreen
 import com.photoguard.client.ui.LoginViewModel
 
-/**
- * PhotoGuard Client Application Main Activity.
- *
- * Implements strict security enforcement:
- * 1. WindowManager.LayoutParams.FLAG_SECURE to prevent screenshot capture,
- *    screen recording, and task switcher thumbnail leaks.
- * 2. In-memory RAM-only Coil configuration (DiskCache = null) to ensure client
- *    photographs are strictly held in RAM and never written to flash/disk storage.
- * 3. Dynamic navigation between 6-Digit PIN Login, 2-Step Masonry Selection,
- *    and Post-Submission Delivery screens.
- */
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Enforce FLAG_SECURE before window rendering starts
+        // Anti-piracy FLAG_SECURE prevents screen recording & screenshots
         window.setFlags(
             WindowManager.LayoutParams.FLAG_SECURE,
             WindowManager.LayoutParams.FLAG_SECURE
         )
+
+        // Global crash guard to prevent dropping to phone's home screen
+        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            Log.e("PhotoGuard", "Intercepted uncaught exception: ", throwable)
+            runOnUiThread {
+                Toast.makeText(
+                    applicationContext,
+                    "PhotoGuard Warning: ${throwable.localizedMessage ?: "Unexpected error"}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+            previousHandler?.uncaughtException(thread, throwable)
+        }
+
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        // Configure Coil for RAM-only caching with GPU Hardware Acceleration (4K Display)
         setupRamOnlyImageLoader()
 
         setContent {
             val isDark = isSystemInDarkTheme()
             val colorScheme = if (isDark) darkColorScheme() else lightColorScheme()
 
-            var activeAlbum by remember { mutableStateOf<AlbumDetailResponse?>(null) }
-            var isSubmittedToDelivery by remember { mutableStateOf(false) }
-
             MaterialTheme(colorScheme = colorScheme) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    when {
-                        activeAlbum == null -> {
-                            val loginViewModel = remember { LoginViewModel(RetrofitClient.api) }
-                            LoginScreen(
-                                viewModel = loginViewModel,
-                                onLoginSuccess = { album ->
-                                    activeAlbum = album
-                                    isSubmittedToDelivery = album.isLocked
-                                }
-                            )
-                        }
-                        isSubmittedToDelivery || activeAlbum?.isLocked == true -> {
-                            val deliveryViewModel = remember(activeAlbum?.pin) {
-                                DeliveryViewModel(RetrofitClient.api, activeAlbum!!)
-                            }
-                            DeliveryScreen(
-                                viewModel = deliveryViewModel,
-                                onSignOut = {
-                                    activeAlbum = null
-                                    isSubmittedToDelivery = false
-                                }
-                            )
-                        }
-                        else -> {
-                            val galleryViewModel = remember(activeAlbum?.pin) {
-                                GalleryViewModel(RetrofitClient.api, activeAlbum!!)
-                            }
-                            GalleryScreen(
-                                viewModel = galleryViewModel,
-                                onSignOut = {
-                                    activeAlbum = null
-                                    isSubmittedToDelivery = false
-                                },
-                                onSubmitComplete = {
-                                    isSubmittedToDelivery = true
-                                }
-                            )
-                        }
-                    }
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    PhotoGuardNavHost()
                 }
             }
         }
     }
 
     /**
-     * Initializes Coil with zero disk persistence, GPU Hardware Acceleration, and RAM caching.
-     * Guarantees zero local image retention while maintaining stutter-free 4K display.
+     * RAM-Only Image Loader with Perceptual Lossless 4K Rendering
+     * - Bitmap.Config.HARDWARE: Direct GPU rendering, zero RAM memory bloat, pin-sharp vector/text fidelity
+     * - Precision.INEXACT: Fast sub-sampling without glitching or moiré patterns
+     * - crossfade(250): Smooth visual transition without flicker
+     * - allowRgb565(false): Enforces 32-bit true-color depth
+     * - diskCache(null): Strict anti-piracy guarantee (no traces saved to flash storage)
      */
     private fun setupRamOnlyImageLoader() {
         val ramOnlyLoader = ImageLoader.Builder(this)
             .memoryCache {
                 MemoryCache.Builder(this)
-                    .maxSizePercent(0.40) // Allocate up to 40% of app memory for fast RAM rendering
+                    .maxSizePercent(0.40)
                     .build()
             }
-            .diskCache(null) // STRICT: Absolutely no disk caching (RAM-Only rendering)
-            .bitmapConfig(Bitmap.Config.HARDWARE) // GPU Hardware Acceleration for ultra-sharp 4K display
-            .allowHardware(true)
-            .crossfade(true)
+            .diskCache(null)
+            .bitmapConfig(Bitmap.Config.HARDWARE)
+            .allowRgb565(false)
+            .precision(Precision.INEXACT)
+            .crossfade(250)
             .build()
+
         Coil.setImageLoader(ramOnlyLoader)
+    }
+}
+
+// Global holder to guarantee album state survives any navigation or recomposition
+object ActiveAlbumHolder {
+    var album: AlbumDetailResponse? = null
+}
+
+@Composable
+fun PhotoGuardNavHost() {
+    val navController = rememberNavController()
+    val clientApi = RetrofitClient.api
+    var currentAlbum by remember { mutableStateOf<AlbumDetailResponse?>(ActiveAlbumHolder.album) }
+
+    NavHost(
+        navController = navController,
+        startDestination = if (currentAlbum != null) {
+            if (currentAlbum?.allowDownload == true || currentAlbum?.isLocked == true || currentAlbum?.isSubmitted == true) "delivery" else "gallery"
+        } else "login",
+        enterTransition = { fadeIn(animationSpec = tween(300)) },
+        exitTransition = { fadeOut(animationSpec = tween(300)) }
+    ) {
+        composable("login") {
+            val loginViewModel: LoginViewModel = viewModel(
+                factory = ViewModelFactory(clientApi)
+            )
+            LoginScreen(
+                viewModel = loginViewModel,
+                onLoginSuccess = { verifiedAlbum ->
+                    ActiveAlbumHolder.album = verifiedAlbum
+                    currentAlbum = verifiedAlbum
+                    // When allowDownload is true (Final Delivery Mode) or album is locked/submitted:
+                    // Navigate directly to delivery for direct-to-gallery download.
+                    // When allowDownload is false and unlocked:
+                    // Navigate to gallery for proof selection & submit.
+                    val destination = if (verifiedAlbum.allowDownload || verifiedAlbum.isLocked || verifiedAlbum.isSubmitted) {
+                        "delivery"
+                    } else {
+                        "gallery"
+                    }
+                    navController.navigate(destination) {
+                        popUpTo("login") { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable("gallery") {
+            val albumToDisplay = currentAlbum ?: ActiveAlbumHolder.album
+            if (albumToDisplay != null) {
+                val galleryViewModel: GalleryViewModel = viewModel(
+                    key = "gallery_${albumToDisplay.pin}",
+                    factory = GalleryViewModelFactory(clientApi, albumToDisplay)
+                )
+                GalleryScreen(
+                    viewModel = galleryViewModel,
+                    onSubmitComplete = {
+                        navController.navigate("delivery")
+                    },
+                    onSignOut = {
+                        ActiveAlbumHolder.album = null
+                        currentAlbum = null
+                        navController.navigate("login") {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
+                )
+            } else {
+                // Safe fallback if album was cleared
+                LaunchedEffect(Unit) {
+                    navController.navigate("login") {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+        }
+
+        composable("delivery") {
+            val albumToDisplay = currentAlbum ?: ActiveAlbumHolder.album
+            if (albumToDisplay != null) {
+                val deliveryViewModel: DeliveryViewModel = viewModel(
+                    key = "delivery_${albumToDisplay.pin}",
+                    factory = DeliveryViewModelFactory(clientApi, albumToDisplay)
+                )
+                DeliveryScreen(
+                    viewModel = deliveryViewModel,
+                    onSignOut = {
+                        ActiveAlbumHolder.album = null
+                        currentAlbum = null
+                        navController.navigate("login") {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
+                )
+            } else {
+                LaunchedEffect(Unit) {
+                    navController.navigate("login") {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+        }
+    }
+}
+
+class ViewModelFactory(private val api: ClientApi) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return LoginViewModel(api) as T
+    }
+}
+
+class GalleryViewModelFactory(
+    private val api: ClientApi,
+    private val album: AlbumDetailResponse
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return GalleryViewModel(api, album) as T
+    }
+}
+
+class DeliveryViewModelFactory(
+    private val api: ClientApi,
+    private val album: AlbumDetailResponse
+) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        return DeliveryViewModel(api, album) as T
     }
 }

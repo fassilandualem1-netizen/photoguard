@@ -2,14 +2,11 @@ package com.photoguard.client.ui
 
 import android.content.Intent
 import android.net.Uri
-import com.photoguard.client.utils.DeepLinkUtils
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,43 +46,42 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 
-/**
- * Post-Submission Celebration and Delivery Screen.
- *
- * Displays:
- * 1. Submission celebration & single-submit lock status.
- * 2. Photographer branding and social links (Strict Studio Tier enforcement - hidden if null).
- * 3. High-resolution gallery download button (Visible only if allow_download == true).
- * 4. Sign Out / Exit action to clear credentials and return to PIN login.
- */
 @Composable
 fun DeliveryScreen(
     viewModel: DeliveryViewModel,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    val scrollState = rememberScrollState()
 
-    LaunchedEffect(uiState.feedbackMessage) {
-        uiState.feedbackMessage?.let { msg ->
-            snackbarHostState.showSnackbar(msg)
-            viewModel.clearFeedbackMessage()
+    LaunchedEffect(uiState.errorMessage) {
+        uiState.errorMessage?.let { error ->
+            snackbarHostState.showSnackbar(error)
+            viewModel.clearErrorMessage()
+        }
+    }
+
+    LaunchedEffect(uiState.downloadProgressText) {
+        uiState.downloadProgressText?.let { progress ->
+            snackbarHostState.showSnackbar(progress)
         }
     }
 
@@ -95,322 +90,284 @@ fun DeliveryScreen(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        BoxWithConstraints(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues),
-            contentAlignment = Alignment.Center
+                .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            val isTablet = maxWidth > 600.dp
-            val containerWidth = if (isTablet) 520.dp else maxWidth
+            Spacer(modifier = Modifier.height(28.dp))
 
-            Column(
+            Box(
                 modifier = Modifier
-                    .widthIn(max = containerWidth)
-                    .fillMaxSize()
-                    .verticalScroll(scrollState)
-                    .padding(horizontal = 24.dp, vertical = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Top
+                    .size(76.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFE8F5E9)),
+                contentAlignment = Alignment.Center
             ) {
-                Spacer(modifier = Modifier.height(16.dp))
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Success",
+                    tint = Color(0xFF2E7D32),
+                    modifier = Modifier.size(44.dp)
+                )
+            }
 
-                // Celebration Badge
-                Box(
+            Spacer(modifier = Modifier.height(18.dp))
+
+            Text(
+                text = "Selections Submitted!",
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = "Your photographer has been notified. The album is now locked for editing.",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (uiState.allowDownload) MaterialTheme.colorScheme.surfaceVariant
+                    else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+                )
+            ) {
+                Column(
                     modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "Success",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(46.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Celebration Header
-                Text(
-                    text = "Selections Submitted!",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
-                    ),
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "Thank you, ${uiState.clientName}. Your photographer has been notified and the album is now locked for editing.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Summary Card
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Album",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = uiState.albumTitle,
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
+                    if (uiState.allowDownload) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "Download Enabled",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp)
+                        )
                         Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Direct High-Res Gallery Download",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Download your finalized photos directly to your device gallery.",
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Selected Photos",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = "${uiState.selectedCount} Photos",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Status",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Locked & Archived",
-                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // High-Resolution Direct Download Section (Visible strictly when allow_download == true)
-                AnimatedVisibility(visible = uiState.allowDownload) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
                         Button(
-                            onClick = { viewModel.startGalleryDownload(context) },
-                            enabled = !uiState.isFetchingDownloads,
+                            onClick = { viewModel.downloadAllPhotos(context) },
+                            enabled = !uiState.isFetchingDownloads && uiState.downloadUrls.isNotEmpty(),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(52.dp),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
-                            )
+                                .height(50.dp),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
                             if (uiState.isFetchingDownloads) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(22.dp),
+                                    modifier = Modifier.size(20.dp),
                                     color = MaterialTheme.colorScheme.onPrimary,
                                     strokeWidth = 2.dp
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Preparing Downloads...")
                             } else {
-                                Icon(
-                                    imageVector = Icons.Default.Download,
-                                    contentDescription = "Download Photos"
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Download Final Photos",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Download All Photos (${uiState.downloadUrls.size})",
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
                             }
                         }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Text(
-                            text = "Direct delivery to Pictures/PhotoGuard. No ZIP extraction required.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Downloads Disabled",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(28.dp)
                         )
-
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Downloads Restricted",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Your photographer has not enabled direct downloads for this album.",
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
+                        )
                     }
                 }
+            }
 
-                // Studio Tier: Social Links & Contact Section (Strict conditional display)
-                val hasSocialLinks = !uiState.contactPhone.isNullOrBlank() ||
-                        !uiState.telegramUrl.isNullOrBlank() ||
-                        !uiState.instagramUrl.isNullOrBlank() ||
-                        !uiState.tiktokUrl.isNullOrBlank() ||
-                        !uiState.youtubeUrl.isNullOrBlank()
+            Spacer(modifier = Modifier.height(28.dp))
 
-                if (hasSocialLinks) {
-                    Text(
-                        text = "Connect with ${uiState.photographerName ?: "Your Studio"}",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
+            val hasStudioBranding = uiState.isStudioTier || !uiState.studioLogoUrl.isNullOrBlank() || !uiState.photographerName.isNullOrBlank()
 
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            if (hasStudioBranding) {
+                Text(
+                    text = "Studio & Contact Details",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            // 1. Direct Phone Call (Deep link to system dialer)
-                            uiState.contactPhone?.takeIf { it.isNotBlank() }?.let { phone ->
-                                SocialLinkRow(
-                                    label = "Direct Call / SMS",
-                                    value = phone,
-                                    icon = Icons.Default.Phone,
-                                    onClick = {
-                                        if (!DeepLinkUtils.openDialer(context, phone)) {
-                                            scope.launch { snackbarHostState.showSnackbar("Unable to open phone dialer.") }
+                        uiState.contactPhone?.takeIf { it.isNotBlank() }?.let { phone ->
+                            SocialLinkRow(
+                                label = "Call / SMS",
+                                value = phone,
+                                icon = Icons.Default.Phone,
+                                onClick = {
+                                    runCatching {
+                                        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
+                                        context.startActivity(intent)
+                                    }.onFailure {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Unable to open dialer application.")
                                         }
                                     }
-                                )
-                            }
+                                }
+                            )
+                        }
 
-                            // 2. Telegram (Deep link to Telegram app or web)
-                            uiState.telegramUrl?.takeIf { it.isNotBlank() }?.let { tg ->
-                                val cleanTg = DeepLinkUtils.cleanHandle(tg, listOf("https://t.me/", "http://t.me/", "t.me/"))
-                                SocialLinkRow(
-                                    label = "Telegram (Direct Chat)",
-                                    value = "@$cleanTg",
-                                    icon = Icons.Default.Send,
-                                    onClick = {
-                                        if (!DeepLinkUtils.openTelegram(context, tg)) {
-                                            scope.launch { snackbarHostState.showSnackbar("Unable to open Telegram.") }
+                        uiState.telegramUrl?.takeIf { it.isNotBlank() }?.let { tg ->
+                            SocialLinkRow(
+                                label = "Telegram",
+                                value = tg.removePrefix("https://t.me/").removePrefix("@"),
+                                icon = Icons.Default.Send,
+                                onClick = {
+                                    runCatching {
+                                        val url = if (tg.startsWith("http")) tg else "https://t.me/$tg"
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                        context.startActivity(intent)
+                                    }.onFailure {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Unable to open Telegram link.")
                                         }
                                     }
-                                )
-                            }
+                                }
+                            )
+                        }
 
-                            // 3. Instagram (Deep link to Instagram app or web)
-                            uiState.instagramUrl?.takeIf { it.isNotBlank() }?.let { insta ->
-                                val cleanInsta = DeepLinkUtils.cleanHandle(insta, listOf("https://instagram.com/", "https://www.instagram.com/", "http://instagram.com/", "instagram.com/"))
-                                SocialLinkRow(
-                                    label = "Instagram (Profile)",
-                                    value = "@$cleanInsta",
-                                    icon = Icons.Default.Share,
-                                    onClick = {
-                                        if (!DeepLinkUtils.openInstagram(context, insta)) {
-                                            scope.launch { snackbarHostState.showSnackbar("Unable to open Instagram.") }
+                        uiState.instagramUrl?.takeIf { it.isNotBlank() }?.let { insta ->
+                            SocialLinkRow(
+                                label = "Instagram",
+                                value = insta.removePrefix("https://instagram.com/").removePrefix("@"),
+                                icon = Icons.Default.Share,
+                                onClick = {
+                                    runCatching {
+                                        val url = if (insta.startsWith("http")) insta else "https://instagram.com/$insta"
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                        context.startActivity(intent)
+                                    }.onFailure {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Unable to open Instagram link.")
                                         }
                                     }
-                                )
-                            }
+                                }
+                            )
+                        }
 
-                            // 4. TikTok (Deep link to TikTok app or web)
-                            uiState.tiktokUrl?.takeIf { it.isNotBlank() }?.let { tiktok ->
-                                val cleanTiktok = DeepLinkUtils.cleanHandle(tiktok, listOf("https://www.tiktok.com/@", "https://tiktok.com/@", "tiktok.com/@"))
-                                SocialLinkRow(
-                                    label = "TikTok (Studio)",
-                                    value = "@$cleanTiktok",
-                                    icon = Icons.Default.Share,
-                                    onClick = {
-                                        if (!DeepLinkUtils.openTikTok(context, tiktok)) {
-                                            scope.launch { snackbarHostState.showSnackbar("Unable to open TikTok.") }
+                        uiState.tiktokUrl?.takeIf { it.isNotBlank() }?.let { tiktok ->
+                            SocialLinkRow(
+                                label = "TikTok",
+                                value = tiktok.removePrefix("https://tiktok.com/@"),
+                                icon = Icons.Default.Share,
+                                onClick = {
+                                    runCatching {
+                                        val url = if (tiktok.startsWith("http")) tiktok else "https://tiktok.com/@$tiktok"
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                        context.startActivity(intent)
+                                    }.onFailure {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Unable to open TikTok link.")
                                         }
                                     }
-                                )
-                            }
+                                }
+                            )
+                        }
 
-                            // 5. YouTube (Deep link to YouTube app or web)
-                            uiState.youtubeUrl?.takeIf { it.isNotBlank() }?.let { yt ->
-                                SocialLinkRow(
-                                    label = "YouTube (Channel)",
-                                    value = "Visit Channel",
-                                    icon = Icons.Default.Share,
-                                    onClick = {
-                                        if (!DeepLinkUtils.openYouTube(context, yt)) {
-                                            scope.launch { snackbarHostState.showSnackbar("Unable to open YouTube.") }
+                        uiState.youtubeUrl?.takeIf { it.isNotBlank() }?.let { yt ->
+                            SocialLinkRow(
+                                label = "YouTube",
+                                value = "Visit Channel",
+                                icon = Icons.Default.Share,
+                                onClick = {
+                                    runCatching {
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(yt))
+                                        context.startActivity(intent)
+                                    }.onFailure {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Unable to open YouTube channel.")
                                         }
                                     }
-                                )
-                            }
+                                }
+                            )
                         }
                     }
-                    Spacer(modifier = Modifier.height(24.dp))
                 }
 
-                // Sign Out / Exit Action
-                OutlinedButton(
-                    onClick = onSignOut,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                        contentDescription = "Sign Out"
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Sign Out / Exit",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(24.dp))
             }
+
+            OutlinedButton(
+                onClick = onSignOut,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                    contentDescription = "Sign Out"
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Sign Out / Exit",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 }
 
-/**
- * Clickable row element for photographer contact & social links.
- */
 @Composable
 private fun SocialLinkRow(
     label: String,

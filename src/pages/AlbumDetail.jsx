@@ -338,7 +338,13 @@ export default function AlbumDetail() {
 
   const mediaItems = album?.media_items || [];
   const selectedItems = mediaItems.filter((m) => m.is_selected);
-  const isSubmitted = album?.is_submitted || false;
+  const isSubmitted = Boolean(
+    album?.is_submitted ||
+    album?.is_locked ||
+    album?.submitted_at ||
+    album?.status === "submitted" ||
+    album?.status === "locked"
+  );
 
   // Client Invite Text & Deep Linking
   const albumPin = album?.pin || album?.client_pin || "";
@@ -397,14 +403,14 @@ export default function AlbumDetail() {
   };
 
   // NATIVE FOLDER DOWNLOAD (window.showDirectoryPicker)
-  // ONLY downloads client selected photos once submitted
+  // Downloads client-selected photos (or all proofs if none specifically marked)
   const handleDownloadAll = async () => {
-    if (!isSubmitted || selectedItems.length === 0) {
-      alert("Download All unlocks once the client submits their selections.");
+    if (!canDownloadAll) {
+      alert("No photos available to download yet.");
       return;
     }
 
-    const targetPhotos = selectedItems;
+    const targetPhotos = selectedItems.length > 0 ? selectedItems : mediaItems;
     const supportsDirectoryPicker = typeof window !== "undefined" && "showDirectoryPicker" in window;
 
     if (!supportsDirectoryPicker) {
@@ -571,8 +577,8 @@ export default function AlbumDetail() {
   const daysLeft = calculateDaysLeft(album.expires_at);
   const displayPhotos = activeViewTab === "selections" ? selectedItems : mediaItems;
 
-  // Download All button enablement: ONLY active once submitted with selections
-  const canDownloadAll = isSubmitted && selectedItems.length > 0;
+  // Download All button enablement: active if client made selections OR if submitted with photos
+  const canDownloadAll = selectedItems.length > 0 || (isSubmitted && mediaItems.length > 0);
 
   return (
     <div id="album-detail-page" className="space-y-6 max-w-7xl mx-auto pb-16">
@@ -611,6 +617,11 @@ export default function AlbumDetail() {
                 <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-semibold border border-amber-500/40 flex items-center gap-1.5 shadow-sm">
                   <Lock className="w-3.5 h-3.5 text-amber-400" />
                   <span>Selection Submitted & Locked</span>
+                </span>
+              ) : selectedItems.length > 0 ? (
+                <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-semibold border border-emerald-500/40 flex items-center gap-1.5 shadow-sm">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>{selectedItems.length} Selections Ready</span>
                 </span>
               ) : (
                 <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 text-xs font-semibold border border-emerald-500/30 flex items-center gap-1.5">
@@ -799,7 +810,7 @@ export default function AlbumDetail() {
               </button>
             )}
 
-            {/* DOWNLOAD ALL BUTTON: Active ONLY once client submits selections */}
+            {/* DOWNLOAD ALL BUTTON: Active if selections exist or submitted */}
             <button
               id="download-all-btn"
               type="button"
@@ -812,8 +823,8 @@ export default function AlbumDetail() {
               }`}
               title={
                 canDownloadAll
-                  ? `Download all ${selectedItems.length} client-selected photos to a local folder`
-                  : "Download All unlocks once the client submits their selections"
+                  ? `Download ${selectedItems.length > 0 ? `${selectedItems.length} client-selected photos` : `all ${mediaItems.length} photos`} to your local folder`
+                  : "Download All activates when the client marks selections or submits the album"
               }
             >
               {isDownloadingFolder ? (
@@ -824,7 +835,7 @@ export default function AlbumDetail() {
               ) : (
                 <>
                   <FolderDown className={`w-4 h-4 stroke-[2.4] ${canDownloadAll ? "text-slate-950" : "text-slate-500"}`} />
-                  <span>Download All {canDownloadAll ? `(${selectedItems.length})` : ""}</span>
+                  <span>Download All {selectedItems.length > 0 ? `(${selectedItems.length})` : mediaItems.length > 0 ? `(${mediaItems.length})` : ""}</span>
                 </>
               )}
             </button>

@@ -1,1 +1,1 @@
-"""PhotoGuard Core Package"""
+# PhotoGuard ASGI Package Marker

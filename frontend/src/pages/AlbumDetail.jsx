@@ -372,33 +372,31 @@ export default function AlbumDetail() {
     return proxyRes.data;
   };
 
-  // Automated Job Sheet text generator (saved in folder upon download)
-  const generateJobSheetText = (albumObj, photosList) => {
-    const dateStr = new Date().toLocaleString("en-US", { dateStyle: "full", timeStyle: "medium" });
-    const selectedCount = photosList.filter((p) => p.is_selected).length;
+  // Clean, Beautifully Formatted Retouching Job Sheet Generator (00_JOB_SHEET.txt)
+  const generateJobSheetText = (albumObj, groupAItems, totalCount) => {
+    const albumName = albumObj?.title || "Gallery Proofs";
     const pin = albumObj?.pin || albumObj?.client_pin || "N/A";
-    const albumTitle = albumObj?.title || "Gallery Proofs";
+    const groupACount = groupAItems.length;
 
-    let out = "========================================================================\n";
-    out += "                 PHOTOGUARD STUDIO — CLIENT SELECTIONS SHEET            \n";
-    out += "========================================================================\n\n";
-    out += `GALLERY ALBUM : ${albumTitle}\n`;
-    out += `GENERATED ON  : ${dateStr}\n`;
-    out += `CLIENT PIN    : ${pin}\n`;
-    out += `TOTAL PHOTOS  : ${photosList.length} (${selectedCount} client-selected)\n`;
-    out += `LOCK STATUS   : ${albumObj?.is_submitted ? "CLIENT SELECTION SUBMITTED & LOCKED" : "IN REVIEW / DRAFT"}\n\n`;
-    out += "========================================================================\n";
-    out += "  PHOTO FILENAME                  | CLIENT RETOUCHING / SELECTION NOTE   \n";
-    out += "========================================================================\n";
+    let out = "============================================================\n";
+    out += "PHOTOGUARD - RETOUCHING JOB SHEET\n";
+    out += `Album: ${albumName} | PIN: ${pin} | Total Photos: ${totalCount}\n`;
+    out += `Items Requiring Edits: ${groupACount}\n`;
+    out += "============================================================\n\n";
 
-    photosList.forEach((photo, idx) => {
-      const fn = (photo.filename || `Photo_${idx + 1}.jpg`).padEnd(32, " ");
-      const note = photo.client_notes || photo.client_note || "[Standard edit / color grade]";
-      out += `${fn} | ${note}\n`;
-    });
+    if (groupACount === 0) {
+      out += "No client retouching notes provided for this batch.\n";
+      out += "All photos marked for standard edit/color grade.\n";
+      out += "------------------------------------------------------------\n";
+    } else {
+      groupAItems.forEach((item, idx) => {
+        const pad = String(idx + 1).padStart(2, "0");
+        out += `[${pad}] ${item.downloadFilename}\n`;
+        out += `Client Note: "${item.resolvedNote}"\n`;
+        out += "------------------------------------------------------------\n";
+      });
+    }
 
-    out += "========================================================================\n";
-    out += "Generated automatically by PhotoGuard Studio Suite.\n";
     return out;
   };
 
@@ -410,11 +408,45 @@ export default function AlbumDetail() {
       return;
     }
 
-    const targetPhotos = selectedItems.length > 0 ? selectedItems : mediaItems;
+    const rawTargetPhotos = selectedItems.length > 0 ? selectedItems : mediaItems;
+
+    // Separate into Group A (With Notes) and Group B (Standard)
+    const groupA = [];
+    const groupB = [];
+
+    rawTargetPhotos.forEach((item) => {
+      const noteText = (item.client_notes || item.client_note || item.note || "").trim();
+      if (noteText.length > 0) {
+        groupA.push({ ...item, resolvedNote: noteText });
+      } else {
+        groupB.push({ ...item, resolvedNote: "" });
+      }
+    });
+
+    // Priority File Renaming:
+    // Group A (With Notes): Prepend zero-padded two-digit index (01_IMG_456.jpg) to sort at the very top
+    // Group B (Standard): Keep original filename intact (IMG_001.jpg)
+    const preparedDownloads = [
+      ...groupA.map((item, idx) => {
+        const pad = String(idx + 1).padStart(2, "0");
+        const rawName = item.filename || `Photo_${idx + 1}.jpg`;
+        return {
+          ...item,
+          downloadFilename: `${pad}_${rawName}`,
+          hasNote: true,
+        };
+      }),
+      ...groupB.map((item) => ({
+        ...item,
+        downloadFilename: item.filename || "photo.jpg",
+        hasNote: false,
+      })),
+    ];
+
     const supportsDirectoryPicker = typeof window !== "undefined" && "showDirectoryPicker" in window;
 
     if (!supportsDirectoryPicker) {
-      handleFallbackMultiDownload(targetPhotos);
+      handleFallbackMultiDownload(preparedDownloads, groupA);
       return;
     }
 
@@ -429,20 +461,33 @@ export default function AlbumDetail() {
       setDownloadModalOpen(true);
       setDownloadProgress({
         current: 0,
-        total: targetPhotos.length,
-        currentFilename: "Preparing local folder stream...",
+        total: preparedDownloads.length,
+        currentFilename: "Creating 00_JOB_SHEET.txt...",
         folderName: dirHandle.name,
         completed: false,
         successCount: 0,
         failedFiles: [],
+        groupACount: groupA.length,
       });
+
+      // Step 1: Write 00_JOB_SHEET.txt at the very top of the designated folder
+      try {
+        const jobSheetText = generateJobSheetText(album, groupA, preparedDownloads.length);
+        const jobSheetHandle = await dirHandle.getFileHandle("00_JOB_SHEET.txt", { create: true });
+        const jobSheetWritable = await jobSheetHandle.createWritable();
+        await jobSheetWritable.write(jobSheetText);
+        await jobSheetWritable.close();
+      } catch (jsErr) {
+        console.warn("Could not write 00_JOB_SHEET.txt:", jsErr);
+      }
 
       let successCount = 0;
       const failedFiles = [];
 
-      for (let i = 0; i < targetPhotos.length; i++) {
-        const item = targetPhotos[i];
-        const filename = item.filename || `Photo_${i + 1}.jpg`;
+      // Step 2: Stream all high-resolution photos directly into the selected folder
+      for (let i = 0; i < preparedDownloads.length; i++) {
+        const item = preparedDownloads[i];
+        const filename = item.downloadFilename;
 
         setDownloadProgress((prev) => ({
           ...prev,
@@ -461,17 +506,6 @@ export default function AlbumDetail() {
           console.error(`Failed to write ${filename}:`, fileErr);
           failedFiles.push(filename);
         }
-      }
-
-      // Automatically save Job_Sheet.txt in the same local folder
-      try {
-        const jobSheetText = generateJobSheetText(album, targetPhotos);
-        const jobSheetHandle = await dirHandle.getFileHandle("Job_Sheet.txt", { create: true });
-        const jobSheetWritable = await jobSheetHandle.createWritable();
-        await jobSheetWritable.write(jobSheetText);
-        await jobSheetWritable.close();
-      } catch (jsErr) {
-        console.warn("Could not write Job_Sheet.txt:", jsErr);
       }
 
       setDownloadProgress((prev) => ({
@@ -493,17 +527,46 @@ export default function AlbumDetail() {
     }
   };
 
-  const handleFallbackMultiDownload = async (targetPhotos) => {
-    alert("Your browser does not support direct directory write. Files will be downloaded individually.");
+  const handleFallbackMultiDownload = async (preparedDownloads, groupA) => {
+    alert("Your browser does not support direct directory write. Files and 00_JOB_SHEET.txt will be downloaded individually.");
 
-    for (const item of targetPhotos) {
-      const a = document.createElement("a");
-      a.href = item.url;
-      a.download = item.filename || "photo.jpg";
-      a.target = "_blank";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+    // First download 00_JOB_SHEET.txt
+    try {
+      const jobSheetText = generateJobSheetText(album, groupA, preparedDownloads.length);
+      const blob = new Blob([jobSheetText], { type: "text/plain;charset=utf-8" });
+      const jobSheetUrl = URL.createObjectURL(blob);
+      const jsA = document.createElement("a");
+      jsA.href = jobSheetUrl;
+      jsA.download = "00_JOB_SHEET.txt";
+      document.body.appendChild(jsA);
+      jsA.click();
+      document.body.removeChild(jsA);
+      URL.revokeObjectURL(jobSheetUrl);
+      await new Promise((r) => setTimeout(r, 200));
+    } catch (err) {
+      console.warn("Fallback job sheet download error:", err);
+    }
+
+    for (const item of preparedDownloads) {
+      try {
+        const blob = await fetchPhotoBlob(item.url, item.id);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = item.downloadFilename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch {
+        const a = document.createElement("a");
+        a.href = item.url;
+        a.download = item.downloadFilename;
+        a.target = "_blank";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
       await new Promise((r) => setTimeout(r, 250));
     }
   };
@@ -1196,8 +1259,13 @@ export default function AlbumDetail() {
                   • <strong>{downloadProgress.successCount} photos</strong> saved directly to your local folder without ZIP extraction.
                 </p>
                 <p>
-                  • <strong>Job_Sheet.txt</strong> included with client retouching instructions.
+                  • <strong>00_JOB_SHEET.txt</strong> placed at the top with client retouching instructions.
                 </p>
+                {downloadProgress.groupACount > 0 && (
+                  <p>
+                    • <strong>{downloadProgress.groupACount} priority photo(s)</strong> with client notes sorted to top (01_, 02_, ...).
+                  </p>
+                )}
               </div>
             )}
 

@@ -780,12 +780,14 @@ fun StudioBrandedTopBar(
     Surface(
         color = Color(0xFF0F172A),
         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E293B)),
-        shadowElevation = 6.dp
+        shadowElevation = 6.dp,
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .statusBarsPadding()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {

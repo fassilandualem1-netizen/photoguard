@@ -44,7 +44,9 @@ class DeliveryViewModel(
             isStudioTier = album.subscriptionPlan.equals("studio", ignoreCase = true),
             mediaItems = album.mediaItems,
             downloadUrls = if (album.allowDownload) album.mediaItems.map { it.url } else emptyList(),
-            photographerName = album.creatorName ?: album.photographerName,
+            photographerName = album.photographerName?.takeIf { it.isNotBlank() }
+                ?: album.creatorName?.takeIf { it.isNotBlank() && it != "Studio Owner" }
+                ?: "PhotoGuard Studio",
             studioLogoUrl = album.studioLogoUrl,
             contactPhone = album.contactPhone ?: album.socialLinks?.contactPhone,
             telegramUrl = album.telegramUrl ?: album.socialLinks?.telegramUrl,

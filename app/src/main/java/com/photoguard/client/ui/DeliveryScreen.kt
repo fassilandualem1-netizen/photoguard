@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
@@ -41,7 +43,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -58,7 +59,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -85,6 +85,7 @@ fun DeliveryScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     var activePreviewItem by remember { mutableStateOf<MediaItemResponse?>(null) }
+    val totalPhotos = uiState.mediaItems.size
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { error ->
@@ -101,6 +102,105 @@ fun DeliveryScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            // TALL STUDIO-BRANDED TOPBAR WITH STATUS BAR NOTCH CLEARANCE
+            Surface(
+                color = Color(0xFF0F172A),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E293B)),
+                shadowElevation = 6.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Studio Logo & Studio Name (NOT Album Name)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        val studioDisplayName = uiState.photographerName ?: "PhotoGuard Studio"
+
+                        if (!uiState.studioLogoUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = uiState.studioLogoUrl,
+                                contentDescription = studioDisplayName,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .border(1.5.dp, Color(0xFF3B82F6), CircleShape)
+                                    .background(Color(0xFF1E293B))
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .border(1.5.dp, Color(0xFF3B82F6), CircleShape)
+                                    .background(Color(0xFF1E293B)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = studioDisplayName.take(1).uppercase(),
+                                    color = Color(0xFF60A5FA),
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                        }
+
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = studioDisplayName,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (uiState.isStudioTier) {
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Verified,
+                                        contentDescription = "Verified Studio",
+                                        tint = Color(0xFFF59E0B),
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Client Gallery Delivery",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF94A3B8)
+                            )
+                        }
+                    }
+
+                    // Exit / Sign Out Button
+                    IconButton(
+                        onClick = onSignOut,
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF1E293B))
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                            contentDescription = "Sign Out",
+                            tint = Color(0xFFE2E8F0),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        },
         modifier = modifier.fillMaxSize(),
         containerColor = Color(0xFF090D16)
     ) { paddingValues ->
@@ -109,91 +209,20 @@ fun DeliveryScreen(
             contentPadding = PaddingValues(
                 start = 12.dp,
                 end = 12.dp,
-                top = paddingValues.calculateTopPadding() + 8.dp,
+                top = paddingValues.calculateTopPadding() + 12.dp,
                 bottom = paddingValues.calculateBottomPadding() + 24.dp
             ),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalItemSpacing = 10.dp,
             modifier = Modifier.fillMaxSize()
         ) {
-            // HEADER & ACTION BAR (Full Span)
+            // ACTION CARD: SIMPLIFIED TEXT & ONE-CLICK DOWNLOAD BUTTON
             item(span = StaggeredGridItemSpan.FullLine) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 12.dp)
                 ) {
-                    // Top App Navigation Bar
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 4.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            if (!uiState.studioLogoUrl.isNullOrBlank()) {
-                                AsyncImage(
-                                    model = uiState.studioLogoUrl,
-                                    contentDescription = "Studio Logo",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF1E293B))
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                            }
-                            Column {
-                                Text(
-                                    text = uiState.albumTitle,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = Color.White,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = uiState.photographerName ?: "PhotoGuard Studio",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color(0xFF94A3B8)
-                                    )
-                                    if (uiState.isStudioTier) {
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Icon(
-                                            imageVector = Icons.Default.Verified,
-                                            contentDescription = "Verified Studio",
-                                            tint = Color(0xFFF59E0B),
-                                            modifier = Modifier.size(13.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        IconButton(
-                            onClick = onSignOut,
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF1E293B))
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                                contentDescription = "Sign Out",
-                                tint = Color(0xFFE2E8F0),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // PROMINENT "DOWNLOAD ALL TO GALLERY" DELIVERY HERO CARD
-                    val totalPhotos = uiState.mediaItems.size
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(18.dp),
@@ -212,20 +241,16 @@ fun DeliveryScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             if (uiState.allowDownload) {
+                                // EXACT USER REQUIRED TEXT
                                 Text(
-                                    text = "Ready for Gallery Download",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = Color(0xFF60A5FA)
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "All finalized photos are available in high-resolution. Save directly to your Android Photos / Gallery.",
-                                    style = MaterialTheme.typography.bodySmall,
+                                    text = "Ready for gallery download. All finalized photos are available for gallery.",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                                     textAlign = TextAlign.Center,
-                                    color = Color(0xFF94A3B8)
+                                    color = Color(0xFFE2E8F0)
                                 )
                                 Spacer(modifier = Modifier.height(14.dp))
 
+                                // EXACT USER REQUIRED BUTTON TEXT
                                 Button(
                                     onClick = { viewModel.downloadAllPhotos(context) },
                                     enabled = !uiState.isFetchingDownloads && totalPhotos > 0,
@@ -253,7 +278,7 @@ fun DeliveryScreen(
                                             )
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(
-                                                text = "Download All to Gallery ($totalPhotos)",
+                                                text = "Download all to gallery ($totalPhotos)",
                                                 fontSize = 15.sp,
                                                 fontWeight = FontWeight.Bold
                                             )
@@ -284,10 +309,10 @@ fun DeliveryScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = "DELIVERED PROOFS ($totalPhotos)",
+                        text = "DELIVERED PHOTOS ($totalPhotos)",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF64748B),
@@ -297,7 +322,7 @@ fun DeliveryScreen(
                 }
             }
 
-            // PURE PHOTO GRID: NO CHECKBOXES, NO HEARTS, LUXURY DISPLAY
+            // PURE PHOTO GRID: NO CHECKBOXES, NO HEARTS, CRISP 4K RENDERING
             itemsIndexed(
                 items = uiState.mediaItems,
                 key = { _, item -> item.id }
@@ -407,6 +432,7 @@ fun DeliveryScreen(
                     onClick = { activePreviewItem = null },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
+                        .statusBarsPadding()
                         .padding(18.dp)
                         .size(42.dp)
                         .clip(CircleShape)

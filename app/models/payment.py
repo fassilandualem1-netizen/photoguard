@@ -14,11 +14,11 @@ class PaymentReceipt(Base):
     __tablename__ = "payment_receipts"
 
     id = Column(Integer, primary_key=True, index=True)
-    photographer_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    photographer_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     transaction_ref = Column(String(100), unique=True, index=True, nullable=False)
     amount = Column(Float, nullable=False)
     payment_method = Column(String(50), default="telebirr")  # telebirr or cbe
-    status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False)
+    status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     photographer = relationship(

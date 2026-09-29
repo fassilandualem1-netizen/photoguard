@@ -33,7 +33,7 @@ class Album(Base):
     is_locked = Column(Boolean, default=False, nullable=False)
     
     # Timestamp when client locked and submitted their final selections
-    submitted_at = Column(DateTime(timezone=True), nullable=True)
+    submitted_at = Column(DateTime(timezone=True), nullable=True, index=True)
     
     # Download permissions toggle controlled by the photographer
     allow_download = Column(Boolean, default=False, nullable=False)
@@ -49,7 +49,7 @@ class Album(Base):
     reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    expires_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True, index=True)
 
     # Relationships
     photographer = relationship("User", back_populates="albums")

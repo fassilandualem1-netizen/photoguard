@@ -94,6 +94,7 @@ def run_db_migrations():
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS parent_owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL;", "users.parent_owner_id")
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES users(id) ON DELETE CASCADE;", "users.parent_id")
         safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_users_parent_id ON users(parent_id);", "index users.parent_id")
+        safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_users_role ON users(role);", "index users.role")
 
         # Safe role type conversions if role was previously typed as enum
         safe_execute_ddl("ALTER TABLE users ALTER COLUMN role TYPE VARCHAR(50) USING role::text;", "users.role type convert")
@@ -158,6 +159,8 @@ def run_db_migrations():
         safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS brand_accent_color VARCHAR(50) DEFAULT '#D97706';", "albums.brand_accent_color")
         safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;", "albums.created_at")
         safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE;", "albums.expires_at")
+        safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_albums_expires_at ON albums(expires_at);", "index albums.expires_at")
+        safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_albums_submitted_at ON albums(submitted_at);", "index albums.submitted_at")
         safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0;", "albums.view_count")
         safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS last_viewed_at TIMESTAMP WITH TIME ZONE;", "albums.last_viewed_at")
         safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP WITH TIME ZONE;", "albums.reminder_sent_at")
@@ -221,6 +224,8 @@ def run_db_migrations():
         safe_execute_ddl("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending';", "payment_receipts.status")
         safe_execute_ddl("ALTER TABLE payment_receipts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;", "payment_receipts.created_at")
         safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_payment_receipts_transaction_ref ON payment_receipts(transaction_ref);", "index payment_receipts.transaction_ref")
+        safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_payment_receipts_photographer_id ON payment_receipts(photographer_id);", "index payment_receipts.photographer_id")
+        safe_execute_ddl("CREATE INDEX IF NOT EXISTS ix_payment_receipts_status ON payment_receipts(status);", "index payment_receipts.status")
 
         # Plan configurations table creation & indexing
         safe_execute_ddl("""

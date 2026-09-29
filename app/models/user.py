@@ -24,7 +24,7 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=False)
-    role = Column(String(50), default="photographer", nullable=False)
+    role = Column(String(50), default="photographer", nullable=False, index=True)
     
     # Hierarchy Column for Studio Assistants:
     # Sub-users / staff link directly to their parent photographer account

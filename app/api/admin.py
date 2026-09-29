@@ -154,7 +154,7 @@ def get_all_photographers(
     - assistants_count & assistants: Sub-account hierarchy assets clearly visible for admin management.
     """
     try:
-        # Strictly filter query to ONLY return root photographers (parent_id IS NULL and role != admin)
+        # 1. Fetch all root photographers
         photographers = (
             db.query(User)
             .filter(
@@ -164,48 +164,67 @@ def get_all_photographers(
             .order_by(User.id.desc())
             .all()
         )
+        if not photographers:
+            return []
 
+        photographer_ids = [p.id for p in photographers]
+
+        # 2. Batch-query all assistants belonging to these photographers
+        all_assistants = (
+            db.query(User)
+            .filter(User.parent_id.in_(photographer_ids))
+            .order_by(User.created_at.desc())
+            .all()
+        )
+
+        assistants_by_parent = {p_id: [] for p_id in photographer_ids}
+        user_to_root = {p_id: p_id for p_id in photographer_ids}
+
+        for asst in all_assistants:
+            if asst.parent_id in assistants_by_parent:
+                assistants_by_parent[asst.parent_id].append(
+                    AssistantSummary(
+                        id=asst.id,
+                        full_name=asst.full_name,
+                        email=asst.email,
+                        is_active=asst.is_active
+                    )
+                )
+            user_to_root[asst.id] = asst.parent_id
+
+        all_studio_user_ids = list(user_to_root.keys())
+
+        # 3. Optimized Batch Query: Aggregated Album Counts grouped by photographer_id
+        album_counts_rows = (
+            db.query(Album.photographer_id, func.count(Album.id))
+            .filter(Album.photographer_id.in_(all_studio_user_ids))
+            .group_by(Album.photographer_id)
+            .all()
+        )
+        total_albums_by_root = {p_id: 0 for p_id in photographer_ids}
+        for creator_id, count in album_counts_rows:
+            root_id = user_to_root.get(creator_id)
+            if root_id in total_albums_by_root:
+                total_albums_by_root[root_id] += (count or 0)
+
+        # 4. Optimized Batch Query: Aggregated Media Counts grouped by Album.photographer_id
+        media_counts_rows = (
+            db.query(Album.photographer_id, func.count(MediaItem.id))
+            .join(MediaItem, MediaItem.album_id == Album.id)
+            .filter(Album.photographer_id.in_(all_studio_user_ids))
+            .group_by(Album.photographer_id)
+            .all()
+        )
+        total_media_by_root = {p_id: 0 for p_id in photographer_ids}
+        for creator_id, count in media_counts_rows:
+            root_id = user_to_root.get(creator_id)
+            if root_id in total_media_by_root:
+                total_media_by_root[root_id] += (count or 0)
+
+        # 5. Build final responses in O(N) memory
         results = []
         for p in photographers:
-            # Query all assistants belonging to this root photographer
-            assistants = (
-                db.query(User)
-                .filter(User.parent_id == p.id)
-                .order_by(User.created_at.desc())
-                .all()
-            )
-            assistant_ids = [asst.id for asst in assistants]
-            all_studio_user_ids = [p.id] + assistant_ids
-
-            # Aggregated Album Count: root photographer ID OR any assistant ID
-            total_albums = (
-                db.query(func.count(Album.id))
-                .filter(Album.photographer_id.in_(all_studio_user_ids))
-                .scalar() or 0
-            )
-
-            # Aggregated Media Count across all albums in the studio hierarchy
-            album_ids_subquery = (
-                db.query(Album.id)
-                .filter(Album.photographer_id.in_(all_studio_user_ids))
-                .subquery()
-            )
-            total_media = (
-                db.query(func.count(MediaItem.id))
-                .filter(MediaItem.album_id.in_(album_ids_subquery))
-                .scalar() or 0
-            )
-
-            assistants_summary = [
-                AssistantSummary(
-                    id=asst.id,
-                    full_name=asst.full_name,
-                    email=asst.email,
-                    is_active=asst.is_active
-                )
-                for asst in assistants
-            ]
-
+            assts = assistants_by_parent.get(p.id, [])
             results.append(
                 PhotographerDetailResponse(
                     id=p.id,
@@ -219,14 +238,13 @@ def get_all_photographers(
                     storage_quota_limit=p.storage_quota_limit,
                     storage_used=p.storage_used,
                     needs_password_change=p.needs_password_change,
-                    total_albums=total_albums,
-                    total_media=total_media,
-                    assistants_count=len(assistants),
-                    assistants=assistants_summary,
+                    total_albums=total_albums_by_root.get(p.id, 0),
+                    total_media=total_media_by_root.get(p.id, 0),
+                    assistants_count=len(assts),
+                    assistants=assts,
                     created_at=p.created_at.isoformat() if p.created_at else None
                 )
             )
-
         return results
     except SQLAlchemyError as exc:
         raise HTTPException(

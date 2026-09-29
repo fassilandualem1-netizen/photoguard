@@ -2,7 +2,7 @@ import secrets
 import string
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
@@ -142,6 +142,8 @@ def get_platform_stats(
 
 @router.get("/users", response_model=List[PhotographerDetailResponse], status_code=status.HTTP_200_OK)
 def get_all_photographers(
+    skip: int = Query(0, ge=0, description="Offset for pagination"),
+    limit: int = Query(100, ge=1, le=500, description="Limit for pagination"),
     db: Session = Depends(get_db),
     admin_user: User = Depends(require_admin)
 ):
@@ -162,6 +164,8 @@ def get_all_photographers(
                 User.parent_id.is_(None)
             )
             .order_by(User.id.desc())
+            .offset(skip)
+            .limit(limit)
             .all()
         )
         if not photographers:

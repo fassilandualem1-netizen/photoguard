@@ -2,7 +2,7 @@ import os
 import logging
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status, File, UploadFile, Query
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import or_, func
@@ -257,6 +257,8 @@ def create_album(
 @router.get("", response_model=List[AlbumListItemResponse], status_code=status.HTTP_200_OK)
 @router.get("/", response_model=List[AlbumListItemResponse], status_code=status.HTTP_200_OK)
 def list_albums(
+    skip: int = Query(0, ge=0, description="Offset for pagination"),
+    limit: int = Query(100, ge=1, le=500, description="Limit for pagination"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -275,7 +277,14 @@ def list_albums(
         )
 
         if current_user.role == UserRole.ADMIN.value or current_user.role == UserRole.ADMIN:
-            albums = db.query(Album).options(selectinload(Album.media_items)).order_by(Album.created_at.desc()).all()
+            albums = (
+                db.query(Album)
+                .options(selectinload(Album.media_items))
+                .order_by(Album.created_at.desc())
+                .offset(skip)
+                .limit(limit)
+                .all()
+            )
         elif is_assistant:
             # Studio Assistant: Strictly albums they created
             albums = (
@@ -283,6 +292,8 @@ def list_albums(
                 .options(selectinload(Album.media_items))
                 .filter(Album.photographer_id == current_user.id)
                 .order_by(Album.created_at.desc())
+                .offset(skip)
+                .limit(limit)
                 .all()
             )
         else:
@@ -296,6 +307,8 @@ def list_albums(
                 .options(selectinload(Album.media_items))
                 .filter(Album.photographer_id.in_(allowed_photographer_ids))
                 .order_by(Album.created_at.desc())
+                .offset(skip)
+                .limit(limit)
                 .all()
             )
 

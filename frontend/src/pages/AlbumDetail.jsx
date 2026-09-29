@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
+import AlbumLightbox from "../components/AlbumLightbox";
+import PhotoUploader from "../components/PhotoUploader";
 import api from "../api/axios";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
@@ -960,94 +962,15 @@ export default function AlbumDetail() {
         </div>
       )}
 
-      {/* Upload Section: Streamlined, End-to-End Encrypted Copy */}
-      {!isSubmitted && (
-        <div
-          id="bulk-upload-section"
-          className="p-6 rounded-3xl border border-dashed border-slate-800 bg-slate-900/30 backdrop-blur-sm"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-                <UploadCloud className="w-4 h-4 text-amber-400" />
-                <span>Upload Client Proofs</span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono">
-                  <ShieldCheck className="w-3 h-3" />
-                  <span>End-to-End Encrypted</span>
-                </span>
-              </h2>
-              <p className="text-xs text-slate-400">
-                End-to-end encrypted proof delivery. Photos are watermarked and protected from unauthorized downloads.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleFileUpload}
-                disabled={uploading}
-                className="hidden"
-                id="photo-upload-input"
-              />
-              <label
-                htmlFor="photo-upload-input"
-                className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700/90 border border-slate-700 text-white font-semibold text-xs transition-colors cursor-pointer ${
-                  uploading ? "opacity-50 cursor-not-allowed" : ""
-                }`}
-              >
-                <FolderPlus className="w-4 h-4 text-amber-400" />
-                <span>{uploading ? `Uploading (${uploadProgress.current}/${uploadProgress.total})...` : "Select Photos"}</span>
-              </label>
-            </div>
-          </div>
-
-          {/* High-Speed Upload Progress Bar */}
-          {uploading && (
-            <div className="mt-4 space-y-2">
-              <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
-                <span className="flex items-center gap-2">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                  <span>Uploading {uploadProgress.current} of {uploadProgress.total} photos...</span>
-                </span>
-                <span>
-                  {uploadProgress.current} / {uploadProgress.total} (
-                  {Math.round((uploadProgress.current / uploadProgress.total) * 100)}%)
-                </span>
-              </div>
-              <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-amber-500 to-amber-300 transition-all duration-200"
-                  style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Upload Summary Feedback */}
-          {lastUploadSummary && (
-            <div className="mt-4 p-4 rounded-xl border border-slate-800 bg-slate-900/60 text-xs space-y-1.5">
-              <div className="flex items-center gap-2 font-semibold text-white">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>
-                  Batch Complete: {lastUploadSummary.success} uploaded successfully
-                  {lastUploadSummary.failed > 0 && `, ${lastUploadSummary.failed} failed`}
-                </span>
-              </div>
-              {lastUploadSummary.reasons?.length > 0 && (
-                <div className="text-red-400 space-y-0.5 pt-1">
-                  {lastUploadSummary.reasons.map((r, i) => (
-                    <div key={i}>• {r}</div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
+      {/* Upload Section: Modularized PhotoUploader */}
+      <PhotoUploader
+        isSubmitted={isSubmitted}
+        uploading={uploading}
+        uploadProgress={uploadProgress}
+        lastUploadSummary={lastUploadSummary}
+        fileInputRef={fileInputRef}
+        onFileUpload={handleFileUpload}
+      />
       {/* GALLERY WORKFLOW SECTION: View Switcher (All Proofs vs Review Selections) */}
       <div id="gallery-workflow-section" className="space-y-4">
         
@@ -1284,90 +1207,14 @@ export default function AlbumDetail() {
         </div>
       )}
 
-      {/* =========================================================================
-          HIGH RESOLUTION PHOTO LIGHTBOX
-          ========================================================================= */}
-      {previewPhoto && (
-        <div
-          id="photo-lightbox-modal"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-2 sm:p-4 animate-in fade-in select-none"
-          onClick={() => setPreviewPhoto(null)}
-        >
-          {activeList.length > 1 && (
-            <>
-              <button
-                type="button"
-                id="lightbox-prev-btn"
-                onClick={handlePrevPhoto}
-                className="fixed left-3 sm:left-6 top-1/2 -translate-y-1/2 z-50 p-3 sm:p-3.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-white hover:text-amber-400 transition-all shadow-2xl backdrop-blur-md group cursor-pointer"
-                title="Previous Photo (Left Arrow)"
-              >
-                <ChevronLeft className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" />
-              </button>
-              <button
-                type="button"
-                id="lightbox-next-btn"
-                onClick={handleNextPhoto}
-                className="fixed right-3 sm:right-6 top-1/2 -translate-y-1/2 z-50 p-3 sm:p-3.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-white hover:text-amber-400 transition-all shadow-2xl backdrop-blur-md group cursor-pointer"
-                title="Next Photo (Right Arrow)"
-              >
-                <ChevronRight className="w-6 h-6 group-hover:translate-x-0.5 transition-transform" />
-              </button>
-            </>
-          )}
-
-          <div
-            className="relative max-w-6xl w-full max-h-[92vh] flex flex-col items-center justify-center gap-3"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl bg-slate-900/90 border border-slate-800 backdrop-blur-md text-slate-300">
-              <div className="flex items-center gap-3">
-                <span className="text-xs sm:text-sm font-semibold text-white truncate max-w-[180px] sm:max-w-md">
-                  {previewPhoto.filename}
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[11px] font-mono text-slate-300">
-                  {activeList.findIndex((p) => p.id === previewPhoto.id) + 1} / {activeList.length}
-                </span>
-                {previewPhoto.is_selected && (
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-[11px] font-semibold flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                    <span>Client Pick</span>
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPreviewPhoto(null)}
-                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="relative max-h-[72vh] flex items-center justify-center overflow-hidden rounded-2xl bg-black/60 border border-slate-800/80">
-              <img
-                src={previewPhoto.url}
-                alt={previewPhoto.filename}
-                className="max-h-[72vh] w-auto object-contain"
-              />
-            </div>
-
-            {(previewPhoto.client_notes || previewPhoto.client_note) && (
-              <div className="w-full p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 flex items-start gap-3 backdrop-blur-md">
-                <MessageSquare className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                <div className="text-xs">
-                  <span className="font-bold text-amber-300">Client Retouching Note: </span>
-                  <span className="text-white">{previewPhoto.client_notes || previewPhoto.client_note}</span>
-                </div>
-              </div>
-            )}
-
-          </div>
-        </div>
-      )}
+      {/* High-Resolution Photo Lightbox Modal */}
+      <AlbumLightbox
+        previewPhoto={previewPhoto}
+        activeList={activeList}
+        onPrev={handlePrevPhoto}
+        onNext={handleNextPhoto}
+        onClose={() => setPreviewPhoto(null)}
+      />
 
     </div>
   );

@@ -80,6 +80,8 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -499,6 +501,8 @@ fun GalleryScreen(
                 initialPage = fullScreenInitialIndex,
                 pageCount = { uiState.mediaItems.size }
             )
+            val coroutineScope = rememberCoroutineScope()
+            var isCurrentPageZoomed by remember { mutableStateOf(false) }
 
             Dialog(
                 onDismissRequest = { fullScreenInitialIndex = -1 },
@@ -519,7 +523,8 @@ fun GalleryScreen(
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier.fillMaxSize(),
-                        key = { page -> uiState.mediaItems[page].id }
+                        userScrollEnabled = !isCurrentPageZoomed,
+                        key = { page -> uiState.mediaItems.getOrNull(page)?.id ?: page }
                     ) { page ->
                         val media = uiState.mediaItems[page]
                         val context = LocalContext.current
@@ -532,7 +537,6 @@ fun GalleryScreen(
                                 .memoryCachePolicy(CachePolicy.ENABLED)
                                 .build()
                         }
-
                         var scale by remember(page) { mutableFloatStateOf(1f) }
                         var offset by remember(page) { mutableStateOf(Offset.Zero) }
 
@@ -541,29 +545,53 @@ fun GalleryScreen(
                             if (pagerState.currentPage != page) {
                                 scale = 1f
                                 offset = Offset.Zero
+                            } else {
+                                isCurrentPageZoomed = (scale > 1.05f)
                             }
                         }
 
-                        val zoomModifier = if (scale > 1.05f) {
-                            Modifier.pointerInput(page) {
-                                detectTransformGestures { _, pan, zoom, _ ->
-                                    val newScale = (scale * zoom).coerceIn(1f, 5f)
-                                    scale = newScale
-                                    if (newScale > 1.05f) {
-                                        offset = Offset(offset.x + pan.x, offset.y + pan.y)
-                                    } else {
-                                        scale = 1f
-                                        offset = Offset.Zero
+                        LaunchedEffect(scale) {
+                            if (pagerState.currentPage == page) {
+                                isCurrentPageZoomed = (scale > 1.05f)
+                            }
+                        }
+
+                        val imageGestureModifier = if (scale > 1.05f) {
+                            Modifier
+                                .pointerInput(page) {
+                                    detectTransformGestures { _, pan, zoom, _ ->
+                                        val newScale = (scale * zoom).coerceIn(1f, 5f)
+                                        scale = newScale
+                                        if (newScale > 1.05f) {
+                                            offset = Offset(offset.x + pan.x, offset.y + pan.y)
+                                        } else {
+                                            scale = 1f
+                                            offset = Offset.Zero
+                                        }
                                     }
                                 }
-                            }
+                                .pointerInput(page) {
+                                    detectTapGestures(
+                                        onDoubleTap = {
+                                            scale = 1f
+                                            offset = Offset.Zero
+                                        }
+                                    )
+                                }
                         } else {
+                            // Unzoomed: Single-finger horizontal swipes are NEVER consumed so HorizontalPager swipes freely!
                             Modifier.pointerInput(page) {
+                                var lastTapTime = 0L
                                 awaitEachGesture {
-                                    awaitFirstDown(requireUnconsumed = false)
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    val startTime = System.currentTimeMillis()
+                                    var moved = false
+                                    var isPinching = false
+
                                     do {
                                         val event = awaitPointerEvent()
                                         if (event.changes.size >= 2) {
+                                            isPinching = true
                                             val zoom = event.calculateZoom()
                                             val newScale = (scale * zoom).coerceIn(1f, 5f)
                                             if (newScale > 1.05f) {
@@ -572,30 +600,37 @@ fun GalleryScreen(
                                                 offset = Offset(pan.x, pan.y)
                                                 event.changes.forEach { it.consume() }
                                             }
+                                        } else if (!isPinching) {
+                                            val current = event.changes.firstOrNull()
+                                            if (current != null) {
+                                                val dx = current.position.x - down.position.x
+                                                val dy = current.position.y - down.position.y
+                                                if (dx * dx + dy * dy > 200f) {
+                                                    moved = true
+                                                    // Do not consume: Let HorizontalPager swipe freely!
+                                                }
+                                            }
                                         }
                                     } while (event.changes.any { it.pressed })
-                                }
-                            }
-                        }
 
-                        val doubleTapModifier = Modifier.pointerInput(page) {
-                            detectTapGestures(
-                                onDoubleTap = {
-                                    if (scale > 1.05f) {
-                                        scale = 1f
-                                        offset = Offset.Zero
-                                    } else {
-                                        scale = 2.5f
+                                    val duration = System.currentTimeMillis() - startTime
+                                    if (!moved && !isPinching && duration < 300) {
+                                        val now = System.currentTimeMillis()
+                                        if (now - lastTapTime < 350) {
+                                            scale = 2.5f
+                                            lastTapTime = 0L
+                                        } else {
+                                            lastTapTime = now
+                                        }
                                     }
                                 }
-                            )
+                            }
                         }
 
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .then(doubleTapModifier)
-                                .then(zoomModifier),
+                                .then(imageGestureModifier),
                             contentAlignment = Alignment.Center
                         ) {
                             AsyncImage(
@@ -615,122 +650,167 @@ fun GalleryScreen(
                         }
                     }
 
-                // Top control bar showing Position Counter ("5 of 45")
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.TopCenter)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(Color(0xEE000000), Color.Transparent)
-                            )
-                        )
-                        .padding(horizontal = 16.dp, vertical = 24.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = { fullScreenInitialIndex = -1 },
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(Color(0x66000000), CircleShape)
-                    ) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = Color.White
-                        )
-                    }
-
-                    // Elegant Position Counter & Filename
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "${pagerState.currentPage + 1} of ${uiState.mediaItems.size}",
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        currentMedia?.filename?.let { fname ->
-                            Text(
-                                text = fname,
-                                color = Color(0xFF94A3B8),
-                                fontSize = 10.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                    // Floating Left / Right Navigation Arrows for instant one-tap swipe
+                    if (!isCurrentPageZoomed && pagerState.currentPage > 0) {
+                        IconButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                }
+                            },
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(start = 12.dp)
+                                .size(44.dp)
+                                .background(Color(0x77000000), CircleShape)
+                        ) {
+                            Icon(
+                                Icons.Default.ArrowBack,
+                                contentDescription = "Previous Photo",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     }
 
-                    // Toggle selection directly from full screen swipe view
-                    if (currentMedia != null) {
+                    if (!isCurrentPageZoomed && pagerState.currentPage < uiState.mediaItems.size - 1) {
                         IconButton(
                             onClick = {
-                                viewModel.toggleSelect(currentMedia.id)
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                }
                             },
                             modifier = Modifier
-                                .size(40.dp)
-                                .background(
-                                    if (currentMedia.isSelected) brandAccent else Color(0x66000000),
-                                    CircleShape
-                                )
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 12.dp)
+                                .size(44.dp)
+                                .background(Color(0x77000000), CircleShape)
                         ) {
                             Icon(
-                                imageVector = if (currentMedia.isSelected) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = "Favorite",
+                                Icons.Default.ArrowForward,
+                                contentDescription = "Next Photo",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    // Top control bar showing Position Counter ("5 of 45")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.TopCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(Color(0xEE000000), Color.Transparent)
+                                )
+                            )
+                            .padding(horizontal = 16.dp, vertical = 24.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { fullScreenInitialIndex = -1 },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(Color(0x66000000), CircleShape)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Close",
                                 tint = Color.White
                             )
                         }
-                    } else {
-                        Spacer(modifier = Modifier.size(40.dp))
-                    }
-                }
 
-                // Bottom notes overlay for current item
-                if (currentMedia != null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.BottomCenter)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, Color(0xF5000000))
-                                )
+                        // Elegant Position Counter & Filename
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "${pagerState.currentPage + 1} of ${uiState.mediaItems.size}",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
                             )
-                            .padding(horizontal = 20.dp, vertical = 24.dp)
-                    ) {
-                        Column {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                            currentMedia?.filename?.let { fname ->
                                 Text(
-                                    text = "Retouching Instruction:",
+                                    text = fname,
                                     color = Color(0xFF94A3B8),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
+                            }
+                        }
 
-                                TextButton(
-                                    onClick = { activeEditingMedia = currentMedia }
+                        // Toggle selection directly from full screen swipe view
+                        if (currentMedia != null) {
+                            IconButton(
+                                onClick = {
+                                    viewModel.toggleSelect(currentMedia.id)
+                                },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(
+                                        if (currentMedia.isSelected) brandAccent else Color(0x66000000),
+                                        CircleShape
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = if (currentMedia.isSelected) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = "Favorite",
+                                    tint = Color.White
+                                )
+                            }
+                        } else {
+                            Spacer(modifier = Modifier.size(40.dp))
+                        }
+                    }
+
+                    // Bottom notes overlay for current item
+                    if (currentMedia != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.BottomCenter)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color.Transparent, Color(0xF5000000))
+                                    )
+                                )
+                                .padding(horizontal = 20.dp, vertical = 24.dp)
+                        ) {
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = if (currentMedia.clientNotes.isNullOrBlank()) "+ Add Note" else "Edit Note",
-                                        color = brandAccent,
-                                        fontSize = 12.sp,
+                                        text = "Retouching Instruction:",
+                                        color = Color(0xFF94A3B8),
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold
                                     )
+                                    TextButton(
+                                        onClick = { activeEditingMedia = currentMedia }
+                                    ) {
+                                        Text(
+                                            text = if (currentMedia.clientNotes.isNullOrBlank()) "+ Add Note" else "Edit Note",
+                                            color = brandAccent,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
-                            }
 
-                            if (!currentMedia.clientNotes.isNullOrBlank()) {
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = currentMedia.clientNotes,
-                                    color = Color(0xFFF1F5F9),
-                                    fontSize = 13.sp,
-                                    lineHeight = 18.sp
-                                )
+                                if (!currentMedia.clientNotes.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = currentMedia.clientNotes,
+                                        color = Color(0xFFF1F5F9),
+                                        fontSize = 13.sp,
+                                        lineHeight = 18.sp
+                                    )
+                                }
                             }
                         }
                     }
@@ -883,9 +963,9 @@ fun StudioBrandedTopBar(
                     // Studio prominent circular avatar/logo (46dp)
                     Box(
                         modifier = Modifier
-                            .size(46.dp)
+                            .size(52.dp)
                             .clip(CircleShape)
-                            .border(2.dp, brandAccent, CircleShape)
+                            .border(2.5.dp, brandAccent, CircleShape)
                             .background(Color(0xFF1E293B)),
                         contentAlignment = Alignment.Center
                     ) {
@@ -901,7 +981,7 @@ fun StudioBrandedTopBar(
                             Text(
                                 text = studioName.take(1).uppercase(),
                                 color = brandAccent,
-                                fontSize = 20.sp,
+                                fontSize = 22.sp,
                                 fontWeight = FontWeight.Black
                             )
                         }
@@ -915,8 +995,8 @@ fun StudioBrandedTopBar(
                                 text = studioName,
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 16.sp,
-                                    letterSpacing = 0.2.sp
+                                    fontSize = 17.sp,
+                                    letterSpacing = 0.4.sp
                                 ),
                                 color = Color.White,
                                 maxLines = 1,
@@ -927,7 +1007,7 @@ fun StudioBrandedTopBar(
                                 Icons.Default.Verified,
                                 contentDescription = "Verified Studio",
                                 tint = Color(0xFFF59E0B),
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                         Text(

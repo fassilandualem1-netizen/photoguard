@@ -37,6 +37,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Lock
@@ -155,24 +157,24 @@ fun DeliveryScreen(
                                 contentDescription = studioDisplayName,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
-                                    .size(46.dp)
+                                    .size(52.dp)
                                     .clip(CircleShape)
-                                    .border(2.dp, Color(0xFF3B82F6), CircleShape)
+                                    .border(2.5.dp, Color(0xFF3B82F6), CircleShape)
                                     .background(Color(0xFF1E293B))
                             )
                         } else {
                             Box(
                                 modifier = Modifier
-                                    .size(46.dp)
+                                    .size(52.dp)
                                     .clip(CircleShape)
-                                    .border(2.dp, Color(0xFF3B82F6), CircleShape)
+                                    .border(2.5.dp, Color(0xFF3B82F6), CircleShape)
                                     .background(Color(0xFF1E293B)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = studioDisplayName.take(1).uppercase(),
                                     color = Color(0xFF60A5FA),
-                                    fontSize = 20.sp,
+                                    fontSize = 22.sp,
                                     fontWeight = FontWeight.Black
                                 )
                             }
@@ -186,8 +188,8 @@ fun DeliveryScreen(
                                     text = studioDisplayName,
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 16.sp,
-                                        letterSpacing = 0.2.sp
+                                        fontSize = 17.sp,
+                                        letterSpacing = 0.4.sp
                                     ),
                                     color = Color.White,
                                     maxLines = 1,
@@ -198,7 +200,7 @@ fun DeliveryScreen(
                                     imageVector = Icons.Default.Verified,
                                     contentDescription = "Verified Studio",
                                     tint = Color(0xFFF59E0B),
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                             Text(
@@ -445,6 +447,7 @@ fun DeliveryScreen(
                 initialPage = activePreviewIndex,
                 pageCount = { uiState.mediaItems.size }
             )
+            var isCurrentPageZoomed by remember { mutableStateOf(false) }
 
             Dialog(
                 onDismissRequest = { activePreviewIndex = -1 },
@@ -465,7 +468,8 @@ fun DeliveryScreen(
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier.fillMaxSize(),
-                        key = { page -> uiState.mediaItems[page].id }
+                        userScrollEnabled = !isCurrentPageZoomed,
+                        key = { page -> uiState.mediaItems.getOrNull(page)?.id ?: page }
                     ) { page ->
                         val media = uiState.mediaItems[page]
                         val fullRequest = remember(media.url) {
@@ -486,29 +490,53 @@ fun DeliveryScreen(
                             if (pagerState.currentPage != page) {
                                 scale = 1f
                                 offset = Offset.Zero
+                            } else {
+                                isCurrentPageZoomed = (scale > 1.05f)
                             }
                         }
 
-                        val zoomModifier = if (scale > 1.05f) {
-                            Modifier.pointerInput(page) {
-                                detectTransformGestures { _, pan, zoom, _ ->
-                                    val newScale = (scale * zoom).coerceIn(1f, 5f)
-                                    scale = newScale
-                                    if (newScale > 1.05f) {
-                                        offset = Offset(offset.x + pan.x, offset.y + pan.y)
-                                    } else {
-                                        scale = 1f
-                                        offset = Offset.Zero
+                        LaunchedEffect(scale) {
+                            if (pagerState.currentPage == page) {
+                                isCurrentPageZoomed = (scale > 1.05f)
+                            }
+                        }
+
+                        val imageGestureModifier = if (scale > 1.05f) {
+                            Modifier
+                                .pointerInput(page) {
+                                    detectTransformGestures { _, pan, zoom, _ ->
+                                        val newScale = (scale * zoom).coerceIn(1f, 5f)
+                                        scale = newScale
+                                        if (newScale > 1.05f) {
+                                            offset = Offset(offset.x + pan.x, offset.y + pan.y)
+                                        } else {
+                                            scale = 1f
+                                            offset = Offset.Zero
+                                        }
                                     }
                                 }
-                            }
+                                .pointerInput(page) {
+                                    detectTapGestures(
+                                        onDoubleTap = {
+                                            scale = 1f
+                                            offset = Offset.Zero
+                                        }
+                                    )
+                                }
                         } else {
+                            // Unzoomed: Single-finger horizontal swipes are NEVER consumed so HorizontalPager swipes freely!
                             Modifier.pointerInput(page) {
+                                var lastTapTime = 0L
                                 awaitEachGesture {
-                                    awaitFirstDown(requireUnconsumed = false)
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    val startTime = System.currentTimeMillis()
+                                    var moved = false
+                                    var isPinching = false
+
                                     do {
                                         val event = awaitPointerEvent()
                                         if (event.changes.size >= 2) {
+                                            isPinching = true
                                             val zoom = event.calculateZoom()
                                             val newScale = (scale * zoom).coerceIn(1f, 5f)
                                             if (newScale > 1.05f) {
@@ -517,30 +545,37 @@ fun DeliveryScreen(
                                                 offset = Offset(pan.x, pan.y)
                                                 event.changes.forEach { it.consume() }
                                             }
+                                        } else if (!isPinching) {
+                                            val current = event.changes.firstOrNull()
+                                            if (current != null) {
+                                                val dx = current.position.x - down.position.x
+                                                val dy = current.position.y - down.position.y
+                                                if (dx * dx + dy * dy > 200f) {
+                                                    moved = true
+                                                    // Do not consume: Let HorizontalPager swipe freely!
+                                                }
+                                            }
                                         }
                                     } while (event.changes.any { it.pressed })
-                                }
-                            }
-                        }
 
-                        val doubleTapModifier = Modifier.pointerInput(page) {
-                            detectTapGestures(
-                                onDoubleTap = {
-                                    if (scale > 1.05f) {
-                                        scale = 1f
-                                        offset = Offset.Zero
-                                    } else {
-                                        scale = 2.5f
+                                    val duration = System.currentTimeMillis() - startTime
+                                    if (!moved && !isPinching && duration < 300) {
+                                        val now = System.currentTimeMillis()
+                                        if (now - lastTapTime < 350) {
+                                            scale = 2.5f
+                                            lastTapTime = 0L
+                                        } else {
+                                            lastTapTime = now
+                                        }
                                     }
                                 }
-                            )
+                            }
                         }
 
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .then(doubleTapModifier)
-                                .then(zoomModifier),
+                                .then(imageGestureModifier),
                             contentAlignment = Alignment.Center
                         ) {
                             AsyncImage(
@@ -556,6 +591,51 @@ fun DeliveryScreen(
                                         translationX = offset.x,
                                         translationY = offset.y
                                     )
+                            )
+                        }
+                    }
+
+                    // Floating Left / Right Navigation Arrows for instant one-tap swipe
+                    if (!isCurrentPageZoomed && pagerState.currentPage > 0) {
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                }
+                            },
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(start = 12.dp)
+                                .size(44.dp)
+                                .background(Color(0x77000000), CircleShape)
+                        ) {
+                            Icon(
+                                Icons.Default.ArrowBack,
+                                contentDescription = "Previous Photo",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    if (!isCurrentPageZoomed && pagerState.currentPage < uiState.mediaItems.size - 1) {
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                }
+                            },
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 12.dp)
+                                .size(44.dp)
+                                .background(Color(0x77000000), CircleShape)
+                        ) {
+                            Icon(
+                                Icons.Default.ArrowForward,
+                                contentDescription = "Next Photo",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     }

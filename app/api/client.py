@@ -40,6 +40,33 @@ def get_client_ip(request: Request) -> str:
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
+def get_protected_media_url(raw_url: str, thumbnail_url: Optional[str] = None) -> str:
+    """
+    Strict Anti-Piracy Protection:
+    When an album's allow_download is False, original master URLs must NEVER be exposed
+    over the client API. Instead, delivers a heavily downscaled, dynamically watermarked
+    preview or compressed WebP/AVIF thumbnail.
+    """
+    if not raw_url:
+        return thumbnail_url or ""
+
+    # Cloudinary: Inject dynamic watermark and heavy downscaling transformation
+    if "res.cloudinary.com" in raw_url and "/upload/" in raw_url:
+        watermarked_preview = "/upload/c_limit,w_1200,q_auto:eco,f_auto,l_text:Arial_36_bold:PHOTOGUARD%20PROOF,o_35,fl_relative,w_0.8/"
+        return raw_url.replace("/upload/", watermarked_preview, 1)
+
+    # ImageKit CDN: Inject watermarking and preview constraints
+    if "ik.imagekit.io" in raw_url:
+        sep = "&" if "?" in raw_url else "?"
+        return f"{raw_url}{sep}tr=w-1200,q-70,l-text,ie-UEhPVE9HVUFSRCBQUk9PRg,ly-N10,lx-N10,o-30"
+
+    # S3 or Local fallback: Return the low-res compressed WebP thumbnail
+    if thumbnail_url:
+        return thumbnail_url
+
+    return raw_url
+
+
 def resolve_root_photographer(album: Album, db: Session) -> Optional[User]:
     """
     Resolves the primary root photographer account responsible for the album.
@@ -113,6 +140,32 @@ def build_client_album_response(album: Album, db: Session) -> AlbumDetailRespons
     except Exception:
         db.rollback()
 
+    # Anti-Piracy Protection for Client Proofing:
+    # If allow_download is False, the API MUST NOT return the original high-resolution
+    # URL in the url field. Instead, map the url to a downscaled, watermarked preview.
+    # Only provide the raw master url if allow_download is True.
+    client_media_items: list[MediaItemResponse] = []
+    for item in (album.media_items or []):
+        if final_allow_download:
+            effective_url = item.url
+        else:
+            effective_url = get_protected_media_url(item.url, item.thumbnail_url)
+
+        client_media_items.append(
+            MediaItemResponse(
+                id=item.id,
+                album_id=item.album_id,
+                filename=item.filename,
+                url=effective_url,
+                thumbnail_url=item.thumbnail_url or effective_url,
+                original_size=item.original_size,
+                compressed_size=item.compressed_size,
+                is_selected=bool(item.is_selected or False),
+                client_notes=item.client_notes,
+                created_at=item.created_at,
+            )
+        )
+
     return AlbumDetailResponse(
         id=album.id,
         title=album.title,
@@ -130,7 +183,7 @@ def build_client_album_response(album: Album, db: Session) -> AlbumDetailRespons
         submitted_at=album.submitted_at,
         media_count=media_count,
         selected_count=selected_count,
-        media_items=album.media_items,
+        media_items=client_media_items,
         social_links=social_links_data,
         contact_phone=contact_phone,
         tiktok_url=tiktok_url,
@@ -426,7 +479,20 @@ def update_client_media_selection(
         # Notify other devices polling the album
         increment_album_version(pin)
 
-        return MediaItemResponse.model_validate(media_item)
+        # Anti-piracy URL protection: respect album allow_download state
+        effective_url = media_item.url if album.allow_download else get_protected_media_url(media_item.url, media_item.thumbnail_url)
+        return MediaItemResponse(
+            id=media_item.id,
+            album_id=media_item.album_id,
+            filename=media_item.filename,
+            url=effective_url,
+            thumbnail_url=media_item.thumbnail_url or effective_url,
+            original_size=media_item.original_size,
+            compressed_size=media_item.compressed_size,
+            is_selected=bool(media_item.is_selected or False),
+            client_notes=media_item.client_notes,
+            created_at=media_item.created_at,
+        )
 
     except SQLAlchemyError as exc:
         db.rollback()

@@ -184,7 +184,7 @@ def save_direct_upload_url(
 
 
 @router.post("/upload/{album_id}", response_model=MediaItemResponse, status_code=status.HTTP_201_CREATED)
-async def upload_album_photo(
+def upload_album_photo(
     album_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -222,7 +222,7 @@ async def upload_album_photo(
 
     # Read uploaded file content
     try:
-        file_bytes = await file.read()
+        file_bytes = file.file.read()
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -270,7 +270,7 @@ async def upload_album_photo(
     # 2. Secondary: S3 / IDrive e2 Storage (if Cloudinary skipped or failed)
     if not high_res_url and is_s3_configured():
         try:
-            await file.seek(0)
+            file.file.seek(0)
             object_path = upload_file_to_s3(file=file, filename=file.filename or "photo.jpg")
             cdn_urls = generate_cdn_urls(object_path=object_path)
             high_res_url = cdn_urls["high_res_url"]

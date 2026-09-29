@@ -53,11 +53,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
     safe_password = plain_password[:72]
 
-    # 1. Exact string match fallback (in case a plain-text password was stored or seeded)
-    if plain_password == hashed_password or safe_password == hashed_password:
-        return True
-
-    # 2. Check for PBKDF2 hash scheme (standard in PhotoGuard 7.0)
+    # 1. Check for PBKDF2 hash scheme (standard in PhotoGuard 7.0)
     if hashed_password.startswith("pbkdf2_sha256$"):
         return _verify_pbkdf2(safe_password, hashed_password)
 

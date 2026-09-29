@@ -687,7 +687,7 @@ def delete_album(
         )
 
 @router.post("/{album_id}/upload", status_code=status.HTTP_201_CREATED)
-async def upload_album_photo_alias(
+def upload_album_photo_alias(
     album_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -697,7 +697,7 @@ async def upload_album_photo_alias(
     Direct alias endpoint to upload photo proofs to an album.
     """
     from app.api.media import upload_album_photo
-    return await upload_album_photo(album_id=album_id, file=file, db=db, current_user=current_user)
+    return upload_album_photo(album_id=album_id, file=file, db=db, current_user=current_user)
 
 @router.post("/{album_id}/toggle-download", status_code=status.HTTP_200_OK)
 def toggle_album_client_download(

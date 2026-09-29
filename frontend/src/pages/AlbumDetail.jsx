@@ -135,12 +135,22 @@ export default function AlbumDetail() {
     }
   }, [id]);
 
+  const mediaItems = album?.media_items || [];
+  const selectedItems = mediaItems.filter((m) => m.is_selected);
+  const isSubmitted = Boolean(
+    album?.is_submitted ||
+    album?.is_locked ||
+    album?.submitted_at ||
+    album?.status === "submitted" ||
+    album?.status === "locked"
+  );
+
   // HIGH-SPEED CONCURRENT BULK UPLOAD (Pool of 4 parallel workers)
   const handleFileUpload = async (e) => {
     const fileList = Array.from(e.target.files || []);
     if (!fileList || fileList.length === 0) return;
 
-    if (album?.is_submitted) {
+    if (isSubmitted) {
       alert("This gallery is submitted & locked by the client. Proof uploads are permanently disabled.");
       return;
     }
@@ -338,15 +348,7 @@ export default function AlbumDetail() {
     return days > 0 ? days : 0;
   };
 
-  const mediaItems = album?.media_items || [];
-  const selectedItems = mediaItems.filter((m) => m.is_selected);
-  const isSubmitted = Boolean(
-    album?.is_submitted ||
-    album?.is_locked ||
-    album?.submitted_at ||
-    album?.status === "submitted" ||
-    album?.status === "locked"
-  );
+
 
   // Client Invite Text & Deep Linking
   const albumPin = album?.pin || album?.client_pin || "";
@@ -550,6 +552,7 @@ export default function AlbumDetail() {
     }
 
     for (const item of preparedDownloads) {
+      if (!item.url) continue;
       try {
         const blob = await fetchPhotoBlob(item.url, item.id);
         const url = URL.createObjectURL(blob);
@@ -592,20 +595,7 @@ export default function AlbumDetail() {
     setPreviewPhoto(activeList[nextIndex]);
   };
 
-  useEffect(() => {
-    if (!previewPhoto) return;
-    const handleKeyDown = (e) => {
-      if (e.key === "Escape") {
-        setPreviewPhoto(null);
-      } else if (e.key === "ArrowLeft") {
-        handlePrevPhoto();
-      } else if (e.key === "ArrowRight") {
-        handleNextPhoto();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [previewPhoto, activeList]);
+
 
   if (loading) {
     return (

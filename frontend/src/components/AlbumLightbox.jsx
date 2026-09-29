@@ -1,13 +1,67 @@
-import React, { useEffect } from "react";
-import { ChevronLeft, ChevronRight, CheckCircle2, X, MessageSquare } from "lucide-react";
+import React, { useState, useEffect, Component } from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  X,
+  MessageSquare,
+  AlertTriangle,
+} from "lucide-react";
 
-export default function AlbumLightbox({
+// Local Component Error Boundary to isolate any unexpected rendering crashes
+class LightboxErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("AlbumLightbox error trapped by local boundary:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4 select-none">
+          <div className="p-6 rounded-2xl bg-slate-900 border border-red-500/30 text-center max-w-md space-y-4">
+            <AlertTriangle className="w-8 h-8 text-amber-400 mx-auto" />
+            <h3 className="text-white text-sm font-bold">Lightbox Display Error</h3>
+            <p className="text-xs text-slate-400">
+              An error occurred while displaying this photo preview.
+            </p>
+            <button
+              type="button"
+              onClick={this.props.onClose}
+              className="px-4 py-2 rounded-xl bg-slate-800 text-white text-xs font-semibold hover:bg-slate-700"
+            >
+              Close Preview
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function AlbumLightboxContent({
   previewPhoto,
   activeList = [],
   onPrev,
   onNext,
   onClose,
 }) {
+  const [imageError, setImageError] = useState(false);
+
+  // Reset imageError whenever previewPhoto changes
+  useEffect(() => {
+    setImageError(false);
+  }, [previewPhoto?.id, previewPhoto?.url]);
+
   useEffect(() => {
     if (!previewPhoto) return;
 
@@ -95,12 +149,27 @@ export default function AlbumLightbox({
           </div>
         </div>
 
-        <div className="relative max-h-[72vh] flex items-center justify-center overflow-hidden rounded-2xl bg-black/60 border border-slate-800/80">
-          <img
-            src={previewPhoto.url}
-            alt={previewPhoto.filename}
-            className="max-h-[72vh] w-auto object-contain"
-          />
+        <div className="relative max-h-[72vh] flex items-center justify-center overflow-hidden rounded-2xl bg-black/60 border border-slate-800/80 min-h-[240px] w-full">
+          {imageError ? (
+            <div className="flex flex-col items-center justify-center p-8 text-center text-slate-400">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-3">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-semibold text-white">
+                High-Resolution Preview Unavailable
+              </p>
+              <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                The image could not be loaded from the CDN storage. The file may be restricted or processing.
+              </p>
+            </div>
+          ) : (
+            <img
+              src={previewPhoto.url}
+              alt={previewPhoto.filename}
+              onError={() => setImageError(true)}
+              className="max-h-[72vh] w-auto object-contain"
+            />
+          )}
         </div>
 
         {(previewPhoto.client_notes || previewPhoto.client_note) && (
@@ -114,5 +183,13 @@ export default function AlbumLightbox({
         )}
       </div>
     </div>
+  );
+}
+
+export default function AlbumLightbox(props) {
+  return (
+    <LightboxErrorBoundary onClose={props.onClose}>
+      <AlbumLightboxContent {...props} />
+    </LightboxErrorBoundary>
   );
 }

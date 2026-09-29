@@ -89,6 +89,7 @@ class AlbumDetailResponse(BaseModel):
     youtube_url: Optional[str] = None
     studio_logo_url: Optional[str] = None
     brand_color: Optional[str] = None
+    brand_accent_color: Optional[str] = Field(default="#D97706", description="Dynamic studio brand accent color for mobile theming")
     photographer_name: Optional[str] = None
     subscription_plan: Optional[str] = None
 

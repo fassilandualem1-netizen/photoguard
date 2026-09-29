@@ -327,17 +327,20 @@ def update_profile(
                 )
             current_user.studio_logo_url = clean_logo
 
-        if payload.brand_color is not None:
-            clean_color = payload.brand_color.strip() if payload.brand_color else "#F59E0B"
-            if clean_color.upper() != "#F59E0B" and not is_admin and not plan_cfg.can_customize_branding:
+        color_candidate = payload.brand_accent_color if payload.brand_accent_color is not None else payload.brand_color
+        if color_candidate is not None:
+            clean_color = color_candidate.strip() if color_candidate else "#D97706"
+            if clean_color.upper() != "#F59E0B" and clean_color.upper() != "#D97706" and not is_admin and not plan_cfg.can_customize_branding:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Custom brand color accent is not enabled for the {user_plan.capitalize()} Plan. Please upgrade to unlock."
                 )
             if is_admin or plan_cfg.can_customize_branding:
                 current_user.brand_color = clean_color
+                current_user.brand_accent_color = clean_color
             else:
-                current_user.brand_color = "#F59E0B"
+                current_user.brand_color = "#D97706"
+                current_user.brand_accent_color = "#D97706"
 
         if payload.contact_phone is not None:
             current_user.contact_phone = payload.contact_phone.strip() if payload.contact_phone.strip() else None

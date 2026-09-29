@@ -26,6 +26,8 @@ interface AlbumData {
   photographer_name: string;
   contact_phone: string;
   telegram_url: string;
+  brand_color?: string;
+  brand_accent_color?: string;
 }
 
 // In-memory persistent state for dev session
@@ -43,6 +45,8 @@ const ALBUMS: Record<string, AlbumData> = {
     photographer_name: 'Dawit Kebede',
     contact_phone: '+251 91 123 4567',
     telegram_url: 'https://t.me/photoguard_demo',
+    brand_color: '#D97706',
+    brand_accent_color: '#D97706',
     media_items: [
       {
         id: 1001,
@@ -167,6 +171,8 @@ const ALBUMS: Record<string, AlbumData> = {
     photographer_name: 'Kidus Berhe',
     contact_phone: '+251 92 345 6789',
     telegram_url: 'https://t.me/photoguard_demo',
+    brand_color: '#D97706',
+    brand_accent_color: '#D97706',
     media_items: [
       {
         id: 2001,
@@ -201,6 +207,8 @@ const ALBUMS: Record<string, AlbumData> = {
     photographer_name: 'Dawit Kebede',
     contact_phone: '+251 91 123 4567',
     telegram_url: 'https://t.me/photoguard_demo',
+    brand_color: '#D97706',
+    brand_accent_color: '#D97706',
     media_items: [
       {
         id: 3001,

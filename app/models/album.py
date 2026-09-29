@@ -43,6 +43,7 @@ class Album(Base):
     client_downloaded_at = Column(DateTime(timezone=True), nullable=True)
     
     # Client Analytics & Tracking:
+    brand_accent_color = Column(String(50), default="#D97706", nullable=True)
     view_count = Column(Integer, default=0, nullable=False)
     last_viewed_at = Column(DateTime(timezone=True), nullable=True)
     reminder_sent_at = Column(DateTime(timezone=True), nullable=True)

@@ -20,7 +20,8 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=1, max_length=255, description="Updated full name")
     telegram_chat_id: Optional[str] = Field(None, max_length=50, description="Telegram chat ID for instant alerts")
     studio_logo_url: Optional[str] = Field(None, max_length=1024, description="Custom studio logo URL for client white-labeling")
-    brand_color: Optional[str] = Field(None, max_length=50, description="Custom studio brand accent color (e.g. #F59E0B)")
+    brand_color: Optional[str] = Field(None, max_length=50, description="Custom studio brand accent color (e.g. #D97706)")
+    brand_accent_color: Optional[str] = Field(None, max_length=50, description="Custom studio brand accent color (e.g. #D97706)")
     contact_phone: Optional[str] = Field(None, max_length=50, description="Contact phone number")
     tiktok_url: Optional[str] = Field(None, max_length=255, description="TikTok profile URL")
     instagram_url: Optional[str] = Field(None, max_length=255, description="Instagram profile URL")
@@ -37,7 +38,8 @@ class UserResponse(BaseModel):
     storage_used: Optional[int] = 0
     telegram_chat_id: Optional[str] = None
     studio_logo_url: Optional[str] = None
-    brand_color: Optional[str] = "#F59E0B"
+    brand_color: Optional[str] = "#D97706"
+    brand_accent_color: Optional[str] = "#D97706"
     contact_phone: Optional[str] = None
     tiktok_url: Optional[str] = None
     instagram_url: Optional[str] = None

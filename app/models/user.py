@@ -54,7 +54,8 @@ class User(Base):
     
     # Studio Tier Custom White-Label Branding
     studio_logo_url = Column(String(1024), nullable=True)
-    brand_color = Column(String(50), default="#F59E0B", nullable=True)
+    brand_color = Column(String(50), default="#D97706", nullable=True)
+    brand_accent_color = Column(String(50), default="#D97706", nullable=True)
 
     # Social Links (Studio Plan Feature):
     contact_phone = Column(String(50), nullable=True)

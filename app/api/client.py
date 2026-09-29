@@ -89,7 +89,8 @@ def build_client_album_response(album: Album, db: Session) -> AlbumDetailRespons
         telegram_url = root_photographer.telegram_url
         youtube_url = root_photographer.youtube_url
         studio_logo_url = root_photographer.studio_logo_url
-        brand_color = root_photographer.brand_color or "#F59E0B"
+        brand_color = getattr(root_photographer, 'brand_accent_color', None) or root_photographer.brand_color or "#D97706"
+        brand_accent_color = brand_color
         photographer_name = root_photographer.full_name
     else:
         # Basic Plan: Return null for social links, but allow_download reflects album state
@@ -100,7 +101,8 @@ def build_client_album_response(album: Album, db: Session) -> AlbumDetailRespons
         telegram_url = None
         youtube_url = None
         studio_logo_url = getattr(root_photographer, "studio_logo_url", None) if root_photographer else None
-        brand_color = getattr(root_photographer, "brand_color", None) or "#F59E0B"
+        brand_color = getattr(root_photographer, "brand_accent_color", None) or getattr(root_photographer, "brand_color", None) or "#D97706"
+        brand_accent_color = brand_color
         photographer_name = getattr(root_photographer, "full_name", None) if root_photographer else "PhotoGuard Studio"
 
     # Track view analytics safely
@@ -137,6 +139,7 @@ def build_client_album_response(album: Album, db: Session) -> AlbumDetailRespons
         youtube_url=youtube_url,
         studio_logo_url=studio_logo_url,
         brand_color=brand_color,
+        brand_accent_color=brand_accent_color,
         photographer_name=photographer_name,
         subscription_plan="studio" if is_studio else "basic",
     )

@@ -55,7 +55,18 @@ def run_db_migrations():
     All statements execute independently so one failing query never blocks startup.
     """
     logger.info("[PhotoGuard DB] Starting schema auto-migration...")
+    # Alembic migrations execution
     try:
+        from alembic.config import Config
+        from alembic import command
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
+        logger.info("[PhotoGuard DB] Alembic upgrade head executed successfully.")
+    except Exception as alembic_err:
+        logger.warning(f"[PhotoGuard DB] Alembic auto-upgrade notice: {alembic_err}")
+
+    try:
+
         # Users table schema migrations
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(255) DEFAULT 'System Admin';", "users.full_name")
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'photographer';", "users.role")
@@ -71,6 +82,7 @@ def run_db_migrations():
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS studio_logo_url VARCHAR(1024);", "users.studio_logo_url")
         safe_execute_ddl("ALTER TABLE users ALTER COLUMN studio_logo_url TYPE VARCHAR(1024);", "users.studio_logo_url type")
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS brand_color VARCHAR(50) DEFAULT '#F59E0B';", "users.brand_color")
+        safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS brand_accent_color VARCHAR(50) DEFAULT '#D97706';", "users.brand_accent_color")
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(50);", "users.contact_phone")
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS tiktok_url VARCHAR(255);", "users.tiktok_url")
         safe_execute_ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS instagram_url VARCHAR(255);", "users.instagram_url")
@@ -143,6 +155,7 @@ def run_db_migrations():
         safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT FALSE;", "albums.is_locked")
         safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP WITH TIME ZONE;", "albums.submitted_at")
         safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS allow_download BOOLEAN DEFAULT FALSE;", "albums.allow_download")
+        safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS brand_accent_color VARCHAR(50) DEFAULT '#D97706';", "albums.brand_accent_color")
         safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;", "albums.created_at")
         safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE;", "albums.expires_at")
         safe_execute_ddl("ALTER TABLE albums ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0;", "albums.view_count")

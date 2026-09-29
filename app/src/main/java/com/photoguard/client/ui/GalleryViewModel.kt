@@ -35,7 +35,7 @@ data class GalleryUiState(
     val studioName: String get() = album.photographerName?.takeIf { it.isNotBlank() }
         ?: album.creatorName?.takeIf { it.isNotBlank() && it != "Studio Owner" }
         ?: "PhotoGuard Studio"
-    val brandColorHex: String get() = album.brandColor ?: "#3B82F6"
+    val brandColorHex: String get() = album.effectiveBrandColor
 }
 
 class GalleryViewModel(

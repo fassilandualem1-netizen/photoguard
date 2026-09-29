@@ -122,17 +122,15 @@ fun getCrispAndroidThumbnailUrl(rawUrl: String?): String {
     }
 }
 
-fun parseBrandAccentColor(hexColor: String?): Color {
-    if (hexColor.isNullOrBlank()) return Color(0xFF3B82F6) // Default Electric Indigo
+fun parseBrandAccentColor(hexString: String?): Color {
+    val defaultColor = Color(0xFFD97706) // Default Amber/Gold
+    if (hexString.isNullOrBlank()) return defaultColor
     return try {
-        val cleanHex = hexColor.trim().removePrefix("#")
-        when (cleanHex.length) {
-            6 -> Color(android.graphics.Color.parseColor("#$cleanHex"))
-            8 -> Color(android.graphics.Color.parseColor("#$cleanHex"))
-            else -> Color(0xFF3B82F6)
-        }
-    } catch (_: Exception) {
-        Color(0xFF3B82F6)
+        val trimmed = hexString.trim()
+        val formatted = if (trimmed.startsWith("#")) trimmed else "#" + trimmed
+        Color(android.graphics.Color.parseColor(formatted))
+    } catch (e: Exception) {
+        defaultColor
     }
 }
 

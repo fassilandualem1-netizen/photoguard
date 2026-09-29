@@ -95,6 +95,19 @@ import coil.size.Precision
 import com.photoguard.client.data.model.MediaItemResponse
 import kotlinx.coroutines.launch
 
+
+fun parseBrandAccentColor(hexString: String?): Color {
+    val defaultColor = Color(0xFFD97706) // Default Amber/Gold
+    if (hexString.isNullOrBlank()) return defaultColor
+    return try {
+        val trimmed = hexString.trim()
+        val formatted = if (trimmed.startsWith("#")) trimmed else "#" + trimmed
+        Color(android.graphics.Color.parseColor(formatted))
+    } catch (e: Exception) {
+        defaultColor
+    }
+}
+
 @Composable
 fun DeliveryScreen(
     viewModel: DeliveryViewModel,
@@ -105,6 +118,9 @@ fun DeliveryScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val dynamicAccentColor = remember(uiState.brandAccentColorHex) {
+        parseBrandAccentColor(uiState.brandAccentColorHex)
+    }
     var activePreviewIndex by remember { mutableIntStateOf(-1) }
     var showStudioInfoDialog by remember { mutableStateOf(false) }
     val totalPhotos = uiState.mediaItems.size
@@ -159,7 +175,7 @@ fun DeliveryScreen(
                                 modifier = Modifier
                                     .size(52.dp)
                                     .clip(CircleShape)
-                                    .border(2.5.dp, Color(0xFF3B82F6), CircleShape)
+                                    .border(2.5.dp, dynamicAccentColor, CircleShape)
                                     .background(Color(0xFF1E293B))
                             )
                         } else {
@@ -167,13 +183,13 @@ fun DeliveryScreen(
                                 modifier = Modifier
                                     .size(52.dp)
                                     .clip(CircleShape)
-                                    .border(2.5.dp, Color(0xFF3B82F6), CircleShape)
+                                    .border(2.5.dp, dynamicAccentColor, CircleShape)
                                     .background(Color(0xFF1E293B)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = studioDisplayName.take(1).uppercase(),
-                                    color = Color(0xFF60A5FA),
+                                    color = dynamicAccentColor,
                                     fontSize = 22.sp,
                                     fontWeight = FontWeight.Black
                                 )
@@ -290,7 +306,7 @@ fun DeliveryScreen(
                                         .height(52.dp),
                                     shape = RoundedCornerShape(14.dp),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF2563EB),
+                                        containerColor = dynamicAccentColor,
                                         contentColor = Color.White
                                     )
                                 ) {
@@ -698,7 +714,7 @@ fun DeliveryScreen(
         StudioInfoDialog(
             studioName = uiState.photographerName ?: "PhotoGuard Studio",
             studioLogoUrl = uiState.studioLogoUrl,
-            brandAccent = Color(0xFF3B82F6),
+            brandAccent = dynamicAccentColor,
             contactPhone = uiState.contactPhone,
             telegramUrl = uiState.telegramUrl,
             instagramUrl = uiState.instagramUrl,

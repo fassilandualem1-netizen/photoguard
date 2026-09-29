@@ -145,6 +145,8 @@ data class AlbumDetailResponse(
     val studioLogoUrl: String? = null,
     @SerialName("brand_color")
     val brandColor: String? = null,
+    @SerialName("brand_accent_color")
+    val brandAccentColor: String? = null,
     @SerialName("photographer_name")
     val photographerName: String? = null,
     @SerialName("subscription_plan")

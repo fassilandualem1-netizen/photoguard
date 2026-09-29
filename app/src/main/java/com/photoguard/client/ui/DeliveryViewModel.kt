@@ -29,6 +29,7 @@ data class DeliveryUiState(
     val instagramUrl: String? = null,
     val tiktokUrl: String? = null,
     val youtubeUrl: String? = null,
+    val brandAccentColorHex: String = "#D97706",
     val errorMessage: String? = null
 )
 
@@ -52,7 +53,8 @@ class DeliveryViewModel(
             telegramUrl = album.telegramUrl ?: album.socialLinks?.telegramUrl,
             instagramUrl = album.instagramUrl ?: album.socialLinks?.instagramUrl,
             tiktokUrl = album.tiktokUrl ?: album.socialLinks?.tiktokUrl,
-            youtubeUrl = album.youtubeUrl ?: album.socialLinks?.youtubeUrl
+            youtubeUrl = album.youtubeUrl ?: album.socialLinks?.youtubeUrl,
+            brandAccentColorHex = album.effectiveBrandColor
         )
     )
     val uiState: StateFlow<DeliveryUiState> = _uiState.asStateFlow()

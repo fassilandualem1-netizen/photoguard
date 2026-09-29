@@ -15,3 +15,8 @@ fun parseBrandAccentColor(hexString: String?): Color {
         DefaultBrandAccentColor
     }
 }
+
+val AlbumDetailResponse.effectiveBrandColor: String
+    get() = brandAccentColor?.takeIf { it.isNotBlank() }
+        ?: brandColor?.takeIf { it.isNotBlank() }
+        ?: "#D97706"

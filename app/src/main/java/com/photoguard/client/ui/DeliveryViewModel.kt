@@ -54,7 +54,7 @@ class DeliveryViewModel(
             instagramUrl = album.instagramUrl ?: album.socialLinks?.instagramUrl,
             tiktokUrl = album.tiktokUrl ?: album.socialLinks?.tiktokUrl,
             youtubeUrl = album.youtubeUrl ?: album.socialLinks?.youtubeUrl,
-            brandAccentColorHex = album.effectiveBrandColor
+            brandAccentColorHex = album.brandAccentColor?.takeIf { it.isNotBlank() } ?: album.brandColor?.takeIf { it.isNotBlank() } ?: "#D97706"
         )
     )
     val uiState: StateFlow<DeliveryUiState> = _uiState.asStateFlow()

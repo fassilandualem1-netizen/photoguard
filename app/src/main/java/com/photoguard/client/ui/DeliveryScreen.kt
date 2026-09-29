@@ -96,17 +96,7 @@ import com.photoguard.client.data.model.MediaItemResponse
 import kotlinx.coroutines.launch
 
 
-fun parseBrandAccentColor(hexString: String?): Color {
-    val defaultColor = Color(0xFFD97706) // Default Amber/Gold
-    if (hexString.isNullOrBlank()) return defaultColor
-    return try {
-        val trimmed = hexString.trim()
-        val formatted = if (trimmed.startsWith("#")) trimmed else "#" + trimmed
-        Color(android.graphics.Color.parseColor(formatted))
-    } catch (e: Exception) {
-        defaultColor
-    }
-}
+
 
 @Composable
 fun DeliveryScreen(

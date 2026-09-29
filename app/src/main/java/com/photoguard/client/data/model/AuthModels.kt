@@ -152,3 +152,9 @@ data class AlbumDetailResponse(
     @SerialName("subscription_plan")
     val subscriptionPlan: String? = "basic"
 )
+
+val AlbumDetailResponse.effectiveBrandColor: String
+    get() = brandAccentColor?.takeIf { it.isNotBlank() }
+        ?: brandColor?.takeIf { it.isNotBlank() }
+        ?: "#D97706"
+

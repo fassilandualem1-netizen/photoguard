@@ -1,5 +1,6 @@
 package com.photoguard.client.ui
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.photoguard.client.data.model.AlbumDetailResponse
@@ -18,14 +19,18 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 data class GalleryUiState(
-    val album: AlbumDetailResponse,
+    val album: AlbumDetailResponse = AlbumDetailResponse(
+        id = 0,
+        photographerId = 0,
+        pin = ""
+    ),
     val mediaItems: List<MediaItemResponse> = emptyList(),
     val selectedCount: Int = 0,
     val isLocked: Boolean = false,
     val isSubmitting: Boolean = false,
+    val isSubmitted: Boolean = false,
     val isSyncing: Boolean = false,
     val localVersion: Int = 1,
-    val isSubmitted: Boolean = false,
     val errorMessage: String? = null
 ) {
     val albumTitle: String get() = album.title
@@ -40,33 +45,58 @@ data class GalleryUiState(
 
 class GalleryViewModel(
     private val clientApi: ClientApi,
-    initialAlbum: AlbumDetailResponse
+    private val savedStateHandle: SavedStateHandle,
+    initialAlbum: AlbumDetailResponse? = null
 ) : ViewModel() {
 
-    private val albumPin = initialAlbum.pin
+    val albumPin: String = savedStateHandle.get<String>("albumPin")
+        ?: initialAlbum?.pin
+        ?: ""
+
     private val _uiState = MutableStateFlow(
-        GalleryUiState(
-            album = initialAlbum,
-            mediaItems = initialAlbum.mediaItems,
-            selectedCount = initialAlbum.mediaItems.count { it.isSelected },
-            isLocked = initialAlbum.isLocked,
-            localVersion = 1
-        )
+        if (initialAlbum != null) {
+            GalleryUiState(
+                album = initialAlbum,
+                mediaItems = initialAlbum.mediaItems,
+                selectedCount = initialAlbum.mediaItems.count { it.isSelected },
+                isLocked = initialAlbum.isLocked,
+                localVersion = 1
+            )
+        } else {
+            GalleryUiState(
+                album = AlbumDetailResponse(id = 0, photographerId = 0, pin = albumPin),
+                isSyncing = true
+            )
+        }
     )
     val uiState: StateFlow<GalleryUiState> = _uiState.asStateFlow()
 
     private var pollingJob: Job? = null
 
     init {
-        startSmartPolling()
+        if (albumPin.isNotBlank()) {
+            savedStateHandle["albumPin"] = albumPin
+        }
+        // If initialAlbum was null (e.g. process death / savedState restoration), re-fetch immediately
+        if (initialAlbum == null && albumPin.isNotBlank()) {
+            viewModelScope.launch {
+                refreshAlbumDetails(newVersion = 1)
+            }
+        }
     }
 
-    private fun startSmartPolling() {
-        pollingJob?.cancel()
+    /**
+     * Strictly Lifecycle-Aware Smart Polling.
+     * Must only run when the UI is in the foreground (STARTED/RESUMED).
+     * Pauses immediately when the app transitions to the background.
+     */
+    fun startPolling() {
+        if (pollingJob?.isActive == true) return
         pollingJob = viewModelScope.launch {
             while (isActive) {
                 delay(3000L)
                 if (_uiState.value.isSubmitting) continue
+                if (albumPin.isBlank()) continue
 
                 val syncResult = safeApiCall { clientApi.syncAlbum(albumPin) }
                 if (syncResult is NetworkResult.Success) {
@@ -87,7 +117,13 @@ class GalleryViewModel(
         }
     }
 
+    fun stopPolling() {
+        pollingJob?.cancel()
+        pollingJob = null
+    }
+
     private suspend fun refreshAlbumDetails(newVersion: Int) {
+        if (albumPin.isBlank()) return
         _uiState.update { it.copy(isSyncing = true) }
         val result = safeApiCall { clientApi.getAlbumDetails(albumPin) }
         if (result is NetworkResult.Success) {
@@ -116,7 +152,6 @@ class GalleryViewModel(
 
         val targetItem = currentState.mediaItems.find { it.id == mediaId } ?: return
         val newSelectedState = !targetItem.isSelected
-
         val updatedList = currentState.mediaItems.map { item ->
             if (item.id == mediaId) item.copy(isSelected = newSelectedState) else item
         }
@@ -139,7 +174,6 @@ class GalleryViewModel(
                     )
                 )
             }
-
             when (patchResult) {
                 is NetworkResult.Success -> {
                     _uiState.update { it.copy(localVersion = it.localVersion + 1) }
@@ -215,6 +249,7 @@ class GalleryViewModel(
         }
 
         _uiState.update { it.copy(isSubmitting = true) }
+
         viewModelScope.launch {
             val submitResult = safeApiCall {
                 clientApi.submitSelections(albumPin)
@@ -256,6 +291,6 @@ class GalleryViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        pollingJob?.cancel()
+        stopPolling()
     }
 }

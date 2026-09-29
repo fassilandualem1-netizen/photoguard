@@ -1,9 +1,11 @@
 package com.photoguard.client.ui
 
 import android.content.Context
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.photoguard.client.data.model.AlbumDetailResponse
+import com.photoguard.client.data.model.MediaItemResponse
 import com.photoguard.client.network.ClientApi
 import com.photoguard.client.network.NetworkResult
 import com.photoguard.client.network.safeApiCall
@@ -18,7 +20,7 @@ data class DeliveryUiState(
     val albumTitle: String = "PhotoGuard Album",
     val allowDownload: Boolean = false,
     val isStudioTier: Boolean = false,
-    val mediaItems: List<com.photoguard.client.data.model.MediaItemResponse> = emptyList(),
+    val mediaItems: List<MediaItemResponse> = emptyList(),
     val downloadUrls: List<String> = emptyList(),
     val isFetchingDownloads: Boolean = false,
     val downloadProgressText: String? = null,
@@ -35,11 +37,41 @@ data class DeliveryUiState(
 
 class DeliveryViewModel(
     private val clientApi: ClientApi,
-    private val album: AlbumDetailResponse
+    private val savedStateHandle: SavedStateHandle,
+    initialAlbum: AlbumDetailResponse? = null
 ) : ViewModel() {
 
+    val albumPin: String = savedStateHandle.get<String>("albumPin")
+        ?: initialAlbum?.pin
+        ?: ""
+
     private val _uiState = MutableStateFlow(
-        DeliveryUiState(
+        if (initialAlbum != null) {
+            mapAlbumToUiState(initialAlbum)
+        } else {
+            DeliveryUiState(
+                albumTitle = "Loading Gallery...",
+                isFetchingDownloads = true
+            )
+        }
+    )
+    val uiState: StateFlow<DeliveryUiState> = _uiState.asStateFlow()
+
+    init {
+        if (albumPin.isNotBlank()) {
+            savedStateHandle["albumPin"] = albumPin
+        }
+        if (initialAlbum == null && albumPin.isNotBlank()) {
+            viewModelScope.launch {
+                loadAlbumAndDownloads()
+            }
+        } else if (initialAlbum?.allowDownload == true) {
+            fetchHighResDownloadUrls()
+        }
+    }
+
+    private fun mapAlbumToUiState(album: AlbumDetailResponse): DeliveryUiState {
+        return DeliveryUiState(
             albumTitle = album.title,
             allowDownload = album.allowDownload,
             isStudioTier = album.subscriptionPlan.equals("studio", ignoreCase = true),
@@ -54,21 +86,35 @@ class DeliveryViewModel(
             instagramUrl = album.instagramUrl ?: album.socialLinks?.instagramUrl,
             tiktokUrl = album.tiktokUrl ?: album.socialLinks?.tiktokUrl,
             youtubeUrl = album.youtubeUrl ?: album.socialLinks?.youtubeUrl,
-            brandAccentColorHex = album.brandAccentColor?.takeIf { it.isNotBlank() } ?: album.brandColor?.takeIf { it.isNotBlank() } ?: "#D97706"
+            brandAccentColorHex = album.brandAccentColor?.takeIf { it.isNotBlank() }
+                ?: album.brandColor?.takeIf { it.isNotBlank() }
+                ?: "#D97706"
         )
-    )
-    val uiState: StateFlow<DeliveryUiState> = _uiState.asStateFlow()
+    }
 
-    init {
-        if (album.allowDownload) {
-            fetchHighResDownloadUrls()
+    private suspend fun loadAlbumAndDownloads() {
+        val result = safeApiCall { clientApi.getAlbumDetails(albumPin) }
+        if (result is NetworkResult.Success) {
+            val album = result.data
+            _uiState.update { mapAlbumToUiState(album) }
+            if (album.allowDownload) {
+                fetchHighResDownloadUrls()
+            }
+        } else {
+            _uiState.update {
+                it.copy(
+                    isFetchingDownloads = false,
+                    errorMessage = "Failed to load album details. Please check connection."
+                )
+            }
         }
     }
 
     private fun fetchHighResDownloadUrls() {
+        if (albumPin.isBlank()) return
         _uiState.update { it.copy(isFetchingDownloads = true) }
         viewModelScope.launch {
-            val result = safeApiCall { clientApi.getDownloadUrls(album.pin) }
+            val result = safeApiCall { clientApi.getDownloadUrls(albumPin) }
             when (result) {
                 is NetworkResult.Success -> {
                     _uiState.update {
@@ -108,7 +154,6 @@ class DeliveryViewModel(
 
         viewModelScope.launch {
             _uiState.update { it.copy(downloadProgressText = "Starting download of ${urls.size} photos...") }
-
             urls.forEachIndexed { index, url ->
                 val filename = "Photo_${index + 1}.jpg"
                 DownloadUtils.downloadImage(
@@ -118,7 +163,6 @@ class DeliveryViewModel(
                     filename = filename
                 )
             }
-
             _uiState.update {
                 it.copy(downloadProgressText = "All ${urls.size} photos enqueued in notification tray.")
             }

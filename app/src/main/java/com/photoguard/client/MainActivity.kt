@@ -17,17 +17,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import coil.Coil
 import coil.ImageLoader
 import coil.memory.MemoryCache
@@ -72,7 +70,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             val isDark = isSystemInDarkTheme()
             val colorScheme = if (isDark) darkColorScheme() else lightColorScheme()
-
             MaterialTheme(colorScheme = colorScheme) {
                 Surface(color = MaterialTheme.colorScheme.background) {
                     PhotoGuardNavHost()
@@ -102,29 +99,18 @@ class MainActivity : ComponentActivity() {
             .precision(Precision.INEXACT)
             .crossfade(250)
             .build()
-
         Coil.setImageLoader(ramOnlyLoader)
     }
-}
-
-// Global holder to guarantee album state survives any navigation or recomposition
-object ActiveAlbumHolder {
-    var album: AlbumDetailResponse? = null
 }
 
 @Composable
 fun PhotoGuardNavHost() {
     val navController = rememberNavController()
     val clientApi = RetrofitClient.api
-    var currentAlbum by remember { mutableStateOf<AlbumDetailResponse?>(ActiveAlbumHolder.album) }
 
     NavHost(
         navController = navController,
-        startDestination = if (currentAlbum != null) {
-            if (currentAlbum?.allowDownload == true) "delivery"
-            else if (currentAlbum?.isSubmitted == true || currentAlbum?.isLocked == true) "delivery"
-            else "gallery"
-        } else "login",
+        startDestination = "login",
         enterTransition = { fadeIn(animationSpec = tween(300)) },
         exitTransition = { fadeOut(animationSpec = tween(300)) }
     ) {
@@ -135,18 +121,17 @@ fun PhotoGuardNavHost() {
             LoginScreen(
                 viewModel = loginViewModel,
                 onLoginSuccess = { verifiedAlbum ->
-                    ActiveAlbumHolder.album = verifiedAlbum
-                    currentAlbum = verifiedAlbum
+                    val pin = verifiedAlbum.pin
                     // Strict Routing Logic Enforcement:
                     // IF allow_download == true: Completely BYPASS GalleryScreen. Route directly to DeliveryScreen.
                     // IF allow_download == false AND is_submitted == false: Route to GalleryScreen (Standard Proofing Mode).
                     // IF allow_download == false AND (is_submitted == true OR is_locked == true): Route to DeliveryScreen.
                     val destination = if (verifiedAlbum.allowDownload) {
-                        "delivery"
+                        "delivery/$pin"
                     } else if (verifiedAlbum.isSubmitted || verifiedAlbum.isLocked) {
-                        "delivery"
+                        "delivery/$pin"
                     } else {
-                        "gallery"
+                        "gallery/$pin"
                     }
                     navController.navigate(destination) {
                         popUpTo("login") { inclusive = true }
@@ -155,60 +140,75 @@ fun PhotoGuardNavHost() {
             )
         }
 
-        composable("gallery") {
-            val albumToDisplay = currentAlbum ?: ActiveAlbumHolder.album
-            if (albumToDisplay != null) {
-                val galleryViewModel: GalleryViewModel = viewModel(
-                    key = "gallery_${albumToDisplay.pin}",
-                    factory = GalleryViewModelFactory(clientApi, albumToDisplay)
+        composable(
+            route = "gallery/{albumPin}",
+            arguments = listOf(
+                navArgument("albumPin") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                }
+            )
+        ) { backStackEntry ->
+            val pin = backStackEntry.arguments?.getString("albumPin") ?: ""
+            if (pin.isNotBlank()) {
+                backStackEntry.savedStateHandle["albumPin"] = pin
+            }
+
+            val galleryViewModel: GalleryViewModel = viewModel(
+                key = "gallery_$pin",
+                factory = GalleryViewModelFactory(
+                    api = clientApi,
+                    savedStateHandle = backStackEntry.savedStateHandle,
+                    initialAlbum = null
                 )
-                GalleryScreen(
-                    viewModel = galleryViewModel,
-                    onSubmitComplete = {
-                        navController.navigate("delivery")
-                    },
-                    onSignOut = {
-                        ActiveAlbumHolder.album = null
-                        currentAlbum = null
-                        navController.navigate("login") {
-                            popUpTo(0) { inclusive = true }
-                        }
+            )
+
+            GalleryScreen(
+                viewModel = galleryViewModel,
+                onSubmitComplete = {
+                    navController.navigate("delivery/$pin") {
+                        popUpTo("gallery/$pin") { inclusive = true }
                     }
-                )
-            } else {
-                // Safe fallback if album was cleared
-                LaunchedEffect(Unit) {
+                },
+                onSignOut = {
                     navController.navigate("login") {
                         popUpTo(0) { inclusive = true }
                     }
                 }
-            }
+            )
         }
 
-        composable("delivery") {
-            val albumToDisplay = currentAlbum ?: ActiveAlbumHolder.album
-            if (albumToDisplay != null) {
-                val deliveryViewModel: DeliveryViewModel = viewModel(
-                    key = "delivery_${albumToDisplay.pin}",
-                    factory = DeliveryViewModelFactory(clientApi, albumToDisplay)
+        composable(
+            route = "delivery/{albumPin}",
+            arguments = listOf(
+                navArgument("albumPin") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                }
+            )
+        ) { backStackEntry ->
+            val pin = backStackEntry.arguments?.getString("albumPin") ?: ""
+            if (pin.isNotBlank()) {
+                backStackEntry.savedStateHandle["albumPin"] = pin
+            }
+
+            val deliveryViewModel: DeliveryViewModel = viewModel(
+                key = "delivery_$pin",
+                factory = DeliveryViewModelFactory(
+                    api = clientApi,
+                    savedStateHandle = backStackEntry.savedStateHandle,
+                    initialAlbum = null
                 )
-                DeliveryScreen(
-                    viewModel = deliveryViewModel,
-                    onSignOut = {
-                        ActiveAlbumHolder.album = null
-                        currentAlbum = null
-                        navController.navigate("login") {
-                            popUpTo(0) { inclusive = true }
-                        }
-                    }
-                )
-            } else {
-                LaunchedEffect(Unit) {
+            )
+
+            DeliveryScreen(
+                viewModel = deliveryViewModel,
+                onSignOut = {
                     navController.navigate("login") {
                         popUpTo(0) { inclusive = true }
                     }
                 }
-            }
+            )
         }
     }
 }
@@ -222,20 +222,22 @@ class ViewModelFactory(private val api: ClientApi) : ViewModelProvider.Factory {
 
 class GalleryViewModelFactory(
     private val api: ClientApi,
-    private val album: AlbumDetailResponse
+    private val savedStateHandle: SavedStateHandle,
+    private val initialAlbum: AlbumDetailResponse? = null
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        return GalleryViewModel(api, album) as T
+        return GalleryViewModel(api, savedStateHandle, initialAlbum) as T
     }
 }
 
 class DeliveryViewModelFactory(
     private val api: ClientApi,
-    private val album: AlbumDetailResponse
+    private val savedStateHandle: SavedStateHandle,
+    private val initialAlbum: AlbumDetailResponse? = null
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        return DeliveryViewModel(api, album) as T
+        return DeliveryViewModel(api, savedStateHandle, initialAlbum) as T
     }
 }

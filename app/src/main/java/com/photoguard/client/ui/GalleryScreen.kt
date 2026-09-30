@@ -137,6 +137,14 @@ fun GalleryScreen(
     onSignOut: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isSubmitted = uiState.isSubmitted || uiState.album.isSubmitted || uiState.isLocked || uiState.album.isLocked
+    val effectiveMediaItems = remember(uiState.mediaItems, isSubmitted) {
+        if (isSubmitted) {
+            uiState.mediaItems.filter { it.isSelected }
+        } else {
+            uiState.mediaItems
+        }
+    }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -161,7 +169,6 @@ fun GalleryScreen(
     var showConfirmDialog by remember { mutableStateOf(false) }
     var showSignOutDialog by remember { mutableStateOf(false) }
     var showStudioInfoDialog by remember { mutableStateOf(false) }
-    var activeEditingMedia by remember { mutableStateOf<MediaItemResponse?>(null) }
 
     // Full screen horizontal pager index (-1 means lightbox is closed)
     var fullScreenInitialIndex by remember { mutableIntStateOf(-1) }
@@ -322,7 +329,7 @@ fun GalleryScreen(
         ) {
             // STEP 1: All Shoot Proofs Grid
             if (currentStep == 1) {
-                if (uiState.mediaItems.isEmpty()) {
+                if (effectiveMediaItems.isEmpty()) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -342,7 +349,7 @@ fun GalleryScreen(
                         modifier = Modifier.fillMaxSize()
                     ) {
                         itemsIndexed(
-                            items = uiState.mediaItems,
+                            items = effectiveMediaItems,
                             key = { _, item -> item.id }
                         ) { index, media ->
                             GalleryItem(
@@ -350,7 +357,6 @@ fun GalleryScreen(
                                 brandAccent = brandAccent,
                                 isLocked = uiState.isLocked,
                                 onToggleSelect = { viewModel.toggleSelect(media.id) },
-                                onEditNote = { activeEditingMedia = media },
                                 onOpenFullScreen = { fullScreenInitialIndex = index }
                             )
                         }
@@ -424,8 +430,7 @@ fun GalleryScreen(
                                     media = media,
                                     brandAccent = brandAccent,
                                     onRemove = { viewModel.toggleSelect(media.id) },
-                                    onEditNote = { activeEditingMedia = media },
-                                    onOpenFullScreen = {
+                                        onOpenFullScreen = {
                                         // Find index in main list to swipe through seamlessly
                                         val mainIdx = uiState.mediaItems.indexOfFirst { it.id == media.id }
                                         fullScreenInitialIndex = if (mainIdx != -1) mainIdx else index
@@ -504,11 +509,11 @@ fun GalleryScreen(
     }
 
     // FULL SCREEN HORIZONTAL PAGER LIGHTBOX (Instagram / Google Photos Swipe Experience)
-    if (fullScreenInitialIndex in uiState.mediaItems.indices) {
+    if (fullScreenInitialIndex in effectiveMediaItems.indices) {
         key(fullScreenInitialIndex) {
             val pagerState = rememberPagerState(
                 initialPage = fullScreenInitialIndex,
-                pageCount = { uiState.mediaItems.size }
+                pageCount = { effectiveMediaItems.size }
             )
             val coroutineScope = rememberCoroutineScope()
             var isCurrentPageZoomed by remember { mutableStateOf(false) }
@@ -526,16 +531,16 @@ fun GalleryScreen(
                         .fillMaxSize()
                         .background(Color.Black)
                 ) {
-                    val currentMedia = uiState.mediaItems.getOrNull(pagerState.currentPage)
+                    val currentMedia = effectiveMediaItems.getOrNull(pagerState.currentPage)
 
                     // The Horizontal Pager allows effortless left/right swiping without exiting
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier.fillMaxSize(),
                         userScrollEnabled = !isCurrentPageZoomed,
-                        key = { page -> uiState.mediaItems.getOrNull(page)?.id ?: page }
+                        key = { page -> effectiveMediaItems.getOrNull(page)?.id ?: page }
                     ) { page ->
-                        val media = uiState.mediaItems[page]
+                        val media = effectiveMediaItems[page]
                         val context = LocalContext.current
                         val fullRequest = remember(media.url) {
                             ImageRequest.Builder(context)
@@ -682,7 +687,7 @@ fun GalleryScreen(
                         }
                     }
 
-                    if (!isCurrentPageZoomed && pagerState.currentPage < uiState.mediaItems.size - 1) {
+                    if (!isCurrentPageZoomed && pagerState.currentPage < effectiveMediaItems.size - 1) {
                         IconButton(
                             onClick = {
                                 coroutineScope.launch {
@@ -734,7 +739,7 @@ fun GalleryScreen(
                         // Elegant Position Counter & Filename
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "${pagerState.currentPage + 1} of ${uiState.mediaItems.size}",
+                                text = "${pagerState.currentPage + 1} of ${effectiveMediaItems.size}",
                                 color = Color.White,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold
@@ -1062,7 +1067,6 @@ fun GalleryItem(
     brandAccent: Color,
     isLocked: Boolean,
     onToggleSelect: () -> Unit,
-    onEditNote: () -> Unit,
     onOpenFullScreen: () -> Unit
 ) {
     val heartColor by animateColorAsState(
@@ -1145,56 +1149,6 @@ fun GalleryItem(
                     )
                 }
 
-                // Bottom left note indicator badge
-                if (!media.clientNotes.isNullOrBlank()) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xCC059669),
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(6.dp)
-                    ) {
-                        Text(
-                            text = "NOTE",
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-            }
-
-            // Note action bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (media.clientNotes.isNullOrBlank()) "No instruction" else media.clientNotes,
-                    fontSize = 10.sp,
-                    color = if (media.clientNotes.isNullOrBlank()) Color(0xFF64748B) else Color(0xFFF1F5F9),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-
-                if (!isLocked) {
-                    IconButton(
-                        onClick = onEditNote,
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = "Edit note",
-                            tint = Color(0xFF94A3B8),
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
             }
         }
     }
@@ -1208,7 +1162,6 @@ fun ReviewItemCard(
     media: MediaItemResponse,
     brandAccent: Color,
     onRemove: () -> Unit,
-    onEditNote: () -> Unit,
     onOpenFullScreen: () -> Unit
 ) {
     Card(
@@ -1264,85 +1217,6 @@ fun ReviewItemCard(
                 }
             }
 
-            // Note section in Step 2
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Retouching Note:",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF94A3B8)
-                    )
-                    IconButton(
-                        onClick = onEditNote,
-                        modifier = Modifier.size(20.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = "Edit",
-                            tint = brandAccent,
-                            modifier = Modifier.size(13.dp)
-                        )
-                    }
-                }
-
-                Text(
-                    text = if (media.clientNotes.isNullOrBlank()) "None (Tap edit to add note)" else media.clientNotes,
-                    fontSize = 11.sp,
-                    color = if (media.clientNotes.isNullOrBlank()) Color(0xFF64748B) else Color(0xFFF1F5F9),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
         }
     }
-}
-
-@Composable
-fun NoteEditorDialog(
-    initialNote: String,
-    onDismiss: () -> Unit,
-    onSave: (String) -> Unit
-) {
-    var noteText by remember { mutableStateOf(initialNote) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Retouching Instruction") },
-        text = {
-            Column {
-                Text(
-                    "Add instructions for the photographer (e.g., soften lighting, remove background reflection, crop):",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = noteText,
-                    onValueChange = { noteText = it },
-                    placeholder = { Text("Type instruction here...") },
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 4
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(noteText) }) {
-                Text("Save", fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
 }

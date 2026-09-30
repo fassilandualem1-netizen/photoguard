@@ -207,39 +207,6 @@ class GalleryViewModel(
         }
     }
 
-    fun updateClientNotes(mediaId: Int, note: String) {
-        val currentState = _uiState.value
-        if (currentState.isLocked) {
-            _uiState.update { it.copy(errorMessage = "Album is locked. Notes cannot be added.") }
-            return
-        }
-
-        val updatedList = currentState.mediaItems.map { item ->
-            if (item.id == mediaId) item.copy(clientNotes = note) else item
-        }
-        _uiState.update { it.copy(mediaItems = updatedList) }
-
-        viewModelScope.launch {
-            val result = safeApiCall {
-                clientApi.updateMedia(
-                    mediaId = mediaId,
-                    request = ClientMediaUpdateRequest(
-                        pin = albumPin,
-                        clientNotes = note
-                    )
-                )
-            }
-            if (result !is NetworkResult.Success) {
-                _uiState.update { current ->
-                    current.copy(
-                        mediaItems = currentState.mediaItems,
-                        errorMessage = "Failed to save note. Please check connection."
-                    )
-                }
-            }
-        }
-    }
-
     fun submitSelection() {
         val currentState = _uiState.value
         if (currentState.isLocked || currentState.isSubmitting) return

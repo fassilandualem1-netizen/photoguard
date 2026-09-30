@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, BigInteger, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, BigInteger, ForeignKey, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
+
 
 class MediaItem(Base):
     """
@@ -10,23 +11,26 @@ class MediaItem(Base):
     selection status, client feedback notes, and AI face recognition encodings.
     """
     __tablename__ = "media_items"
+    __table_args__ = (
+        Index("ix_media_items_album_selected", "album_id", "is_selected"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     album_id = Column(Integer, ForeignKey("albums.id", ondelete="CASCADE"), nullable=False, index=True)
     filename = Column(String(255), nullable=False)
     url = Column(String(1024), nullable=False)
     thumbnail_url = Column(String(1024), nullable=True)
-    
+
     # Virtual Quota tracking:
     # original_size: displayed to user (e.g. 40MB RAW/JPEG)
     # compressed_size: actual cloud storage used (e.g. 1.2MB WebP)
     original_size = Column(BigInteger, default=0, nullable=False)
     compressed_size = Column(BigInteger, default=0, nullable=False)
-    
+
     # Selection and review
     is_selected = Column(Boolean, default=False, nullable=False)
     client_notes = Column(String(1000), nullable=True)
-    
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # Relationships

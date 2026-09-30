@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status, File, UploadFile, Query
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import or_, func
+from sqlalchemy import or_, func, case
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
@@ -279,7 +279,6 @@ def list_albums(
         if current_user.role == UserRole.ADMIN.value or current_user.role == UserRole.ADMIN:
             albums = (
                 db.query(Album)
-                .options(selectinload(Album.media_items))
                 .order_by(Album.created_at.desc())
                 .offset(skip)
                 .limit(limit)
@@ -289,7 +288,6 @@ def list_albums(
             # Studio Assistant: Strictly albums they created
             albums = (
                 db.query(Album)
-                .options(selectinload(Album.media_items))
                 .filter(Album.photographer_id == current_user.id)
                 .order_by(Album.created_at.desc())
                 .offset(skip)
@@ -304,13 +302,28 @@ def list_albums(
             allowed_photographer_ids = [current_user.id] + assistant_ids
             albums = (
                 db.query(Album)
-                .options(selectinload(Album.media_items))
                 .filter(Album.photographer_id.in_(allowed_photographer_ids))
                 .order_by(Album.created_at.desc())
                 .offset(skip)
                 .limit(limit)
                 .all()
             )
+
+        album_ids = [alb.id for alb in albums]
+        # SQL-level aggregation: calculates media_count and selected_count without loading any ORM MediaItem objects
+        counts_by_album = {}
+        if album_ids:
+            media_stats = (
+                db.query(
+                    MediaItem.album_id,
+                    func.count(MediaItem.id).label("total_count"),
+                    func.coalesce(func.sum(case((MediaItem.is_selected == True, 1), else_=0)), 0).label("selected_count")
+                )
+                .filter(MediaItem.album_id.in_(album_ids))
+                .group_by(MediaItem.album_id)
+                .all()
+            )
+            counts_by_album = {row.album_id: (int(row.total_count or 0), int(row.selected_count or 0)) for row in media_stats}
 
         # Batch-fetch all creators for albums in a single query
         creator_ids = {alb.photographer_id for alb in albums if alb.photographer_id}
@@ -322,9 +335,7 @@ def list_albums(
 
         result = []
         for alb in albums:
-            media_items = alb.media_items or []
-            media_count = len(media_items)
-            selected_count = sum(1 for m in media_items if bool(m.is_selected or False))
+            media_count, selected_count = counts_by_album.get(alb.id, (0, 0))
             creator_user = creators_by_id.get(alb.photographer_id)
             creator_name, creator_role = resolve_creator_info(creator_user)
 

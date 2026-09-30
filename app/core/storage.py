@@ -266,3 +266,32 @@ def generate_cloudinary_signature(folder: str, timestamp: int) -> str:
     # Parameters must be sorted alphabetically: folder, timestamp
     to_sign = f"folder={folder}&timestamp={timestamp}{secret}"
     return hashlib.sha1(to_sign.encode('utf-8')).hexdigest()
+
+def destroy_media_asset(url_or_path: str) -> bool:
+    """
+    Permanently destroys a media file from Cloudinary, S3/IDrive e2, or local disk.
+    Airtight destruction for both high-resolution images and thumbnail proofs.
+    """
+    if not url_or_path:
+        return False
+    from app.core.s3_cleanup import delete_file_from_s3
+    try:
+        if "res.cloudinary.com" in url_or_path:
+            return delete_file_from_cloudinary(url_or_path)
+        elif url_or_path.startswith("/uploads/"):
+            clean_filename = os.path.basename(url_or_path)
+            local_filepath = os.path.join(UPLOADS_DIR, clean_filename)
+            if os.path.exists(local_filepath):
+                try:
+                    os.remove(local_filepath)
+                    logger.info(f"[Storage] Deleted local file: {local_filepath}")
+                    return True
+                except Exception as del_f_err:
+                    logger.warning(f"Could not remove local file {local_filepath}: {del_f_err}")
+                    return False
+            return True
+        else:
+            return delete_file_from_s3(url_or_path)
+    except Exception as exc:
+        logger.warning(f"[Storage] Failed to destroy asset {url_or_path}: {exc}")
+        return False

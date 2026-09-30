@@ -10,7 +10,7 @@ from sqlalchemy import or_, func
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.s3_cleanup import delete_file_from_s3
-from app.core.storage import delete_file_from_cloudinary
+from app.core.storage import delete_file_from_cloudinary, destroy_media_asset
 from app.models.user import User, UserRole
 from app.models.album import Album, MediaItem, generate_album_pin
 from app.services.plan_service import get_or_create_plan_config
@@ -655,7 +655,8 @@ def delete_album(
     Enforces strict ownership & assistant data isolation access control:
     - Main Photographer can delete own albums or albums created by their assistants.
     - Assistant can strictly delete only albums they created themselves.
-    - Lifetime Bandwidth Quota: storage_used is preserved.
+    - Reclaims Storage Quota: decrements total original_size from photographer user.storage_used.
+    - Airtight Storage Cleanup: permanently destroys BOTH item.url AND item.thumbnail_url.
     """
     album = db.query(Album).filter(Album.id == album_id).first()
     if not album:
@@ -666,22 +667,30 @@ def delete_album(
 
     try:
         media_items = album.media_items or []
+        total_freed_bytes = sum(getattr(item, "original_size", 0) or 0 for item in media_items)
+
+        # Resolve studio effective owner for storage quota reclamation
+        album_creator = db.query(User).filter(User.id == album.photographer_id).first()
+        owner = None
+        if album_creator:
+            owner = db.query(User).filter(User.id == album_creator.effective_owner_id).first() or album_creator
+        elif current_user:
+            owner = db.query(User).filter(User.id == current_user.effective_owner_id).first() or current_user
+
+        if owner and total_freed_bytes > 0:
+            owner.storage_used = max(0, (owner.storage_used or 0) - total_freed_bytes)
+            logger.info(f"[Albums API] Reclaimed {total_freed_bytes} bytes for owner {owner.email}. New storage_used: {owner.storage_used}")
+
+        # Airtight Storage Deletion: Destroy both item.url and item.thumbnail_url
         for item in media_items:
-            item_url = item.url
-            if not item_url:
-                continue
-            if "res.cloudinary.com" in item_url:
-                background_tasks.add_task(delete_file_from_cloudinary, item_url)
-            elif item_url.startswith("/uploads/"):
-                clean_filename = os.path.basename(item_url)
-                local_filepath = os.path.join(os.getcwd(), "uploads", clean_filename)
-                if os.path.exists(local_filepath):
-                    try:
-                        os.remove(local_filepath)
-                    except Exception as del_f_err:
-                        logger.warning(f"Could not remove local file {local_filepath}: {del_f_err}")
-            else:
-                background_tasks.add_task(delete_file_from_s3, item_url)
+            urls_to_delete = set()
+            if item.url:
+                urls_to_delete.add(item.url)
+            if item.thumbnail_url:
+                urls_to_delete.add(item.thumbnail_url)
+
+            for u in urls_to_delete:
+                background_tasks.add_task(destroy_media_asset, u)
 
         db.delete(album)
         db.commit()

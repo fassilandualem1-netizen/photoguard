@@ -10,6 +10,7 @@ from app.core.storage import (
     is_cloudinary_configured,
     upload_file_to_cloudinary,
     delete_file_from_cloudinary,
+    destroy_media_asset,
     generate_cloudinary_signature,
     CLOUDINARY_CLOUD_NAME,
     CLOUDINARY_API_KEY,
@@ -375,8 +376,8 @@ def delete_media_item(
 ):
     """
     Deletes a media item:
-    1. Lifetime Bandwidth Quota: DO NOT decrement storage_used (preserves lifetime upload tracking).
-    2. Physical storage cleanup: Deletes actual high-res object from S3 or local storage.
+    1. Reclaims Storage Quota: Decrements item.original_size from owner.storage_used (ensuring >= 0).
+    2. Airtight Physical Storage Cleanup: Deletes BOTH item.url AND item.thumbnail_url from Cloudinary/S3/Disk.
     3. Wrapped in strict try...except with db.rollback().
     """
     item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
@@ -391,29 +392,35 @@ def delete_media_item(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     item_url = item.url
+    item_thumb = item.thumbnail_url
+    item_size = getattr(item, "original_size", 0) or 0
     album_pin = album.pin
 
     try:
-        # Note: We intentionally DO NOT subtract item.original_size from photographer.storage_used.
-        # The storage_used field represents lifetime upload bandwidth quota to drive tier upgrades.
+        # Reclaim storage quota on effective studio owner
+        album_creator = db.query(User).filter(User.id == album.photographer_id).first()
+        owner = None
+        if album_creator:
+            owner = db.query(User).filter(User.id == album_creator.effective_owner_id).first() or album_creator
+        elif current_user:
+            owner = db.query(User).filter(User.id == current_user.effective_owner_id).first() or current_user
+
+        if owner and item_size > 0:
+            owner.storage_used = max(0, (owner.storage_used or 0) - item_size)
+            logger.info(f"[Media API] Reclaimed {item_size} bytes for owner {owner.email}. New storage_used: {owner.storage_used}")
 
         db.delete(item)
         db.commit()
 
-        # Storage Cleanup: delete from Cloudinary, local filesystem, or S3
+        # Airtight Storage Cleanup: delete BOTH high-res url and thumbnail_url
+        urls_to_delete = set()
         if item_url:
-            if "res.cloudinary.com" in item_url:
-                background_tasks.add_task(delete_file_from_cloudinary, item_url)
-            elif item_url.startswith("/uploads/"):
-                clean_filename = os.path.basename(item_url)
-                local_filepath = os.path.join(os.getcwd(), "uploads", clean_filename)
-                if os.path.exists(local_filepath):
-                    try:
-                        os.remove(local_filepath)
-                    except Exception as del_f_err:
-                        logger.warning(f"Could not remove local file {local_filepath}: {del_f_err}")
-            else:
-                background_tasks.add_task(delete_file_from_s3, item_url)
+            urls_to_delete.add(item_url)
+        if item_thumb:
+            urls_to_delete.add(item_thumb)
+
+        for u in urls_to_delete:
+            background_tasks.add_task(destroy_media_asset, u)
 
         # Increment sync version for active client apps
         try:
@@ -422,7 +429,6 @@ def delete_media_item(
             logger.warning(f"Redis increment_album_version notice: {redis_err}")
 
         return None
-
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(

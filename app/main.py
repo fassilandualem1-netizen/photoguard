@@ -30,7 +30,7 @@ from app.api.telegram import router as telegram_router
 from app.api.team import router as team_router
 from app.api.broadcasts import router as broadcasts_router
 from app.api.photographers import router as photographers_router
-from app.core.storage import delete_file_from_cloudinary
+from app.core.storage import delete_file_from_cloudinary, destroy_media_asset
 from app.core.s3_cleanup import delete_file_from_s3
 
 logging.basicConfig(level=logging.INFO)
@@ -416,6 +416,72 @@ def seed_root_admin():
     finally:
         db.close()
 
+def purge_expired_albums():
+    """
+    Active Auto-Expiration Worker.
+    Scans the database for albums where expires_at <= now_utc.
+    For all expired albums:
+      1. Gathers all associated media items.
+      2. Calculates total original_size.
+      3. Destroys BOTH item.url AND item.thumbnail_url from Cloudinary/S3/Disk.
+      4. Decrements photographer owner.storage_used (ensuring >= 0).
+      5. Deletes the album row from PostgreSQL (cascades to media_items).
+    """
+    db = SessionLocal()
+    try:
+        now_utc = datetime.now(timezone.utc)
+        expired_albums = db.query(Album).filter(
+            Album.expires_at.isnot(None),
+            Album.expires_at <= now_utc
+        ).all()
+
+        if not expired_albums:
+            logger.info("[Auto-Expire Worker] No expired albums currently match auto-expiration criteria.")
+            return
+
+        logger.info(f"[Auto-Expire Worker] Found {len(expired_albums)} expired album(s) qualifying for airtight deletion.")
+        total_deleted_albums = 0
+        total_freed_bytes = 0
+
+        for album in expired_albums:
+            media_items = album.media_items or []
+            album_bytes = sum(getattr(item, "original_size", 0) or 0 for item in media_items)
+
+            # Reclaim owner storage quota
+            album_creator = db.query(User).filter(User.id == album.photographer_id).first()
+            if album_creator:
+                owner = db.query(User).filter(User.id == album_creator.effective_owner_id).first() or album_creator
+                if owner and album_bytes > 0:
+                    owner.storage_used = max(0, (owner.storage_used or 0) - album_bytes)
+                    logger.info(f"[Auto-Expire Worker] Reclaimed {album_bytes} bytes for owner {owner.email}. New storage_used: {owner.storage_used}")
+
+            # Airtight physical file destruction for both high-res and thumbnails
+            for item in media_items:
+                urls_to_delete = set()
+                if item.url:
+                    urls_to_delete.add(item.url)
+                if item.thumbnail_url:
+                    urls_to_delete.add(item.thumbnail_url)
+
+                for u in urls_to_delete:
+                    try:
+                        destroy_media_asset(u)
+                    except Exception as del_err:
+                        logger.warning(f"[Auto-Expire Worker] Error destroying asset {u}: {del_err}")
+
+            db.delete(album)
+            total_deleted_albums += 1
+            total_freed_bytes += album_bytes
+
+        db.commit()
+        logger.info(f"[Auto-Expire Complete] Successfully destroyed {total_deleted_albums} expired album(s), reclaimed {total_freed_bytes / (1024 * 1024):.2f} MB storage.")
+    except Exception as exc:
+        db.rollback()
+        logger.error(f"[Auto-Expire Error] Error executing auto-expire scan: {exc}\n{traceback.format_exc()}")
+    finally:
+        db.close()
+
+
 def purge_download_triggered_assets():
     """
     Download-Triggered Auto-Purge Worker.
@@ -514,6 +580,14 @@ async def run_auto_purge_loop():
     # Small initial delay on startup so database initialization completes smoothly
     await asyncio.sleep(5)
     while True:
+        try:
+            purge_expired_albums()
+        except asyncio.CancelledError:
+            logger.info("[Auto-Purge Worker] Background loop cancelled.")
+            break
+        except Exception as exc:
+            logger.error(f"[Auto-Expire Worker Error] Unexpected error in auto-expire scan: {exc}")
+
         try:
             purge_download_triggered_assets()
         except asyncio.CancelledError:
@@ -850,6 +924,20 @@ async def serve_uploaded_media(filename: str):
     if os.path.isfile(file_path):
         return FileResponse(file_path)
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": f"File '{clean_name}' not found."})
+
+@app.post("/api/v1/admin/purge-expired", tags=["Admin Control"])
+def manual_purge_expired_albums_endpoint(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Emergency/On-Demand Admin Endpoint to trigger airtight auto-expiration cleanup.
+    """
+    if str(getattr(current_user, "role", "")).lower() != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required.")
+    purge_expired_albums()
+    return {"status": "success", "message": "Airtight auto-expiration cleanup triggered successfully."}
+
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 def health_check(db: Session = Depends(get_db)):

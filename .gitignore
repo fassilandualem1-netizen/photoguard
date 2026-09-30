@@ -24,7 +24,6 @@ local.properties
 *.keystore
 node_modules/
 .vite/
-.github/
 
 
 

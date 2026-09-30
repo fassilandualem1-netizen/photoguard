@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/axios";
 import AdminPhotographerTable from "../components/AdminPhotographerTable";
-import PaymentVerificationModal from "../components/PaymentVerificationModal";
 import { useAuth } from "../context/AuthContext";
 import {
   Users,
@@ -60,8 +59,6 @@ export default function AdminDashboard() {
 
   // Password Reset Modal State
   const [resetModalData, setResetModalData] = useState(null);
-  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [selectedPaymentReceipt, setSelectedPaymentReceipt] = useState(null);
   const [hasCopiedResetPassword, setHasCopiedResetPassword] = useState(false);
 
   // Global Dashboard Broadcast Announcements State
@@ -1348,14 +1345,6 @@ export default function AdminDashboard() {
     )}
   </main>
 
-      {/* Manual Payment Verification Modal */}
-      <PaymentVerificationModal
-        isOpen={paymentModalOpen}
-        onClose={() => setPaymentModalOpen(false)}
-        receipt={selectedPaymentReceipt}
-        onApprove={() => setPaymentModalOpen(false)}
-        onReject={() => setPaymentModalOpen(false)}
-      />
 
       {/* High-Visibility Password Reset Modal Overlay */}
       {resetModalData && (

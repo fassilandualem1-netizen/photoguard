@@ -53,14 +53,14 @@ class MainActivity : ComponentActivity() {
         // Global crash guard with persistent diagnostics logging
         val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            val crashDetails = "Thread [${thread.name}] crash: ${throwable.message}
-${Log.getStackTraceString(throwable)}"
+            val trace = Log.getStackTraceString(throwable)
+            val crashDetails = "Thread [${thread.name}] crash: ${throwable.message} - $trace"
             Log.e("PhotoGuard", crashDetails)
             try {
                 val prefs = applicationContext.getSharedPreferences("photoguard_crash_logs", Context.MODE_PRIVATE)
                 prefs.edit()
                     .putString("last_crash_reason", throwable.localizedMessage ?: "Unexpected fatal crash")
-                    .putString("last_crash_trace", Log.getStackTraceString(throwable))
+                    .putString("last_crash_trace", trace)
                     .putLong("last_crash_timestamp", System.currentTimeMillis())
                     .commit() // Synchronous disk commit before process termination
             } catch (prefEx: Exception) {

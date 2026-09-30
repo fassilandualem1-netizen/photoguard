@@ -779,71 +779,24 @@ fun GalleryScreen(
                         }
                     }
 
-                    // Bottom notes overlay for current item
-                    if (currentMedia != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .align(Alignment.BottomCenter)
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(Color.Transparent, Color(0xF5000000))
-                                    )
+                    // Subtle bottom gradient shadow for immersive viewing
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(60.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(Color.Transparent, Color(0x99000000))
                                 )
-                                .padding(horizontal = 20.dp, vertical = 24.dp)
-                        ) {
-                            Column {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Retouching Instruction:",
-                                        color = Color(0xFF94A3B8),
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    TextButton(
-                                        onClick = { activeEditingMedia = currentMedia }
-                                    ) {
-                                        Text(
-                                            text = if (currentMedia.clientNotes.isNullOrBlank()) "+ Add Note" else "Edit Note",
-                                            color = brandAccent,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-
-                                if (!currentMedia.clientNotes.isNullOrBlank()) {
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = currentMedia.clientNotes,
-                                        color = Color(0xFFF1F5F9),
-                                        fontSize = 13.sp,
-                                        lineHeight = 18.sp
-                                    )
-                                }
-                            }
-                        }
-                    }
+                            )
+                    )
                 }
             }
         }
     }
 
-    // Retouch Note Editor Dialog
-    activeEditingMedia?.let { media ->
-        NoteEditorDialog(
-            initialNote = media.clientNotes ?: "",
-            onDismiss = { activeEditingMedia = null },
-            onSave = { note ->
-                viewModel.updateClientNotes(media.id, note)
-                activeEditingMedia = null
-            }
-        )
-    }
+
 
     // Sign Out / Switch PIN Confirmation Dialog
     if (showSignOutDialog) {

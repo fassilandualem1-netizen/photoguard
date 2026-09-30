@@ -90,7 +90,7 @@ class MainActivity : ComponentActivity() {
         val ramOnlyLoader = ImageLoader.Builder(this)
             .memoryCache {
                 MemoryCache.Builder(this)
-                    .maxSizePercent(0.40)
+                    .maxSizePercent(0.20)
                     .build()
             }
             .diskCache(null)

@@ -72,6 +72,8 @@ class GalleryViewModel(
     val uiState: StateFlow<GalleryUiState> = _uiState.asStateFlow()
 
     private var pollingJob: Job? = null
+    private var lastRefreshTimestamp: Long = 0L
+    private val REFRESH_THROTTLE_MS: Long = 5000L
 
     init {
         if (albumPin.isNotBlank()) {
@@ -86,15 +88,16 @@ class GalleryViewModel(
     }
 
     /**
-     * Strictly Lifecycle-Aware Smart Polling.
-     * Must only run when the UI is in the foreground (STARTED/RESUMED).
-     * Pauses immediately when the app transitions to the background.
+     * Strictly Lifecycle-Aware Smart Polling with Throttled Payload Ingestion.
+     * - Throttled to 5s poll cycle to save mobile radio battery and data bandwidth.
+     * - Implements minimum delta interval between full AlbumDetailResponse refreshes.
+     * - Pauses immediately when the app transitions to the background.
      */
     fun startPolling() {
         if (pollingJob?.isActive == true) return
         pollingJob = viewModelScope.launch {
             while (isActive) {
-                delay(3000L)
+                delay(5000L) // Throttled to 5s to reduce network churn
                 if (_uiState.value.isSubmitting) continue
                 if (albumPin.isBlank()) continue
 
@@ -109,7 +112,9 @@ class GalleryViewModel(
                             )
                         }
                     }
-                    if (remoteSync.version > _uiState.value.localVersion) {
+                    val now = System.currentTimeMillis()
+                    if (remoteSync.version > _uiState.value.localVersion && (now - lastRefreshTimestamp >= REFRESH_THROTTLE_MS)) {
+                        lastRefreshTimestamp = now
                         refreshAlbumDetails(newVersion = remoteSync.version)
                     }
                 }
@@ -129,10 +134,13 @@ class GalleryViewModel(
         if (result is NetworkResult.Success) {
             val freshAlbum = result.data
             _uiState.update { current ->
+                val newItems = freshAlbum.mediaItems
+                val hasChanged = current.mediaItems.size != newItems.size ||
+                    current.mediaItems.zip(newItems).any { (old, new) -> old.id != new.id || old.isSelected != new.isSelected }
                 current.copy(
                     album = freshAlbum,
-                    mediaItems = freshAlbum.mediaItems,
-                    selectedCount = freshAlbum.mediaItems.count { it.isSelected },
+                    mediaItems = if (hasChanged) newItems else current.mediaItems,
+                    selectedCount = if (hasChanged) newItems.count { it.isSelected } else current.selectedCount,
                     isLocked = freshAlbum.isLocked,
                     localVersion = newVersion,
                     isSyncing = false

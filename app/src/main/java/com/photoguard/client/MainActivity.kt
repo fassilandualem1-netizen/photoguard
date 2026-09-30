@@ -1,5 +1,6 @@
 package com.photoguard.client
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.util.Log
@@ -49,16 +50,21 @@ class MainActivity : ComponentActivity() {
             WindowManager.LayoutParams.FLAG_SECURE
         )
 
-        // Global crash guard to prevent dropping to phone's home screen
+        // Global crash guard with persistent diagnostics logging
         val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            Log.e("PhotoGuard", "Intercepted uncaught exception: ", throwable)
-            runOnUiThread {
-                Toast.makeText(
-                    applicationContext,
-                    "PhotoGuard Warning: ${throwable.localizedMessage ?: "Unexpected error"}",
-                    Toast.LENGTH_LONG
-                ).show()
+            val crashDetails = "Thread [${thread.name}] crash: ${throwable.message}
+${Log.getStackTraceString(throwable)}"
+            Log.e("PhotoGuard", crashDetails)
+            try {
+                val prefs = applicationContext.getSharedPreferences("photoguard_crash_logs", Context.MODE_PRIVATE)
+                prefs.edit()
+                    .putString("last_crash_reason", throwable.localizedMessage ?: "Unexpected fatal crash")
+                    .putString("last_crash_trace", Log.getStackTraceString(throwable))
+                    .putLong("last_crash_timestamp", System.currentTimeMillis())
+                    .commit() // Synchronous disk commit before process termination
+            } catch (prefEx: Exception) {
+                Log.e("PhotoGuard", "Failed to persist crash log to SharedPreferences", prefEx)
             }
             previousHandler?.uncaughtException(thread, throwable)
         }

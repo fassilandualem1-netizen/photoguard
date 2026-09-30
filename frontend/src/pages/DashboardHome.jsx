@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import AdminDashboard from "../components/AdminDashboard";
+import AdminDashboard from "./AdminDashboard";
 import CreateAlbumModal from "../components/CreateAlbumModal";
 import api from "../api/axios";
 import {

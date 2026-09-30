@@ -13,29 +13,43 @@ const api = axios.create({
 // Request interceptor: attach bearer token from localStorage
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    return config;
-  },
+    return config;  },
   (error) => {
     return Promise.reject(error);
   }
 );
 
-// Response interceptor: handle 401 unauthorized gracefully without infinite reload loops
+// Response interceptor: handle 401 Unauthorized & 403 Forbidden (deactivated studio/revoked access)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
+    const status = error.response?.status;
+    const detail = String(error.response?.data?.detail || "").toLowerCase();
+
+    // Check for 401 Unauthorized or 403 Forbidden (deactivated/suspended studio or revoked access)
+    const isUnauthorized = status === 401;
+    const isForbiddenAuth =
+      status === 403 &&
+      (detail.includes("suspended") ||
+        detail.includes("deactivated") ||
+        detail.includes("disabled") ||
+        detail.includes("revoked") ||
+        detail.includes("forbidden") ||
+        detail.includes("access denied"));
+
+    if (isUnauthorized || isForbiddenAuth) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+      sessionStorage.removeItem("token");
+      sessionStorage.removeItem("user");
 
       // Globally notify application of authorization invalidation
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("auth:unauthorized"));
-
         const currentPath = window.location.pathname;
         const requestUrl = error.config?.url || "";
         const isAuthEndpoint =
@@ -43,7 +57,7 @@ api.interceptors.response.use(
           requestUrl.includes("/api/auth/me") ||
           requestUrl.includes("/api/auth/emergency-login");
 
-        // Only redirect via window.location if not on login, not in public gallery (/c/),
+        // Only redirect if not on login, not in public gallery (/c/),
         // and not during an internal auth verification check
         if (
           currentPath !== "/login" &&

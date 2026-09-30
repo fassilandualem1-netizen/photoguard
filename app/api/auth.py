@@ -373,13 +373,14 @@ def update_profile(
         )
 
 @router.post("/upload-logo", status_code=status.HTTP_200_OK)
-async def upload_studio_logo(
+def upload_studio_logo(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
     Direct logo upload for Studio white-label branding.
+    Synchronous worker executed in AnyIO threadpool to prevent blocking the asyncio event loop.
     Uploads directly to Cloudinary (or resilient fallback) and saves studio_logo_url.
     Returns: {"url": "https://res.cloudinary.com/..."}
     """
@@ -392,7 +393,8 @@ async def upload_studio_logo(
         )
 
     try:
-        file_bytes = await file.read()
+        file.file.seek(0)
+        file_bytes = file.file.read()
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

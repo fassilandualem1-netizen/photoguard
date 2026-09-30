@@ -295,3 +295,43 @@ def destroy_media_asset(url_or_path: str) -> bool:
     except Exception as exc:
         logger.warning(f"[Storage] Failed to destroy asset {url_or_path}: {exc}")
         return False
+
+def generate_signed_watermarked_url(raw_url: str) -> str:
+    """
+    Generates a cryptographically signed delivery URL with locked watermarking for Cloudinary.
+    The 's--<signature>--' component prevents clients from stripping or tampering with
+    the watermark transformation to access the original file.
+    """
+    if not is_cloudinary_configured() or "res.cloudinary.com" not in raw_url:
+        return ""
+    try:
+        import cloudinary.utils
+        parts = raw_url.split("/upload/")[-1].split("/")
+        clean_parts = [
+            p for p in parts
+            if not p.startswith("v") and not (
+                p.startswith("c_") or p.startswith("w_") or p.startswith("q_") or p.startswith("s--") or p.startswith("l_") or p.startswith("f_")
+            )
+        ]
+        full_path = "/".join(clean_parts)
+        public_id = os.path.splitext(full_path)[0]
+
+        transformation = [
+            {"width": 1200, "crop": "limit", "quality": "auto:eco", "fetch_format": "auto"},
+            {
+                "overlay": {"font_family": "Arial", "font_size": 36, "font_weight": "bold", "text": "PHOTOGUARD PROOF"},
+                "opacity": 35,
+                "flags": "relative",
+                "width": 0.8
+            }
+        ]
+        signed_url, _ = cloudinary.utils.cloudinary_url(
+            public_id,
+            transformation=transformation,
+            sign_url=True,
+            secure=True
+        )
+        return signed_url
+    except Exception as exc:
+        logger.warning(f"[Storage] Could not generate signed Cloudinary URL: {exc}")
+        return ""

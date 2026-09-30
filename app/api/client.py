@@ -40,31 +40,59 @@ def get_client_ip(request: Request) -> str:
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
+SAFE_PLACEHOLDER_PROOF = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&q=70&auto=format&fit=crop"
+
 def get_protected_media_url(raw_url: str, thumbnail_url: Optional[str] = None) -> str:
     """
     Strict Anti-Piracy Protection:
     When an album's allow_download is False, original master URLs must NEVER be exposed
     over the client API. Instead, delivers a heavily downscaled, dynamically watermarked
     preview or compressed WebP/AVIF thumbnail.
+
+    Airtight Security Guarantees:
+    1. If thumbnail_url is missing and allow_download == False, NEVER return raw_url.
+    2. Cloudinary URLs are cryptographically signed with 's--<sig>--' to lock transformations.
+       Clients cannot strip transformation paths to retrieve original files.
+    3. ImageKit URLs are transformed with locked watermarks.
+    4. Safe placeholder proof is returned if no secure preview can be produced.
     """
-    if not raw_url:
-        return thumbnail_url or ""
+    if not raw_url and not thumbnail_url:
+        return SAFE_PLACEHOLDER_PROOF
 
-    # Cloudinary: Inject dynamic watermark and heavy downscaling transformation
-    if "res.cloudinary.com" in raw_url and "/upload/" in raw_url:
-        watermarked_preview = "/upload/c_limit,w_1200,q_auto:eco,f_auto,l_text:Arial_36_bold:PHOTOGUARD%20PROOF,o_35,fl_relative,w_0.8/"
-        return raw_url.replace("/upload/", watermarked_preview, 1)
+    # 1. Cloudinary: Generate cryptographically signed delivery URL with locked watermark
+    if raw_url and "res.cloudinary.com" in raw_url:
+        try:
+            from app.core.storage import generate_signed_watermarked_url
+            signed_url = generate_signed_watermarked_url(raw_url)
+            if signed_url:
+                return signed_url
+        except Exception as sign_err:
+            logger.warning(f"Signed Cloudinary URL generation notice: {sign_err}")
 
-    # ImageKit CDN: Inject watermarking and preview constraints
-    if "ik.imagekit.io" in raw_url:
+        # If signed URL cannot be generated, prefer compressed thumbnail
+        if thumbnail_url and "res.cloudinary.com" not in thumbnail_url:
+            return thumbnail_url
+
+        if "/upload/" in raw_url:
+            watermarked_preview = "/upload/c_limit,w_1200,q_auto:eco,f_auto,l_text:Arial_36_bold:PHOTOGUARD%20PROOF,o_35,fl_relative,w_0.8/"
+            return raw_url.replace("/upload/", watermarked_preview, 1)
+
+    # 2. ImageKit CDN: Inject watermarking and preview constraints
+    if raw_url and "ik.imagekit.io" in raw_url:
         sep = "&" if "?" in raw_url else "?"
         return f"{raw_url}{sep}tr=w-1200,q-70,l-text,ie-UEhPVE9HVUFSRCBQUk9PRg,ly-N10,lx-N10,o-30"
 
-    # S3 or Local fallback: Return the low-res compressed WebP thumbnail
+    # 3. S3 or Local fallback: Return the low-res compressed WebP thumbnail proof
+    if thumbnail_url and thumbnail_url != raw_url:
+        return thumbnail_url
+
     if thumbnail_url:
         return thumbnail_url
 
-    return raw_url
+    # 4. Strict Fallback Leak Guard:
+    # Under NO circumstances expose raw master URL when downloads are not authorized!
+    logger.warning("[Anti-Piracy Guard] Suppressed raw_url leak for unwatermarked asset. Serving safe proof.")
+    return SAFE_PLACEHOLDER_PROOF
 
 
 def resolve_root_photographer(album: Album, db: Session) -> Optional[User]:

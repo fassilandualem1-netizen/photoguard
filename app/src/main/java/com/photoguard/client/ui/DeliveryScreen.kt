@@ -156,11 +156,17 @@ fun DeliveryScreen(
     }
     var activePreviewIndex by remember { mutableIntStateOf(-1) }
     var showStudioInfoDialog by remember { mutableStateOf(false) }
+    val studioDisplayName = remember(uiState.studioName, uiState.photographerName) {
+        uiState.studioName.takeIf { it.isNotBlank() }
+            ?: uiState.photographerName?.takeIf { it.isNotBlank() }
+            ?: "Fasil Studio"
+    }
     val deliveredPhotos = remember(uiState.mediaItems) {
         val selected = uiState.mediaItems.filter { it.isSelected }
         if (selected.isNotEmpty()) selected else uiState.mediaItems
     }
     val deliveredCount = deliveredPhotos.size
+    val totalPhotos = deliveredCount
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { error ->
@@ -193,7 +199,6 @@ fun DeliveryScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val studioDisplayName = uiState.studioName.takeIf { it.isNotBlank() } ?: uiState.photographerName ?: "Fasil Studio"
 
                     // Clickable Studio Logo & Bold Name Layout (YouTube-style prominent branding)
                     Row(

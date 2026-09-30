@@ -871,9 +871,7 @@ export default function AlbumDetail() {
                   CLIENT SELECTION SUBMITTED & LOCKED
                 </h3>
               </div>
-              <p className="text-xs text-amber-300/80 mt-1 max-w-xl leading-relaxed">
-                The client has submitted their final selections ({selectedItems.length} photos). Click "Review Selections" to view their requests or use "Download All" to save the chosen photos directly to your local folder.
-              </p>
+
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">

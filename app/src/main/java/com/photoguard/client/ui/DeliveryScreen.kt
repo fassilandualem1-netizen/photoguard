@@ -98,6 +98,49 @@ import kotlinx.coroutines.launch
 
 
 
+/**
+ * Clean Unwatermarked URL Resolver for Android (Protected by FLAG_SECURE)
+ */
+fun getCleanUnwatermarkedDeliveryUrl(url: String?, rawUrl: String? = null): String {
+    if (!rawUrl.isNullOrBlank()) return rawUrl
+    if (url.isNullOrBlank()) return ""
+
+    var result = url
+    // Strip Cloudinary watermarks
+    if (result.contains("res.cloudinary.com") && result.contains("/upload/")) {
+        result = result.replace(
+            Regex("/upload/(?:s--[^/]+--/)?(?:[a-zA-Z0-9_:,.-]*,)?l_text:[^/]+/"),
+            "/upload/"
+        )
+        result = result.replace(
+            Regex("/upload/(?:s--[^/]+--/)?(?:[a-zA-Z0-9_:,.-]*,)?l_[^/]+/"),
+            "/upload/"
+        )
+    }
+    // Strip ImageKit watermarks
+    if (result.contains("ik.imagekit.io")) {
+        result = result.replace(Regex("([?&])tr=[^&]*l-text[^&]*(&)?")) { match ->
+            if (match.groupValues[1] == "?" && match.groupValues[2] == "&") "?" else ""
+        }
+        result = result.replace(Regex("/tr:[^/]*l-text[^/]*/"), "/")
+        result = result.trimEnd('?', '&')
+    }
+    return result
+}
+
+fun getCrispAndroidDeliveryThumbnailUrl(media: MediaItemResponse): String {
+    val clean = getCleanUnwatermarkedDeliveryUrl(media.url, media.rawUrl)
+    if (clean.isBlank()) return ""
+    return if (clean.contains("res.cloudinary.com") && clean.contains("/upload/")) {
+        clean.replace(
+            Regex("/upload/(?:[a-zA-Z0-9_:,.-]+/)?"),
+            "/upload/w_1000,q_auto:best,c_limit/"
+        )
+    } else {
+        clean
+    }
+}
+
 @Composable
 fun DeliveryScreen(
     viewModel: DeliveryViewModel,
@@ -113,7 +156,11 @@ fun DeliveryScreen(
     }
     var activePreviewIndex by remember { mutableIntStateOf(-1) }
     var showStudioInfoDialog by remember { mutableStateOf(false) }
-    val totalPhotos = uiState.mediaItems.size
+    val deliveredPhotos = remember(uiState.mediaItems) {
+        val selected = uiState.mediaItems.filter { it.isSelected }
+        if (selected.isNotEmpty()) selected else uiState.mediaItems
+    }
+    val deliveredCount = deliveredPhotos.size
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { error ->
@@ -146,7 +193,7 @@ fun DeliveryScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val studioDisplayName = uiState.photographerName ?: "PhotoGuard Studio"
+                    val studioDisplayName = uiState.studioName.takeIf { it.isNotBlank() } ?: uiState.photographerName ?: "Fasil Studio"
 
                     // Clickable Studio Logo & Bold Name Layout (YouTube-style prominent branding)
                     Row(
@@ -348,20 +395,39 @@ fun DeliveryScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Text(
-                        text = "DELIVERED PHOTOS ($totalPhotos)",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF64748B),
-                        letterSpacing = 1.2.sp,
-                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 4.dp, end = 4.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Delivered Photos ($deliveredCount)",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFFF1F5F9),
+                            letterSpacing = 0.3.sp
+                        )
+                        Surface(
+                            color = dynamicAccentColor.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = "Selected by Client",
+                                color = dynamicAccentColor,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
                 }
             }
 
             // PURE PHOTO GRID: NO CHECKBOXES, NO HEARTS, CRISP 4K RENDERING
             itemsIndexed(
-                items = uiState.mediaItems,
+                items = deliveredPhotos,
                 key = { _, item -> item.id }
             ) { index, media ->
                 DeliveryPhotoItem(
@@ -447,11 +513,11 @@ fun DeliveryScreen(
     }
 
     // FULL-SCREEN HORIZONTAL PAGER LIGHTBOX (SMOOTH SWIPING RESTORATION)
-    if (activePreviewIndex in uiState.mediaItems.indices) {
+    if (activePreviewIndex in deliveredPhotos.indices) {
         key(activePreviewIndex) {
             val pagerState = rememberPagerState(
                 initialPage = activePreviewIndex,
-                pageCount = { uiState.mediaItems.size }
+                pageCount = { deliveredPhotos.size }
             )
             var isCurrentPageZoomed by remember { mutableStateOf(false) }
 
@@ -468,19 +534,22 @@ fun DeliveryScreen(
                         .fillMaxSize()
                         .background(Color.Black)
                 ) {
-                    val currentMedia = uiState.mediaItems.getOrNull(pagerState.currentPage)
+                    val currentMedia = deliveredPhotos.getOrNull(pagerState.currentPage)
 
                     // The Horizontal Pager allows effortless left/right swiping across all delivered photos
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier.fillMaxSize(),
                         userScrollEnabled = !isCurrentPageZoomed,
-                        key = { page -> uiState.mediaItems.getOrNull(page)?.id ?: page }
+                        key = { page -> deliveredPhotos.getOrNull(page)?.id ?: page }
                     ) { page ->
-                        val media = uiState.mediaItems[page]
-                        val fullRequest = remember(media.url) {
+                        val media = deliveredPhotos[page]
+                        val cleanFullUrl = remember(media.rawUrl, media.url) {
+                            getCleanUnwatermarkedDeliveryUrl(media.url, media.rawUrl)
+                        }
+                        val fullRequest = remember(cleanFullUrl) {
                             ImageRequest.Builder(context)
-                                .data(media.url)
+                                .data(cleanFullUrl)
                                 .crossfade(true)
                                 .precision(Precision.EXACT)
                                 .diskCachePolicy(CachePolicy.DISABLED)
@@ -601,50 +670,7 @@ fun DeliveryScreen(
                         }
                     }
 
-                    // Floating Left / Right Navigation Arrows for instant one-tap swipe
-                    if (!isCurrentPageZoomed && pagerState.currentPage > 0) {
-                        IconButton(
-                            onClick = {
-                                scope.launch {
-                                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                                }
-                            },
-                            modifier = Modifier
-                                .align(Alignment.CenterStart)
-                                .padding(start = 12.dp)
-                                .size(44.dp)
-                                .background(Color(0x77000000), CircleShape)
-                        ) {
-                            Icon(
-                                Icons.Default.ArrowBack,
-                                contentDescription = "Previous Photo",
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
 
-                    if (!isCurrentPageZoomed && pagerState.currentPage < uiState.mediaItems.size - 1) {
-                        IconButton(
-                            onClick = {
-                                scope.launch {
-                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                                }
-                            },
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .padding(end = 12.dp)
-                                .size(44.dp)
-                                .background(Color(0x77000000), CircleShape)
-                        ) {
-                            Icon(
-                                Icons.Default.ArrowForward,
-                                contentDescription = "Next Photo",
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
 
                     // Top control bar showing Position Counter ("5 of 45") & Close Button
                     Row(
@@ -677,7 +703,7 @@ fun DeliveryScreen(
 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "${pagerState.currentPage + 1} of ${uiState.mediaItems.size}",
+                                text = "${pagerState.currentPage + 1} of ${deliveredPhotos.size}",
                                 color = Color.White,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold
@@ -702,7 +728,7 @@ fun DeliveryScreen(
 
     if (showStudioInfoDialog) {
         StudioInfoDialog(
-            studioName = uiState.photographerName ?: "PhotoGuard Studio",
+            studioName = studioDisplayName,
             studioLogoUrl = uiState.studioLogoUrl,
             brandAccent = dynamicAccentColor,
             contactPhone = uiState.contactPhone,
@@ -733,7 +759,9 @@ private fun DeliveryPhotoItem(
             .clickable { onClick() }
     ) {
         AsyncImage(
-            model = media.thumbnailUrl ?: media.url,
+            model = remember(media.rawUrl, media.thumbnailUrl, media.url) {
+                getCrispAndroidDeliveryThumbnailUrl(media)
+            },
             contentDescription = media.filename ?: "Delivered Photo",
             contentScale = ContentScale.Crop,
             modifier = Modifier

@@ -24,6 +24,7 @@ data class DeliveryUiState(
     val downloadUrls: List<String> = emptyList(),
     val isFetchingDownloads: Boolean = false,
     val downloadProgressText: String? = null,
+    val studioName: String = "Fasil Studio",
     val photographerName: String? = null,
     val studioLogoUrl: String? = null,
     val contactPhone: String? = null,
@@ -75,11 +76,14 @@ class DeliveryViewModel(
             albumTitle = album.title,
             allowDownload = album.allowDownload,
             isStudioTier = album.subscriptionPlan.equals("studio", ignoreCase = true),
-            mediaItems = album.mediaItems,
-            downloadUrls = if (album.allowDownload) album.mediaItems.map { it.url } else emptyList(),
-            photographerName = album.photographerName?.takeIf { it.isNotBlank() }
-                ?: album.creatorName?.takeIf { it.isNotBlank() && it != "Studio Owner" }
-                ?: "PhotoGuard Studio",
+            mediaItems = album.mediaItems.filter { it.isSelected }.ifEmpty { album.mediaItems },
+            downloadUrls = if (album.allowDownload) {
+                val selected = album.mediaItems.filter { it.isSelected }
+                val target = if (selected.isNotEmpty()) selected else album.mediaItems
+                target.map { it.rawUrl?.takeIf { r -> r.isNotBlank() } ?: it.url }
+            } else emptyList(),
+            studioName = album.displayStudioName,
+            photographerName = album.displayStudioName,
             studioLogoUrl = album.studioLogoUrl,
             contactPhone = album.contactPhone ?: album.socialLinks?.contactPhone,
             telegramUrl = album.telegramUrl ?: album.socialLinks?.telegramUrl,

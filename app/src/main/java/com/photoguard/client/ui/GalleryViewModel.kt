@@ -37,9 +37,7 @@ data class GalleryUiState(
     val pin: String get() = album.pin
     val totalCount: Int get() = mediaItems.size
     val studioLogoUrl: String? get() = album.studioLogoUrl
-    val studioName: String get() = album.photographerName?.takeIf { it.isNotBlank() }
-        ?: album.creatorName?.takeIf { it.isNotBlank() && it != "Studio Owner" }
-        ?: "PhotoGuard Studio"
+    val studioName: String get() = album.displayStudioName
     val brandColorHex: String get() = album.brandAccentColor?.takeIf { it.isNotBlank() } ?: album.brandColor?.takeIf { it.isNotBlank() } ?: "#D97706"
 }
 

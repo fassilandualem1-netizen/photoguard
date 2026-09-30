@@ -112,18 +112,47 @@ import com.photoguard.client.data.model.MediaItemResponse
  * Parse studio brand color with safe fallback
  */
 /**
- * Formats image URLs into high-resolution crisp thumbnails for mobile display (w_800, q_auto:best)
+ * Clean Unwatermarked URL Formatter for Android.
+ * Android client is secured via FLAG_SECURE (no screenshots/screen recording),
+ * so we eradicate all watermarks to deliver crisp, pristine photography.
  */
-fun getCrispAndroidThumbnailUrl(rawUrl: String?): String {
-    if (rawUrl.isNullOrBlank()) return ""
-    return if (rawUrl.contains("res.cloudinary.com") && rawUrl.contains("/upload/")) {
-        // Upgrade transformation to high-DPI crisp mobile thumbnail (w_800, q_auto:best)
-        rawUrl.replace(
+fun getCleanUnwatermarkedUrl(url: String?, rawUrl: String? = null): String {
+    if (!rawUrl.isNullOrBlank()) return rawUrl
+    if (url.isNullOrBlank()) return ""
+
+    var result = url
+    // Strip Cloudinary watermarks
+    if (result.contains("res.cloudinary.com") && result.contains("/upload/")) {
+        result = result.replace(
+            Regex("/upload/(?:s--[^/]+--/)?(?:[a-zA-Z0-9_:,.-]*,)?l_text:[^/]+/"),
+            "/upload/"
+        )
+        result = result.replace(
+            Regex("/upload/(?:s--[^/]+--/)?(?:[a-zA-Z0-9_:,.-]*,)?l_[^/]+/"),
+            "/upload/"
+        )
+    }
+    // Strip ImageKit watermarks
+    if (result.contains("ik.imagekit.io")) {
+        result = result.replace(Regex("([?&])tr=[^&]*l-text[^&]*(&)?")) { match ->
+            if (match.groupValues[1] == "?" && match.groupValues[2] == "&") "?" else ""
+        }
+        result = result.replace(Regex("/tr:[^/]*l-text[^/]*/"), "/")
+        result = result.trimEnd('?', '&')
+    }
+    return result
+}
+
+fun getCrispAndroidThumbnailUrl(media: MediaItemResponse): String {
+    val clean = getCleanUnwatermarkedUrl(media.url, media.rawUrl)
+    if (clean.isBlank()) return ""
+    return if (clean.contains("res.cloudinary.com") && clean.contains("/upload/")) {
+        clean.replace(
             Regex("/upload/(?:[a-zA-Z0-9_:,.-]+/)?"),
-            "/upload/w_800,q_auto:best,c_limit/"
+            "/upload/w_1000,q_auto:best,c_limit/"
         )
     } else {
-        rawUrl
+        clean
     }
 }
 
@@ -200,6 +229,7 @@ fun GalleryScreen(
                 currentStep = currentStep,
                 selectedCount = uiState.selectedCount,
                 totalCount = uiState.totalCount,
+                isSubmitted = isSubmitted,
                 onBackToStep1 = { currentStep = 1 },
                 onStudioClick = { showStudioInfoDialog = true },
                 onSignOutClick = { showSignOutDialog = true }
@@ -327,38 +357,96 @@ fun GalleryScreen(
                 .padding(innerPadding)
                 .background(Color(0xFF0F172A))
         ) {
-            // STEP 1: All Shoot Proofs Grid
+            // STEP 1: All Shoot Proofs Grid / Post-Submit Delivered View
             if (currentStep == 1) {
-                if (effectiveMediaItems.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No proofs uploaded yet.",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 14.sp
-                        )
+                Column(modifier = Modifier.fillMaxSize()) {
+                    if (isSubmitted) {
+                        Surface(
+                            color = Color(0xFF1E293B),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.Lock,
+                                        contentDescription = null,
+                                        tint = brandAccent,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = "Delivered Photos (${effectiveMediaItems.size})",
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.ExtraBold,
+                                                fontSize = 15.sp
+                                            ),
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = "Selections submitted to ${uiState.studioName}",
+                                            fontSize = 11.sp,
+                                            color = Color(0xFF94A3B8)
+                                        )
+                                    }
+                                }
+                                Surface(
+                                    color = brandAccent.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = "Delivered",
+                                        color = brandAccent,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
-                } else {
-                    LazyVerticalStaggeredGrid(
-                        columns = StaggeredGridCells.Fixed(2),
-                        contentPadding = PaddingValues(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalItemSpacing = 8.dp,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        itemsIndexed(
-                            items = effectiveMediaItems,
-                            key = { _, item -> item.id }
-                        ) { index, media ->
-                            GalleryItem(
-                                media = media,
-                                brandAccent = brandAccent,
-                                isLocked = uiState.isLocked,
-                                onToggleSelect = { viewModel.toggleSelect(media.id) },
-                                onOpenFullScreen = { fullScreenInitialIndex = index }
+
+                    if (effectiveMediaItems.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (isSubmitted) "No selected photos submitted." else "No proofs uploaded yet.",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 14.sp
                             )
+                        }
+                    } else {
+                        LazyVerticalStaggeredGrid(
+                            columns = StaggeredGridCells.Fixed(2),
+                            contentPadding = PaddingValues(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalItemSpacing = 8.dp,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            itemsIndexed(
+                                items = effectiveMediaItems,
+                                key = { _, item -> item.id }
+                            ) { index, media ->
+                                GalleryItem(
+                                    media = media,
+                                    brandAccent = brandAccent,
+                                    isLocked = uiState.isLocked,
+                                    onToggleSelect = { viewModel.toggleSelect(media.id) },
+                                    onOpenFullScreen = { fullScreenInitialIndex = index }
+                                )
+                            }
                         }
                     }
                 }
@@ -542,9 +630,12 @@ fun GalleryScreen(
                     ) { page ->
                         val media = effectiveMediaItems[page]
                         val context = LocalContext.current
-                        val fullRequest = remember(media.url) {
+                        val cleanFullUrl = remember(media.rawUrl, media.url) {
+                            getCleanUnwatermarkedUrl(media.url, media.rawUrl)
+                        }
+                        val fullRequest = remember(cleanFullUrl) {
                             ImageRequest.Builder(context)
-                                .data(media.url)
+                                .data(cleanFullUrl)
                                 .crossfade(true)
                                 .precision(Precision.EXACT)
                                 .diskCachePolicy(CachePolicy.DISABLED)
@@ -664,50 +755,7 @@ fun GalleryScreen(
                         }
                     }
 
-                    // Floating Left / Right Navigation Arrows for instant one-tap swipe
-                    if (!isCurrentPageZoomed && pagerState.currentPage > 0) {
-                        IconButton(
-                            onClick = {
-                                coroutineScope.launch {
-                                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                                }
-                            },
-                            modifier = Modifier
-                                .align(Alignment.CenterStart)
-                                .padding(start = 12.dp)
-                                .size(44.dp)
-                                .background(Color(0x77000000), CircleShape)
-                        ) {
-                            Icon(
-                                Icons.Default.ArrowBack,
-                                contentDescription = "Previous Photo",
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
 
-                    if (!isCurrentPageZoomed && pagerState.currentPage < effectiveMediaItems.size - 1) {
-                        IconButton(
-                            onClick = {
-                                coroutineScope.launch {
-                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                                }
-                            },
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .padding(end = 12.dp)
-                                .size(44.dp)
-                                .background(Color(0x77000000), CircleShape)
-                        ) {
-                            Icon(
-                                Icons.Default.ArrowForward,
-                                contentDescription = "Next Photo",
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
 
                     // Top control bar showing Position Counter ("5 of 45")
                     Row(
@@ -878,6 +926,7 @@ fun StudioBrandedTopBar(
     currentStep: Int,
     selectedCount: Int,
     totalCount: Int,
+    isSubmitted: Boolean = false,
     onBackToStep1: () -> Unit,
     onStudioClick: () -> Unit,
     onSignOutClick: () -> Unit
@@ -978,7 +1027,9 @@ fun StudioBrandedTopBar(
                             )
                         }
                         Text(
-                            text = if (currentStep == 1) {
+                            text = if (isSubmitted) {
+                                "Delivered Photos ($selectedCount) • Locked"
+                            } else if (currentStep == 1) {
                                 "Premium Client Gallery • $totalCount Proofs"
                             } else {
                                 "Premium Client Gallery • $selectedCount Chosen"
@@ -1044,8 +1095,8 @@ fun GalleryItem(
         Column {
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val context = LocalContext.current
-                val crispUrl = remember(media.thumbnailUrl, media.url) {
-                    getCrispAndroidThumbnailUrl(media.thumbnailUrl ?: media.url)
+                val crispUrl = remember(media.rawUrl, media.thumbnailUrl, media.url) {
+                    getCrispAndroidThumbnailUrl(media)
                 }
                 val imageRequest = remember(crispUrl) {
                     ImageRequest.Builder(context)
@@ -1129,8 +1180,8 @@ fun ReviewItemCard(
         Column {
             Box(modifier = Modifier.fillMaxWidth()) {
                 val context = LocalContext.current
-                val crispUrl = remember(media.thumbnailUrl, media.url) {
-                    getCrispAndroidThumbnailUrl(media.thumbnailUrl ?: media.url)
+                val crispUrl = remember(media.rawUrl, media.thumbnailUrl, media.url) {
+                    getCrispAndroidThumbnailUrl(media)
                 }
                 val imageRequest = remember(crispUrl) {
                     ImageRequest.Builder(context)

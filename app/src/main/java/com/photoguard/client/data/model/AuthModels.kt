@@ -73,6 +73,8 @@ data class MediaItemResponse(
     val filename: String? = "photo.jpg",
     @SerialName("url")
     val url: String,
+    @SerialName("raw_url")
+    val rawUrl: String? = null,
     @SerialName("thumbnail_url")
     val thumbnailUrl: String? = null,
     @SerialName("original_size")
@@ -147,8 +149,16 @@ data class AlbumDetailResponse(
     val brandColor: String? = null,
     @SerialName("brand_accent_color")
     val brandAccentColor: String? = null,
+    @SerialName("studio_name")
+    val studioName: String? = null,
     @SerialName("photographer_name")
     val photographerName: String? = null,
     @SerialName("subscription_plan")
     val subscriptionPlan: String? = "basic"
-)
+) {
+    val displayStudioName: String
+        get() = studioName?.takeIf { it.isNotBlank() }
+            ?: photographerName?.takeIf { it.isNotBlank() }
+            ?: creatorName?.takeIf { it.isNotBlank() && it != "Studio Owner" }
+            ?: "Fasil Studio"
+}

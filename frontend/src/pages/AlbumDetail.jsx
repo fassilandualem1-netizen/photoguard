@@ -29,7 +29,6 @@ import {
   ChevronRight,
   X,
   FolderDown,
-  MessageSquare,
   Check,
   CheckSquare,
   FolderCheck,
@@ -377,29 +376,20 @@ export default function AlbumDetail() {
   };
 
   // Clean, Beautifully Formatted Retouching Job Sheet Generator (00_JOB_SHEET.txt)
-  const generateJobSheetText = (albumObj, groupAItems, totalCount) => {
+  const generateJobSheetText = (albumObj, targetPhotos, totalCount) => {
     const albumName = albumObj?.title || "Gallery Proofs";
     const pin = albumObj?.pin || albumObj?.client_pin || "N/A";
-    const groupACount = groupAItems.length;
 
     let out = "============================================================\n";
     out += "PHOTOGUARD - RETOUCHING JOB SHEET\n";
     out += `Album: ${albumName} | PIN: ${pin} | Total Photos: ${totalCount}\n`;
-    out += `Items Requiring Edits: ${groupACount}\n`;
     out += "============================================================\n\n";
 
-    if (groupACount === 0) {
-      out += "No client retouching notes provided for this batch.\n";
-      out += "All photos marked for standard edit/color grade.\n";
-      out += "------------------------------------------------------------\n";
-    } else {
-      groupAItems.forEach((item, idx) => {
-        const pad = String(idx + 1).padStart(2, "0");
-        out += `[${pad}] ${item.downloadFilename}\n`;
-        out += `Client Note: "${item.resolvedNote}"\n`;
-        out += "------------------------------------------------------------\n";
-      });
-    }
+    targetPhotos.forEach((item, idx) => {
+      const pad = String(idx + 1).padStart(2, "0");
+      const name = item.downloadFilename || item.filename || `Photo_${idx + 1}.jpg`;
+      out += `[${pad}] ${name}\n`;
+    });
 
     return out;
   };
@@ -412,45 +402,20 @@ export default function AlbumDetail() {
       return;
     }
 
-    const rawTargetPhotos = selectedItems.length > 0 ? selectedItems : mediaItems;
+    const rawTargetPhotos = (isSubmitted || selectedItems.length > 0) ? selectedItems : mediaItems;
 
-    // Separate into Group A (With Notes) and Group B (Standard)
-    const groupA = [];
-    const groupB = [];
-
-    rawTargetPhotos.forEach((item) => {
-      const noteText = (item.client_notes || item.client_note || item.note || "").trim();
-      if (noteText.length > 0) {
-        groupA.push({ ...item, resolvedNote: noteText });
-      } else {
-        groupB.push({ ...item, resolvedNote: "" });
-      }
+    const preparedDownloads = rawTargetPhotos.map((item, idx) => {
+      const pad = String(idx + 1).padStart(2, "0");
+      const rawName = item.filename || `Photo_${idx + 1}.jpg`;
+      return {
+        ...item,
+        downloadFilename: `${pad}_${rawName}`,
+      };
     });
 
-    // Priority File Renaming:
-    // Group A (With Notes): Prepend zero-padded two-digit index (01_IMG_456.jpg) to sort at the very top
-    // Group B (Standard): Keep original filename intact (IMG_001.jpg)
-    const preparedDownloads = [
-      ...groupA.map((item, idx) => {
-        const pad = String(idx + 1).padStart(2, "0");
-        const rawName = item.filename || `Photo_${idx + 1}.jpg`;
-        return {
-          ...item,
-          downloadFilename: `${pad}_${rawName}`,
-          hasNote: true,
-        };
-      }),
-      ...groupB.map((item) => ({
-        ...item,
-        downloadFilename: item.filename || "photo.jpg",
-        hasNote: false,
-      })),
-    ];
-
     const supportsDirectoryPicker = typeof window !== "undefined" && "showDirectoryPicker" in window;
-
     if (!supportsDirectoryPicker) {
-      handleFallbackMultiDownload(preparedDownloads, groupA);
+      handleFallbackMultiDownload(preparedDownloads);
       return;
     }
 
@@ -471,12 +436,11 @@ export default function AlbumDetail() {
         completed: false,
         successCount: 0,
         failedFiles: [],
-        groupACount: groupA.length,
       });
 
       // Step 1: Write 00_JOB_SHEET.txt at the very top of the designated folder
       try {
-        const jobSheetText = generateJobSheetText(album, groupA, preparedDownloads.length);
+        const jobSheetText = generateJobSheetText(album, preparedDownloads, preparedDownloads.length);
         const jobSheetHandle = await dirHandle.getFileHandle("00_JOB_SHEET.txt", { create: true });
         const jobSheetWritable = await jobSheetHandle.createWritable();
         await jobSheetWritable.write(jobSheetText);
@@ -531,12 +495,12 @@ export default function AlbumDetail() {
     }
   };
 
-  const handleFallbackMultiDownload = async (preparedDownloads, groupA) => {
+  const handleFallbackMultiDownload = async (preparedDownloads) => {
     alert("Your browser does not support direct directory write. Files and 00_JOB_SHEET.txt will be downloaded individually.");
 
     // First download 00_JOB_SHEET.txt
     try {
-      const jobSheetText = generateJobSheetText(album, groupA, preparedDownloads.length);
+      const jobSheetText = generateJobSheetText(album, preparedDownloads, preparedDownloads.length);
       const blob = new Blob([jobSheetText], { type: "text/plain;charset=utf-8" });
       const jobSheetUrl = URL.createObjectURL(blob);
       const jsA = document.createElement("a");
@@ -577,7 +541,9 @@ export default function AlbumDetail() {
   };
 
   // Lightbox navigation
-  const activeList = activeViewTab === "selections" ? selectedItems : mediaItems;
+  const activeList = isSubmitted
+    ? selectedItems
+    : (activeViewTab === "selections" ? selectedItems : mediaItems);
 
   const handlePrevPhoto = () => {
     if (!previewPhoto || activeList.length === 0) return;
@@ -630,7 +596,10 @@ export default function AlbumDetail() {
   }
 
   const daysLeft = calculateDaysLeft(album.expires_at);
-  const displayPhotos = activeViewTab === "selections" ? selectedItems : mediaItems;
+  // When album is submitted/locked, strictly filter to ONLY client-selected photos (unselected disappear)
+  const displayPhotos = isSubmitted
+    ? selectedItems
+    : (activeViewTab === "selections" ? selectedItems : mediaItems);
 
   // Download All button enablement: active if client made selections OR if submitted with photos
   const canDownloadAll = selectedItems.length > 0 || (isSubmitted && mediaItems.length > 0);
@@ -1032,7 +1001,7 @@ export default function AlbumDetail() {
                 </div>
                 <h3 className="text-base font-bold text-white">No Client Selections Yet</h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Once your client enters PIN <span className="font-mono text-amber-300 font-bold">{albumPin}</span> in the mobile app and submits their selected photos and retouching notes, they will appear right here.
+                  Once your client enters PIN <span className="font-mono text-amber-300 font-bold">{albumPin}</span> in the mobile app and submits their selected photos , they will appear right here.
                 </p>
                 <button
                   type="button"
@@ -1057,8 +1026,6 @@ export default function AlbumDetail() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-3.5 sm:gap-4">
             {displayPhotos.map((item) => {
-              const hasCustomNote = Boolean(item.client_notes || item.client_note);
-
               return (
                 <div
                   key={item.id}
@@ -1073,16 +1040,6 @@ export default function AlbumDetail() {
                     loading="lazy"
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
-
-                  {/* Subtle Client Custom Retouching Note Indicator */}
-                  {hasCustomNote && (
-                    <div
-                      className="absolute bottom-2.5 left-2.5 p-1.5 rounded-lg bg-black/80 border border-amber-500/40 text-amber-300 backdrop-blur-md shadow-md"
-                      title={`Client Request: "${item.client_notes || item.client_note}"`}
-                    >
-                      <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-                    </div>
-                  )}
 
                   {/* Elegant Hover Overlay with Zoom & Delete */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2 backdrop-blur-[1px]">
@@ -1174,11 +1131,7 @@ export default function AlbumDetail() {
                 <p>
                   • <strong>00_JOB_SHEET.txt</strong> placed at the top with client retouching instructions.
                 </p>
-                {downloadProgress.groupACount > 0 && (
-                  <p>
-                    • <strong>{downloadProgress.groupACount} priority photo(s)</strong> with client notes sorted to top (01_, 02_, ...).
-                  </p>
-                )}
+
               </div>
             )}
 

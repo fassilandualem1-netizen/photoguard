@@ -1,10 +1,9 @@
-import React, { useState, useEffect, Component } from "react";
+import React, { useState, useEffect, useRef, Component } from "react";
 import {
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
   X,
-  MessageSquare,
   AlertTriangle,
 } from "lucide-react";
 
@@ -56,6 +55,44 @@ function AlbumLightboxContent({
   onClose,
 }) {
   const [imageError, setImageError] = useState(false);
+
+  // Touch Swipe tracking for smooth Instagram-style photo transitions
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
+  const touchStartY = useRef(0);
+  const touchEndY = useRef(0);
+  const minSwipeDistance = 45;
+
+  const handleTouchStart = (e) => {
+    if (e.targetTouches && e.targetTouches.length > 0) {
+      touchStartX.current = e.targetTouches[0].clientX;
+      touchEndX.current = e.targetTouches[0].clientX;
+      touchStartY.current = e.targetTouches[0].clientY;
+      touchEndY.current = e.targetTouches[0].clientY;
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (e.targetTouches && e.targetTouches.length > 0) {
+      touchEndX.current = e.targetTouches[0].clientX;
+      touchEndY.current = e.targetTouches[0].clientY;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    const deltaX = touchStartX.current - touchEndX.current;
+    const deltaY = Math.abs(touchStartY.current - touchEndY.current);
+    // Only trigger if horizontal swipe is prominent
+    if (Math.abs(deltaX) > minSwipeDistance && Math.abs(deltaX) > deltaY) {
+      if (deltaX > 0) {
+        // Swiped Left -> Next Photo
+        onNext?.();
+      } else {
+        // Swiped Right -> Previous Photo
+        onPrev?.();
+      }
+    }
+  };
 
   // Reset imageError whenever previewPhoto changes
   useEffect(() => {
@@ -149,7 +186,12 @@ function AlbumLightboxContent({
           </div>
         </div>
 
-        <div className="relative max-h-[72vh] flex items-center justify-center overflow-hidden rounded-2xl bg-black/60 border border-slate-800/80 min-h-[240px] w-full">
+        <div
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          className="relative max-h-[72vh] flex items-center justify-center overflow-hidden rounded-2xl bg-black/60 border border-slate-800/80 min-h-[240px] w-full touch-pan-y"
+        >
           {imageError ? (
             <div className="flex flex-col items-center justify-center p-8 text-center text-slate-400">
               <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-3">
@@ -167,20 +209,10 @@ function AlbumLightboxContent({
               src={previewPhoto.url}
               alt={previewPhoto.filename}
               onError={() => setImageError(true)}
-              className="max-h-[72vh] w-auto object-contain"
+              className="max-h-[72vh] w-auto object-contain pointer-events-none"
             />
           )}
         </div>
-
-        {(previewPhoto.client_notes || previewPhoto.client_note) && (
-          <div className="w-full p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 flex items-start gap-3 backdrop-blur-md">
-            <MessageSquare className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <div className="text-xs">
-              <span className="font-bold text-amber-300">Client Retouching Note: </span>
-              <span className="text-white">{previewPhoto.client_notes || previewPhoto.client_note}</span>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

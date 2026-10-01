@@ -42,5 +42,5 @@ jobs:
       - name: Install and Build Frontend
         working-directory: ./frontend
         run: |
-          npm install
+          npm install --legacy-peer-deps
           npm run build

@@ -254,3 +254,95 @@ def reset_pin_rate_limit(client_ip: str, pin: str) -> None:
     with _mem_lock:
         _memory_rate_limits.pop(f"ip:{client_ip}", None)
         _memory_rate_limits.pop(f"pin:{pin}", None)
+
+def check_login_rate_limit(client_ip: str, email: str, max_attempts: int = 5, window_seconds: int = 900) -> Tuple[bool, int]:
+    client = get_redis()
+    if client is not None:
+        try:
+            key_ip = f"ratelimit:login:ip:{client_ip}"
+            key_email = f"ratelimit:login:email:{email}"
+            
+            attempts_ip = client.get(key_ip)
+            attempts_email = client.get(key_email)
+            
+            count_ip = int(attempts_ip) if attempts_ip else 0
+            count_email = int(attempts_email) if attempts_email else 0
+
+            if count_ip >= max_attempts:
+                ttl = client.ttl(key_ip)
+                return True, max(ttl, 1)
+
+            if count_email >= max_attempts:
+                ttl = client.ttl(key_email)
+                return True, max(ttl, 1)
+
+            return False, 0
+        except RedisError as exc:
+            logger.warning(f"Redis check_login_rate_limit failed: {exc}. Using in-memory fallback.")
+
+    now = time.time()
+    with _mem_lock:
+        for key in (f"login_ip:{client_ip}", f"login_email:{email}"):
+            entry = _memory_rate_limits.get(key)
+            if entry:
+                if now > entry['expires_at']:
+                    _memory_rate_limits.pop(key, None)
+                elif entry['count'] >= max_attempts:
+                    remaining = max(1, int(entry['expires_at'] - now))
+                    return True, remaining
+
+        return False, 0
+
+def record_failed_login_attempt(client_ip: str, email: str, window_seconds: int = 900) -> int:
+    client = get_redis()
+    if client is not None:
+        try:
+            key_ip = f"ratelimit:login:ip:{client_ip}"
+            key_email = f"ratelimit:login:email:{email}"
+
+            pipe = client.pipeline()
+            pipe.incr(key_ip)
+            pipe.ttl(key_ip)
+            pipe.incr(key_email)
+            pipe.ttl(key_email)
+            results = pipe.execute()
+
+            attempts_ip, ttl_ip, attempts_email, ttl_email = results[0], results[1], results[2], results[3]
+
+            if ttl_ip == -1 or attempts_ip == 1:
+                client.expire(key_ip, window_seconds)
+            if ttl_email == -1 or attempts_email == 1:
+                client.expire(key_email, window_seconds)
+
+            return max(attempts_ip, attempts_email)
+        except RedisError as exc:
+            logger.warning(f"Redis record_failed_login_attempt failed: {exc}. Using in-memory fallback.")
+
+    now = time.time()
+    with _mem_lock:
+        highest_count = 1
+        for key in (f"login_ip:{client_ip}", f"login_email:{email}"):
+            entry = _memory_rate_limits.get(key)
+            if not entry or now > entry['expires_at']:
+                _memory_rate_limits[key] = {'count': 1, 'expires_at': now + window_seconds}
+                count = 1
+            else:
+                entry['count'] += 1
+                count = entry['count']
+            if count > highest_count:
+                highest_count = count
+
+        return highest_count
+
+def reset_login_rate_limit(client_ip: str, email: str) -> None:
+    client = get_redis()
+    if client is not None:
+        try:
+            client.delete(f"ratelimit:login:ip:{client_ip}")
+            client.delete(f"ratelimit:login:email:{email}")
+        except Exception:
+            pass
+
+    with _mem_lock:
+        _memory_rate_limits.pop(f"login_ip:{client_ip}", None)
+        _memory_rate_limits.pop(f"login_email:{email}", None)

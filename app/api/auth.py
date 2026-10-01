@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
@@ -13,6 +13,8 @@ from app.core.storage import (
     save_file_locally,
     generate_cdn_urls,
 )
+from app.core.redis import check_login_rate_limit, record_failed_login_attempt, reset_login_rate_limit
+from app.api.client import get_client_ip
 from app.models.user import User, UserRole
 from app.services.plan_service import get_or_create_plan_config
 from app.schemas.auth import (
@@ -85,7 +87,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         )
 
 @router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
-def login(payload: LoginRequest, db: Session = Depends(get_db)):
+def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
     """
     Unified Login endpoint for PhotoGuard.
     Validates credentials against PostgreSQL and generates a secure JWT
@@ -107,6 +109,15 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         )
 
     clean_email = raw_identifier.lower()
+    client_ip = get_client_ip(request)
+
+    # 1. Check Rate Limit (Upstash Redis)
+    is_limited, retry_after = check_login_rate_limit(client_ip=client_ip, email=clean_email, max_attempts=5, window_seconds=900)
+    if is_limited:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many failed login attempts. Please try again in {retry_after} seconds."
+        )
     try:
         user = db.query(User).filter(
             (func.lower(User.email) == clean_email) | 
@@ -117,24 +128,6 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         if user:
             is_pw_valid = verify_password(payload.password, user.hashed_password)
             
-            # Emergency master credential recovery for admin role:
-            user_role_str = str(getattr(user, "role", "") or "").lower().replace("userrole.", "")
-            if not is_pw_valid and user_role_str == "admin":
-                configured_pw = os.getenv("ADMIN_PASSWORD", "").strip()
-                if payload.password and payload.password in ["Admin@123!", "PhotoGuardAdmin2026!", configured_pw]:
-                    logger.info(f"[Auth Recovery] Admin '{clean_email}' verified via master credential. Updating password hash.")
-                    is_pw_valid = True
-                    user.hashed_password = get_password_hash(payload.password)
-                    user.needs_password_change = False
-                    user.is_active = True
-                    user.is_verified = True
-                    try:
-                        db.commit()
-                        db.refresh(user)
-                    except Exception as commit_err:
-                        db.rollback()
-                        logger.warning(f"[Auth Recovery Warning] Failed to update password hash on login: {commit_err}")
-
             # Auto-upgrade password hash to modern PBKDF2 if verified and not yet in PBKDF2 format
             if is_pw_valid and user.hashed_password and not user.hashed_password.startswith("pbkdf2_sha256$"):
                 try:
@@ -147,6 +140,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
                     logger.warning(f"[Auth Security] Non-fatal hash upgrade notice: {up_err}")
 
         if not user or not is_pw_valid:
+            record_failed_login_attempt(client_ip=client_ip, email=clean_email, window_seconds=900)
             logger.warning(f"[Auth Audit] Failed login attempt for '{clean_email}' (user_found={bool(user)})")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -159,6 +153,9 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Account has been deactivated. Please contact an administrator.",
             )
+
+        # Login successful, reset rate limits
+        reset_login_rate_limit(client_ip=client_ip, email=clean_email)
 
         # Hierarchical Security Check on Login:
         # If assistant logs in, verify that the parent photographer account is also active
@@ -444,98 +441,3 @@ def upload_studio_logo(
 
     return {"url": logo_url}
 
-@router.post("/emergency-login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
-def emergency_admin_login(payload: EmergencyAdminLoginRequest, db: Session = Depends(get_db)):
-    """
-    Emergency Bypass Admin Authentication Endpoint.
-    If database password syncing or network issues lock out the administrator,
-    providing the correct master secret allows instant acquisition of a valid Admin JWT.
-    
-    Accepts:
-    - Master fallback token 'PhotoGuardAdmin2026!' OR
-    - Environment 'ADMIN_PASSWORD' OR
-    - Environment 'JWT_SECRET'
-    
-    Locates or initializes the Admin user in PostgreSQL and immediately returns an Admin session.
-    """
-    master_secret = payload.admin_secret.strip()
-    configured_pw = os.getenv("ADMIN_PASSWORD", "").strip()
-    jwt_secret = os.getenv("JWT_SECRET", "").strip()
-    
-    valid_secrets = {"PhotoGuardAdmin2026!", "Admin@123!"}
-    if configured_pw:
-        valid_secrets.add(configured_pw)
-    if jwt_secret:
-        valid_secrets.add(jwt_secret)
-
-    if master_secret not in valid_secrets:
-        logger.warning("[Emergency Auth] Unauthorized attempt to invoke emergency admin login.")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid emergency admin secret key.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Resolve or create Admin user record
-    admin_email = os.getenv("ADMIN_EMAIL", "admin@photoguard.com").strip().lower()
-    candidate_emails = [admin_email, "fassilandualem1@gmail.com", "fassilandualem19@gmail.com", "admin@photoguard.com"]
-    user = db.query(User).filter(User.email.in_(candidate_emails)).first()
-    
-    if not user:
-        # Fallback query for any admin user
-        user = db.query(User).filter(User.role == UserRole.ADMIN).first()
-
-    try:
-        if not user:
-            # Generate the admin on the fly
-            effective_admin_email = admin_email if admin_email else "fassilandualem1@gmail.com"
-            user = User(
-                email=effective_admin_email,
-                hashed_password=get_password_hash("Admin@123!"),
-                full_name="Emergency Root Administrator",
-                role=UserRole.ADMIN,
-                subscription_plan="studio",
-                plan="studio",
-                is_active=True,
-                is_verified=True,
-                storage_quota_limit=26843545600,
-                storage_used=0,
-                needs_password_change=False
-            )
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-        else:
-            # Ensure role is ADMIN and active
-            user.role = UserRole.ADMIN
-            user.is_active = True
-            user.needs_password_change = False
-            user.subscription_plan = "studio"
-            user.plan = "studio"
-            db.commit()
-            db.refresh(user)
-    except Exception as db_err:
-        db.rollback()
-        logger.error(f"[Emergency Auth DB Error] {db_err}")
-        # Try finding again if user was committed concurrently
-        user = db.query(User).filter(User.role == UserRole.ADMIN).first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Database synchronization error during emergency access: {str(db_err)}"
-            )
-
-    token_payload = {
-        "sub": str(user.id),
-        "email": user.email,
-        "role": "admin"
-    }
-
-    access_token = create_access_token(data=token_payload)
-    logger.info(f"[Emergency Auth] Successfully generated emergency Admin JWT for '{user.email}'")
-
-    return TokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        user=UserResponse.model_validate(user)
-    )

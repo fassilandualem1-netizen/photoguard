@@ -195,6 +195,7 @@ def purge_expired_albums():
                     logger.info(f"[Auto-Expire Worker] Reclaimed {album_bytes} bytes for owner {owner.email}. New storage_used: {owner.storage_used}")
 
             # Airtight physical file destruction for both high-res and thumbnails
+            cloud_deletion_success = True
             for item in media_items:
                 urls_to_delete = set()
                 if item.url:
@@ -206,11 +207,15 @@ def purge_expired_albums():
                     try:
                         destroy_media_asset(u)
                     except Exception as del_err:
-                        logger.warning(f"[Auto-Expire Worker] Error destroying asset {u}: {del_err}")
+                        logger.warning(f"[Auto-Expire Worker] Error destroying asset {u}: {del_err}. Skipping DB deletion for album {album.id}.")
+                        cloud_deletion_success = False
 
-            db.delete(album)
-            total_deleted_albums += 1
-            total_freed_bytes += album_bytes
+            if cloud_deletion_success:
+                db.delete(album)
+                total_deleted_albums += 1
+                total_freed_bytes += album_bytes
+            else:
+                logger.error(f"[Auto-Expire Worker] Incomplete cloud deletion for album {album.id}. Skipping DB deletion to prevent orphaned data.")
 
         db.commit()
         logger.info(f"[Auto-Expire Complete] Successfully destroyed {total_deleted_albums} expired album(s), reclaimed {total_freed_bytes / (1024 * 1024):.2f} MB storage.")
@@ -398,10 +403,16 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Bulletproof CORS configuration for cross-origin communication
+# Secured CORS configuration for cross-origin communication
+origins = [
+    "http://localhost:3000",
+    "https://photoguard.com",
+    os.environ.get("FRONTEND_URL", "https://photoguard.com")
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=".*",
+    allow_origins=list(set(origins)),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

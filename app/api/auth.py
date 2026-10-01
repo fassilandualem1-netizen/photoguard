@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Request, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
@@ -10,8 +10,6 @@ from app.core.dependencies import get_current_user
 from app.core.storage import (
     is_cloudinary_configured,
     upload_file_to_cloudinary,
-    save_file_locally,
-    generate_cdn_urls,
 )
 from app.core.redis import check_login_rate_limit, record_failed_login_attempt, reset_login_rate_limit
 from app.api.client import get_client_ip
@@ -87,7 +85,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         )
 
 @router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
-def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
+def login(payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     """
     Unified Login endpoint for PhotoGuard.
     Validates credentials against PostgreSQL and generates a secure JWT
@@ -208,6 +206,16 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
             "is_active": True if getattr(user, "is_active", None) is None else bool(user.is_active),
         }
 
+        is_prod = os.environ.get("ENVIRONMENT", "development") == "production"
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=is_prod,
+            samesite="lax",
+            max_age=86400  # 1 day
+        )
+
         return TokenResponse(
             access_token=access_token,
             token_type="bearer",
@@ -223,6 +231,20 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Login authentication service error: {str(exc)}"
         )
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+def logout(response: Response):
+    """
+    Clears the HttpOnly JWT cookie to log the user out.
+    """
+    is_prod = os.environ.get("ENVIRONMENT", "development") == "production"
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        secure=is_prod,
+        samesite="lax"
+    )
+    return {"message": "Successfully logged out."}
 
 @router.put("/change-password", response_model=UserResponse, status_code=status.HTTP_200_OK)
 @router.post("/change-password", response_model=UserResponse, status_code=status.HTTP_200_OK)
@@ -407,7 +429,6 @@ def upload_studio_logo(
     clean_filename = file.filename or "logo.png"
     logo_url = None
 
-    # 1. Primary: Upload to Cloudinary
     if is_cloudinary_configured():
         try:
             cloud_res = upload_file_to_cloudinary(
@@ -418,17 +439,16 @@ def upload_studio_logo(
             logo_url = cloud_res["high_res_url"]
             logger.info(f"[Logo Upload] Uploaded studio logo to Cloudinary: {logo_url}")
         except Exception as cloud_err:
-            logger.warning(f"[Logo Upload Warning] Cloudinary upload failed ({cloud_err}). Using local fallback.")
-
-    # 2. Fallback: Local upload storage
-    if not logo_url:
-        object_path = save_file_locally(
-            file_bytes=file_bytes,
-            filename=f"studio_logo_{current_user.id}_{clean_filename}"
+            logger.error(f"[Logo Upload Error] Cloudinary upload failed: {cloud_err}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Cloud Storage Upload Failed"
+            )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Cloud Storage is not configured. Stateless system requires cloud storage."
         )
-        cdn_urls = generate_cdn_urls(object_path)
-        logo_url = cdn_urls["high_res_url"]
-        logger.info(f"[Logo Upload] Saved studio logo locally: {logo_url}")
 
     # Immediately persist into current_user profile
     try:

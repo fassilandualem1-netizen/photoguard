@@ -4,26 +4,24 @@ import api from "../api/axios";
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(() => localStorage.getItem("token") || null);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem("user");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(true);
 
-  // Clear all credentials from storage and memory
+  // Clear all credentials from memory
   const clearAuth = useCallback(() => {
-    localStorage.removeItem("token");
     localStorage.removeItem("user");
-    setToken(null);
     setUser(null);
   }, []);
 
-  // Verify token and re-fetch profile from backend
+  // Verify cookie and re-fetch profile from backend
   const refreshProfile = useCallback(async () => {
-    const storedToken = localStorage.getItem("token");
-    if (!storedToken) {
-      clearAuth();
-      return null;
-    }
-
     try {
       const response = await api.get("/api/auth/me");
       if (response && response.data && response.data.id) {
@@ -46,21 +44,11 @@ export const AuthProvider = ({ children }) => {
     let isMounted = true;
 
     const initializeAuth = async () => {
-      const storedToken = localStorage.getItem("token");
-      if (!storedToken) {
-        if (isMounted) {
-          clearAuth();
-          setLoading(false);
-        }
-        return;
-      }
-
       try {
         const response = await api.get("/api/auth/me");
         if (isMounted) {
           if (response && response.data && response.data.id) {
             setUser(response.data);
-            setToken(storedToken);
             localStorage.setItem("user", JSON.stringify(response.data));
           } else {
             clearAuth();
@@ -99,8 +87,7 @@ export const AuthProvider = ({ children }) => {
   // Window Focus Listener: Auto-sync user plan upgrades when returning from Admin tab
   useEffect(() => {
     const handleFocus = () => {
-      const storedToken = localStorage.getItem("token");
-      if (storedToken && user) {
+      if (user) {
         refreshProfile();
       }
     };
@@ -119,12 +106,10 @@ export const AuthProvider = ({ children }) => {
       password: password,
     });
 
-    const { access_token, user: userData } = response.data;
+    const { user: userData } = response.data;
 
-    localStorage.setItem("token", access_token);
     localStorage.setItem("user", JSON.stringify(userData));
 
-    setToken(access_token);
     setUser(userData);
 
     return userData;
@@ -155,7 +140,12 @@ export const AuthProvider = ({ children }) => {
     return updatedUser;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await api.post("/api/auth/logout");
+    } catch(err) {
+      console.warn("Logout request failed", err);
+    }
     clearAuth();
   };
 
@@ -163,12 +153,11 @@ export const AuthProvider = ({ children }) => {
   const isAdmin = roleStr === "admin";
   const isPhotographer = roleStr === "photographer" || (!isAdmin && !!user);
 
-  // Authenticated ONLY when loading is done AND both valid token and user profile exist
-  const isAuthenticated = !loading && Boolean(token && user);
+  // Authenticated ONLY when loading is done AND valid user profile exist
+  const isAuthenticated = !loading && Boolean(user);
 
   const value = {
     user,
-    token,
     loading,
     isAuthenticated,
     needsPasswordChange: Boolean(user?.needs_password_change),

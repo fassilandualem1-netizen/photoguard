@@ -16,7 +16,6 @@ from app.core.storage import (
     CLOUDINARY_API_KEY,
     upload_file_to_s3,
     generate_cdn_urls,
-    save_file_locally,
     is_s3_configured,
 )
 from app.core.s3_cleanup import delete_file_from_s3
@@ -281,14 +280,13 @@ def upload_album_photo(
         except Exception as s3_exc:
             logger.warning(f"[Storage Warning] S3 upload failed ({s3_exc}). Activating local fallback.")
 
-    # 3. Resilient Fallback: Local Disk Storage
+    # 3. Prevent Stateful Fallback
     if not high_res_url:
-        object_path = save_file_locally(file_bytes=file_bytes, filename=file.filename or "photo.jpg")
-        cdn_urls = generate_cdn_urls(object_path=object_path)
-        high_res_url = cdn_urls["high_res_url"]
-        thumbnail_url = cdn_urls["thumbnail_url"]
-        storage_provider = "local"
-        logger.info(f"[Storage Info] Saved to local storage fallback: {high_res_url}")
+        logger.error("[Storage Error] Cloud Storage Upload Failed on all providers.")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Cloud Storage Upload Failed"
+        )
 
     # Silent AI Compression
     compressed_bytes = None

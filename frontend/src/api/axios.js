@@ -4,20 +4,18 @@ const baseURL = import.meta.env.VITE_API_URL || "";
 
 const api = axios.create({
   baseURL,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
   timeout: 30000,
 });
 
-// Request interceptor: attach bearer token from localStorage
+// Request interceptor: nothing needed for HttpOnly cookies
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;  },
+    return config;
+  },
   (error) => {
     return Promise.reject(error);
   }
@@ -42,9 +40,7 @@ api.interceptors.response.use(
         detail.includes("access denied"));
 
     if (isUnauthorized || isForbiddenAuth) {
-      localStorage.removeItem("token");
       localStorage.removeItem("user");
-      sessionStorage.removeItem("token");
       sessionStorage.removeItem("user");
 
       // Globally notify application of authorization invalidation

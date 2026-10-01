@@ -4,19 +4,23 @@ from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import SECRET_KEY, ALGORITHM
+from fastapi import Request
 from app.models.user import User, UserRole
 
-# Standard OAuth2 Bearer token extractor
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+# Standard OAuth2 Bearer token extractor (for fallback/Swagger)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 def get_current_user(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ) -> User:
     """
-    Dependency that decodes the bearer JWT, validates integrity and expiration,
-    and queries PostgreSQL for the real user entity.
+    Dependency that decodes the bearer JWT from HttpOnly cookie (or Bearer header),
+    validates integrity and expiration, and queries PostgreSQL for the real user entity.
     """
+    if not token:
+        token = request.cookies.get("access_token")
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -27,6 +31,9 @@ def get_current_user(
         detail="Session has been revoked. Please sign in again.",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    if not token:
+        raise credentials_exception
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id_raw = payload.get("sub")

@@ -10,7 +10,7 @@ import retrofit2.Retrofit
 import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
-    private const val BASE_URL = "https://photoguard.onrender.com/"
+    private val BASE_URL = com.photoguard.client.BuildConfig.API_BASE_URL
 
     private val json = Json {
         ignoreUnknownKeys = true

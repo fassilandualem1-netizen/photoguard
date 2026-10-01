@@ -280,12 +280,6 @@ fun GalleryScreen(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.sp
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Icon(
-                                        Icons.Default.ArrowForward,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
                                 }
                             }
                         } else {
@@ -297,13 +291,6 @@ fun GalleryScreen(
                                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.Default.ArrowBack,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
                                     Text(
                                         text = "Add More",
                                         color = Color.White,

@@ -222,18 +222,23 @@ fun GalleryScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            StudioBrandedTopBar(
-                studioName = uiState.studioName,
-                studioLogoUrl = uiState.studioLogoUrl,
-                brandAccent = brandAccent,
-                currentStep = currentStep,
-                selectedCount = uiState.selectedCount,
-                totalCount = uiState.totalCount,
-                isSubmitted = isSubmitted,
-                onBackToStep1 = { currentStep = 1 },
-                onStudioClick = { showStudioInfoDialog = true },
-                onSignOutClick = { showSignOutDialog = true }
-            )
+            Column {
+                StudioBrandedTopBar(
+                    studioName = uiState.studioName,
+                    studioLogoUrl = uiState.studioLogoUrl,
+                    brandAccent = brandAccent,
+                    currentStep = currentStep,
+                    selectedCount = uiState.selectedCount,
+                    totalCount = uiState.totalCount,
+                    isSubmitted = isSubmitted,
+                    onBackToStep1 = { currentStep = 1 },
+                    onStudioClick = { showStudioInfoDialog = true },
+                    onSignOutClick = { showSignOutDialog = true }
+                )
+                if (uiState.isOffline) {
+                    OfflineBanner()
+                }
+            }
         },
         bottomBar = {
             if (!uiState.isLocked) {
@@ -1209,5 +1214,23 @@ fun ReviewItemCard(
             }
 
         }
+    }
+}
+
+@Composable
+fun OfflineBanner() {
+    androidx.compose.foundation.layout.Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFB91C1C))
+            .padding(vertical = 4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "Offline / Reconnecting...",
+            color = Color.White,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+        )
     }
 }

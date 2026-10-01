@@ -31,7 +31,8 @@ data class GalleryUiState(
     val isSubmitted: Boolean = false,
     val isSyncing: Boolean = false,
     val localVersion: Int = 1,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val isOffline: Boolean = false
 ) {
     val albumTitle: String get() = album.title
     val pin: String get() = album.pin
@@ -102,6 +103,7 @@ class GalleryViewModel(
                 val syncResult = safeApiCall { clientApi.syncAlbum(albumPin) }
                 if (syncResult is NetworkResult.Success) {
                     val remoteSync = syncResult.data
+                    _uiState.update { it.copy(isOffline = false) }
                     if (remoteSync.isLocked && !_uiState.value.isLocked) {
                         _uiState.update { current ->
                             current.copy(
@@ -115,6 +117,8 @@ class GalleryViewModel(
                         lastRefreshTimestamp = now
                         refreshAlbumDetails(newVersion = remoteSync.version)
                     }
+                } else if (syncResult is NetworkResult.NetworkException) {
+                    _uiState.update { it.copy(isOffline = true) }
                 }
             }
         }
@@ -141,11 +145,17 @@ class GalleryViewModel(
                     selectedCount = if (hasChanged) newItems.count { it.isSelected } else current.selectedCount,
                     isLocked = freshAlbum.isLocked,
                     localVersion = newVersion,
+                    isOffline = false,
                     isSyncing = false
                 )
             }
         } else {
-            _uiState.update { it.copy(isSyncing = false) }
+            _uiState.update { 
+                it.copy(
+                    isSyncing = false,
+                    isOffline = if (result is NetworkResult.NetworkException) true else it.isOffline
+                ) 
+            }
         }
     }
 
@@ -198,14 +208,11 @@ class GalleryViewModel(
                     }
                 }
                 is NetworkResult.NetworkException -> {
+                    // Graceful degraded mode: Optimistic UI update maintained.
+                    // DO NOT revert the selection state during temporary network drops.
                     _uiState.update { current ->
-                        val revertedList = current.mediaItems.map { item ->
-                            if (item.id == mediaId) item.copy(isSelected = !newSelectedState) else item
-                        }
                         current.copy(
-                            mediaItems = revertedList,
-                            selectedCount = revertedList.count { it.isSelected },
-                            errorMessage = "Network connection failed. Selection was not saved."
+                            errorMessage = "No internet connection. Retrying..."
                         )
                     }
                 }

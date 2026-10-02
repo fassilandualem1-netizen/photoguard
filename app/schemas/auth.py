@@ -1,5 +1,5 @@
 from typing import Optional, Any
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 class LoginRequest(BaseModel):
     email: Optional[str] = Field(None, description="Registered user email address")
@@ -27,6 +27,26 @@ class UserUpdate(BaseModel):
     instagram_url: Optional[str] = Field(None, max_length=255, description="Instagram profile URL")
     telegram_url: Optional[str] = Field(None, max_length=255, description="Telegram channel/profile URL")
     youtube_url: Optional[str] = Field(None, max_length=255, description="YouTube channel URL")
+    # Backwards-compatible aliases
+    phone_number: Optional[str] = Field(None, max_length=50)
+    telegram_username: Optional[str] = Field(None, max_length=255)
+    instagram: Optional[str] = Field(None, max_length=255)
+    youtube: Optional[str] = Field(None, max_length=255)
+    tiktok: Optional[str] = Field(None, max_length=255)
+
+    @model_validator(mode="after")
+    def sync_aliases(self):
+        if not self.contact_phone and self.phone_number:
+            self.contact_phone = self.phone_number
+        if not self.telegram_url and self.telegram_username:
+            self.telegram_url = self.telegram_username
+        if not self.instagram_url and self.instagram:
+            self.instagram_url = self.instagram
+        if not self.youtube_url and self.youtube:
+            self.youtube_url = self.youtube
+        if not self.tiktok_url and self.tiktok:
+            self.tiktok_url = self.tiktok
+        return self
 
 class UserResponse(BaseModel):
     id: int
@@ -45,6 +65,12 @@ class UserResponse(BaseModel):
     instagram_url: Optional[str] = None
     telegram_url: Optional[str] = None
     youtube_url: Optional[str] = None
+    # Aliases
+    phone_number: Optional[str] = None
+    telegram_username: Optional[str] = None
+    instagram: Optional[str] = None
+    youtube: Optional[str] = None
+    tiktok: Optional[str] = None
     subscription_plan: Optional[str] = "basic"
     is_verified: Optional[bool] = False
     needs_password_change: Optional[bool] = True
@@ -81,6 +107,15 @@ class UserResponse(BaseModel):
         if v is None:
             return False
         return bool(v)
+
+    @model_validator(mode="after")
+    def populate_aliases(self):
+        self.phone_number = self.phone_number or self.contact_phone
+        self.telegram_username = self.telegram_username or self.telegram_url
+        self.instagram = self.instagram or self.instagram_url
+        self.youtube = self.youtube or self.youtube_url
+        self.tiktok = self.tiktok or self.tiktok_url
+        return self
 
     class Config:
         from_attributes = True

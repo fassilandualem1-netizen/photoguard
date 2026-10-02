@@ -361,16 +361,21 @@ def update_profile(
                 current_user.brand_color = "#D97706"
                 current_user.brand_accent_color = "#D97706"
 
-        if payload.contact_phone is not None:
-            current_user.contact_phone = payload.contact_phone.strip() if payload.contact_phone.strip() else None
-        if payload.tiktok_url is not None:
-            current_user.tiktok_url = payload.tiktok_url.strip() if payload.tiktok_url.strip() else None
-        if payload.instagram_url is not None:
-            current_user.instagram_url = payload.instagram_url.strip() if payload.instagram_url.strip() else None
-        if payload.telegram_url is not None:
-            current_user.telegram_url = payload.telegram_url.strip() if payload.telegram_url.strip() else None
-        if payload.youtube_url is not None:
-            current_user.youtube_url = payload.youtube_url.strip() if payload.youtube_url.strip() else None
+        phone = payload.contact_phone if payload.contact_phone is not None else payload.phone_number
+        if phone is not None:
+            current_user.contact_phone = phone.strip() if phone.strip() else None
+        tt = payload.tiktok_url if payload.tiktok_url is not None else payload.tiktok
+        if tt is not None:
+            current_user.tiktok_url = tt.strip() if tt.strip() else None
+        insta = payload.instagram_url if payload.instagram_url is not None else payload.instagram
+        if insta is not None:
+            current_user.instagram_url = insta.strip() if insta.strip() else None
+        tg = payload.telegram_url if payload.telegram_url is not None else payload.telegram_username
+        if tg is not None:
+            current_user.telegram_url = tg.strip() if tg.strip() else None
+        yt = payload.youtube_url if payload.youtube_url is not None else payload.youtube
+        if yt is not None:
+            current_user.youtube_url = yt.strip() if yt.strip() else None
 
         db.commit()
         db.refresh(current_user)

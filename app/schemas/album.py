@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from app.schemas.media import (
     MediaItemBase,
     MediaItemCreate,
@@ -54,6 +54,21 @@ class SocialLinksResponse(BaseModel):
     instagram_url: Optional[str] = None
     telegram_url: Optional[str] = None
     youtube_url: Optional[str] = None
+    # Aliases
+    phone_number: Optional[str] = None
+    telegram_username: Optional[str] = None
+    instagram: Optional[str] = None
+    youtube: Optional[str] = None
+    tiktok: Optional[str] = None
+
+    @model_validator(mode="after")
+    def populate_aliases(self):
+        self.phone_number = self.phone_number or self.contact_phone
+        self.telegram_username = self.telegram_username or self.telegram_url
+        self.instagram = self.instagram or self.instagram_url
+        self.youtube = self.youtube or self.youtube_url
+        self.tiktok = self.tiktok or self.tiktok_url
+        return self
 
     class Config:
         from_attributes = True
@@ -87,11 +102,26 @@ class AlbumDetailResponse(BaseModel):
     instagram_url: Optional[str] = None
     telegram_url: Optional[str] = None
     youtube_url: Optional[str] = None
+    # Aliases
+    phone_number: Optional[str] = None
+    telegram_username: Optional[str] = None
+    instagram: Optional[str] = None
+    youtube: Optional[str] = None
+    tiktok: Optional[str] = None
     studio_logo_url: Optional[str] = None
     brand_color: Optional[str] = None
     brand_accent_color: Optional[str] = Field(default="#D97706", description="Dynamic studio brand accent color for mobile theming")
     photographer_name: Optional[str] = None
     subscription_plan: Optional[str] = None
+
+    @model_validator(mode="after")
+    def populate_aliases(self):
+        self.phone_number = self.phone_number or self.contact_phone
+        self.telegram_username = self.telegram_username or self.telegram_url
+        self.instagram = self.instagram or self.instagram_url
+        self.youtube = self.youtube or self.youtube_url
+        self.tiktok = self.tiktok or self.tiktok_url
+        return self
 
     class Config:
         from_attributes = True

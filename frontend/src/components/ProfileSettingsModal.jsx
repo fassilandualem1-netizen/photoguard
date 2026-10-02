@@ -13,7 +13,13 @@ import {
   ShieldCheck,
   UploadCloud,
   ImageIcon,
-  Trash2
+  Trash2,
+  Phone,
+  Instagram,
+  Video,
+  Youtube,
+  Share2,
+  Save
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
@@ -49,11 +55,50 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
   const [telegramStatusMsg, setTelegramStatusMsg] = useState(null);
   const [telegramErrorMsg, setTelegramErrorMsg] = useState(null);
 
+  // Studio Contact & Social Channels State
+  const [contactPhone, setContactPhone] = useState("");
+  const [telegramUrl, setTelegramUrl] = useState("");
+  const [instagramUrl, setInstagramUrl] = useState("");
+  const [tiktokUrl, setTiktokUrl] = useState("");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [isSavingSocial, setIsSavingSocial] = useState(false);
+  const [socialSuccessMsg, setSocialSuccessMsg] = useState(null);
+  const [socialErrorMsg, setSocialErrorMsg] = useState(null);
+
   // Populate form fields from current user on open or update
   useEffect(() => {
     if (user) {
       setStudioLogoUrl(user.studio_logo_url || "");
       setBrandColor(user.brand_color || "#F59E0B");
+      setContactPhone(user.contact_phone || user.phone_number || "");
+      setTelegramUrl(user.telegram_url || user.telegram_username || "");
+      setInstagramUrl(user.instagram_url || user.instagram || "");
+      setTiktokUrl(user.tiktok_url || user.tiktok || "");
+      setYoutubeUrl(user.youtube_url || user.youtube || "");
+    }
+
+    if (isOpen) {
+      api.get("/api/v1/photographers/me/social-links")
+        .then((res) => {
+          if (res.data) {
+            if (res.data.contact_phone || res.data.phone_number) {
+              setContactPhone(res.data.contact_phone || res.data.phone_number);
+            }
+            if (res.data.telegram_url || res.data.telegram_username) {
+              setTelegramUrl(res.data.telegram_url || res.data.telegram_username);
+            }
+            if (res.data.instagram_url || res.data.instagram) {
+              setInstagramUrl(res.data.instagram_url || res.data.instagram);
+            }
+            if (res.data.tiktok_url || res.data.tiktok) {
+              setTiktokUrl(res.data.tiktok_url || res.data.tiktok);
+            }
+            if (res.data.youtube_url || res.data.youtube) {
+              setYoutubeUrl(res.data.youtube_url || res.data.youtube);
+            }
+          }
+        })
+        .catch(() => {});
     }
   }, [user, isOpen]);
 
@@ -198,6 +243,43 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
       setBrandingErrorMsg(detail);
     } finally {
       setIsSavingBranding(false);
+    }
+  };
+
+  // ==========================================
+  // SECTION 2: SAVE STUDIO CONTACT & SOCIALS
+  // ==========================================
+  const handleSaveSocialLinks = async (e) => {
+    e.preventDefault();
+    setIsSavingSocial(true);
+    setSocialSuccessMsg(null);
+    setSocialErrorMsg(null);
+
+    const payload = {
+      contact_phone: contactPhone ? contactPhone.trim() : null,
+      telegram_url: telegramUrl ? telegramUrl.trim() : null,
+      instagram_url: instagramUrl ? instagramUrl.trim() : null,
+      tiktok_url: tiktokUrl ? tiktokUrl.trim() : null,
+      youtube_url: youtubeUrl ? youtubeUrl.trim() : null,
+      phone_number: contactPhone ? contactPhone.trim() : null,
+      telegram_username: telegramUrl ? telegramUrl.trim() : null,
+      instagram: instagramUrl ? instagramUrl.trim() : null,
+      tiktok: tiktokUrl ? tiktokUrl.trim() : null,
+      youtube: youtubeUrl ? youtubeUrl.trim() : null
+    };
+
+    try {
+      await api.put("/api/v1/photographers/me/social-links", payload);
+      await api.put("/api/auth/profile", payload);
+      if (refreshProfile) {
+        await refreshProfile();
+      }
+      setSocialSuccessMsg("Studio contact details and social media channels updated successfully!");
+    } catch (err) {
+      const detail = err?.response?.data?.detail || "Failed to update social channels.";
+      setSocialErrorMsg(detail);
+    } finally {
+      setIsSavingSocial(false);
     }
   };
 
@@ -508,7 +590,162 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
           </div>
 
           {/* ========================================================= */}
-          {/* SECTION 2: TELEGRAM INTEGRATION (DEEP-LINKING WORKFLOW)   */}
+          {/* SECTION 2: STUDIO CONTACT & SOCIAL MEDIA CHANNELS         */}
+          {/* ========================================================= */}
+          <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+              <div className="flex items-center gap-2 text-amber-400 font-semibold text-xs">
+                <Share2 className="w-4 h-4" />
+                <span>Studio Contact & Social Media Channels</span>
+              </div>
+              <span
+                className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                  isStudio
+                    ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                    : "bg-slate-800 text-slate-400 border border-slate-700"
+                }`}
+              >
+                {isStudio ? "Studio Plan Active" : "Studio Tier Only"}
+              </span>
+            </div>
+
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Connect your direct studio channels so clients can easily call, message, and view your portfolio right from their mobile delivery gallery.
+            </p>
+
+            {isStudio ? (
+              <form onSubmit={handleSaveSocialLinks} className="space-y-3.5">
+                {/* 1. Phone Number */}
+                <div>
+                  <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5 mb-1">
+                    <Phone className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Contact Phone Number</span>
+                  </label>
+                  <input
+                    type="tel"
+                    id="studio-phone-input"
+                    placeholder="+251 91 123 4567 or (555) 019-2834"
+                    value={contactPhone}
+                    onChange={(e) => setContactPhone(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                  />
+                </div>
+
+                {/* 2. Telegram */}
+                <div>
+                  <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5 mb-1">
+                    <Send className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Telegram Channel or Username</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="studio-telegram-input"
+                    placeholder="@yourstudio or https://t.me/yourstudio"
+                    value={telegramUrl}
+                    onChange={(e) => setTelegramUrl(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                  />
+                </div>
+
+                {/* 3. Instagram */}
+                <div>
+                  <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5 mb-1">
+                    <Instagram className="w-3.5 h-3.5 text-pink-400" />
+                    <span>Instagram Profile</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="studio-instagram-input"
+                    placeholder="@yourstudio or https://instagram.com/yourstudio"
+                    value={instagramUrl}
+                    onChange={(e) => setInstagramUrl(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                  />
+                </div>
+
+                {/* 4. TikTok */}
+                <div>
+                  <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5 mb-1">
+                    <Video className="w-3.5 h-3.5 text-teal-400" />
+                    <span>TikTok Profile</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="studio-tiktok-input"
+                    placeholder="@yourstudio or https://tiktok.com/@yourstudio"
+                    value={tiktokUrl}
+                    onChange={(e) => setTiktokUrl(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                  />
+                </div>
+
+                {/* 5. YouTube */}
+                <div>
+                  <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5 mb-1">
+                    <Youtube className="w-3.5 h-3.5 text-red-500" />
+                    <span>YouTube Channel</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="studio-youtube-input"
+                    placeholder="https://youtube.com/@yourstudio"
+                    value={youtubeUrl}
+                    onChange={(e) => setYoutubeUrl(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                  />
+                </div>
+
+                {/* Feedback Alerts */}
+                {socialSuccessMsg && (
+                  <div className="p-2.5 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[11px] flex items-center gap-2 animate-in fade-in">
+                    <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>{socialSuccessMsg}</span>
+                  </div>
+                )}
+
+                {socialErrorMsg && (
+                  <div className="p-2.5 rounded-lg bg-red-950/80 border border-red-500/40 text-red-300 text-[11px] flex items-center gap-2 animate-in fade-in">
+                    <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                    <span>{socialErrorMsg}</span>
+                  </div>
+                )}
+
+                {/* Submit Action Button */}
+                <button
+                  id="save-studio-socials-btn"
+                  type="submit"
+                  disabled={isSavingSocial}
+                  className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-semibold text-xs transition-all shadow-md flex items-center justify-center gap-1.5"
+                >
+                  {isSavingSocial ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving Channels...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Save Contact & Social Channels</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            ) : (
+              <div className="space-y-2 text-slate-400 pt-1">
+                <p className="text-[11px] leading-relaxed">
+                  Display your direct studio contact phone and social media links in the client mobile app.
+                  Upgrade to the <b>Studio Plan</b> to unlock.
+                </p>
+                <div className="flex items-center gap-1.5 text-[11px] text-amber-400 font-medium">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Available on Studio Tier</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ========================================================= */}
+          {/* SECTION 3: TELEGRAM INTEGRATION (DEEP-LINKING WORKFLOW)   */}
           {/* ========================================================= */}
           <div className="p-4 rounded-xl bg-slate-950/70 border border-sky-500/30 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">

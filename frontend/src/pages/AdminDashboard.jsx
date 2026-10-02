@@ -1049,7 +1049,7 @@ export default function AdminDashboard() {
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
               <span className="text-[11px] text-slate-500">
-                ⚡ Publishing automatically deactivates previous announcements.
+                <Zap className="w-3 h-3" /> Publishing automatically deactivates previous announcements.
               </span>
               <button
                 type="submit"

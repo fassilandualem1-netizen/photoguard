@@ -33,8 +33,8 @@ export default function AlbumCard({
   const pinCode = album.pin || album.client_pin;
 
   // Creator Tracking Badge Logic:
-  // - Root Owner: Subtle "👑 Owner" badge
-  // - Assistant: Brightly colored "👤 Ast: [creator_name]" badge (vibrant cyan/emerald tint)
+  // - Root Owner: Subtle "<Crown className="w-3 h-3" /> Owner" badge
+  // - Assistant: Brightly colored "<User className="w-3 h-3" /> Ast: [creator_name]" badge (vibrant cyan/emerald tint)
   const role = String(album.creator_role || "photographer").toLowerCase().trim();
   const isAssistant = role === "assistant";
   const creatorName = album.creator_name || (isAssistant ? "Studio Assistant" : "Owner");
@@ -96,7 +96,7 @@ export default function AlbumCard({
                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase shrink-0 bg-cyan-950/80 text-cyan-300 border border-cyan-400/50 shadow-sm shadow-cyan-500/20"
                 >
                   <UserCheck className="w-3 h-3 text-cyan-400 shrink-0" />
-                  <span className="truncate max-w-[120px]">👤 Ast: {creatorName}</span>
+                  <span className="truncate max-w-[120px]">Ast: {creatorName}</span>
                 </span>
               ) : (
                 <span
@@ -104,7 +104,7 @@ export default function AlbumCard({
                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold shrink-0 bg-slate-800/90 text-amber-300/90 border border-amber-500/20"
                 >
                   <Crown className="w-3 h-3 text-amber-400 shrink-0" />
-                  <span>👑 Owner</span>
+                  <span>Owner</span>
                 </span>
               )}
             </div>

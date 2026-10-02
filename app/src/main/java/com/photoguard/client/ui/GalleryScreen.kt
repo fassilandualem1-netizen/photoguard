@@ -337,7 +337,7 @@ fun GalleryScreen(
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "Final Submit to Studio 🔒",
+                                            text = "Final Submit to Studio",
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 13.sp
                                         )
@@ -494,7 +494,7 @@ fun GalleryScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "🔍 Reviewing ${selectedItems.size} chosen photos before locking album.",
+                                    text = "Reviewing ${selectedItems.size} chosen photos before locking album.",
                                     fontSize = 11.sp,
                                     color = Color(0xFF38BDF8),
                                     fontWeight = FontWeight.Medium
@@ -926,7 +926,7 @@ fun GalleryScreen(
                         viewModel.submitSelection()
                     }
                 ) {
-                    Text("Confirm & Submit 🔒", fontWeight = FontWeight.Bold)
+                    Text("Confirm & Submit", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {

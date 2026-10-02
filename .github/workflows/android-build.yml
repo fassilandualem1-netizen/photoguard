@@ -29,12 +29,12 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: photoguard-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: photoguard-release-apk
+          path: app/build/outputs/apk/release/*.apk
           retention-days: 7

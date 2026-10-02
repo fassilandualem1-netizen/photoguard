@@ -29,7 +29,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
           <div className="bg-slate-900 border border-red-500/30 rounded-3xl p-8 max-w-lg w-full text-center space-y-4 shadow-2xl">
             <div className="w-16 h-16 rounded-2xl bg-red-500/10 text-red-400 flex items-center justify-center mx-auto text-2xl font-bold">
-              ⚠️
+              
             </div>
             <h2 className="text-xl font-bold">Something went wrong</h2>
             <p className="text-xs text-slate-400">
@@ -57,7 +57,7 @@ import {
   ExternalLink, Heart, MessageSquare, AlertTriangle, ArrowLeft,
   Terminal, X, Database, Sliders, Film, Scissors, Copy, FileText,
   CheckCheck, Layers, Camera, Palette, Wand2, Eye
-} from 'lucide-react';
+, Printer, Phone, Send, Instagram, Music, Youtube} from 'lucide-react';
 
 interface MediaItem {
   id: number;
@@ -413,7 +413,7 @@ export default function App() {
                   Live PostgreSQL & Render
                 </span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono">
-                  Favicon Synced 🛡️
+                  Favicon Synced
                 </span>
               </div>
               <p className="text-xs text-slate-400">Direct Ingest Suite for Lightroom, Photoshop, Capture One, CapCut & Premiere</p>
@@ -693,7 +693,7 @@ export default function App() {
                       className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 flex items-center gap-1.5 shadow transition"
                       title="Print or Save Job Sheet as PDF"
                     >
-                      <span>🖨️ Print Job Sheet</span>
+                      <span className="flex items-center gap-1"><Printer className="w-4 h-4"/> Print Job Sheet</span>
                     </button>
                   </div>
                 </div>
@@ -1353,7 +1353,7 @@ export default function App() {
 
                               {photo.client_notes && (
                                 <div className="absolute bottom-2 left-2 right-2 px-1.5 py-0.5 rounded bg-black/70 text-[9px] text-emerald-300 truncate">
-                                  📝 {photo.client_notes}
+                                  {photo.client_notes}
                                 </div>
                               )}
                             </div>
@@ -1419,7 +1419,7 @@ export default function App() {
                                     </button>
                                   </div>
                                   <p className="text-[10px] text-emerald-300/90 truncate">
-                                    {photo.client_notes ? `📝 ${photo.client_notes}` : 'No note added'}
+                                    {photo.client_notes ? `${photo.client_notes}` : 'No note added'}
                                   </p>
                                 </div>
                               </div>
@@ -1455,7 +1455,7 @@ export default function App() {
                             className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-bold text-xs text-white flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition"
                           >
                             <CheckCircle2 className="w-4 h-4" />
-                            <span>Final Submit to Studio 🔒</span>
+                            <span>Final Submit to Studio</span>
                           </button>
                         </div>
                       )}
@@ -1509,7 +1509,7 @@ export default function App() {
                             className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800/80 transition text-xs group"
                           >
                             <div className="flex items-center gap-2 text-slate-300 group-hover:text-white">
-                              <span className="text-emerald-400">📞</span>
+                              <Phone className="w-4 h-4 text-emerald-400"/>
                               <span className="font-medium">Direct Phone Call</span>
                             </div>
                             <span className="text-[11px] text-indigo-400 font-mono">
@@ -1525,7 +1525,7 @@ export default function App() {
                             className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800/80 transition text-xs group"
                           >
                             <div className="flex items-center gap-2 text-slate-300 group-hover:text-white">
-                              <span className="text-sky-400">✈️</span>
+                              <Send className="w-4 h-4 text-sky-400"/>
                               <span className="font-medium">Telegram Channel</span>
                             </div>
                             <span className="text-[11px] text-sky-400">Chat ➔</span>
@@ -1539,7 +1539,7 @@ export default function App() {
                             className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800/80 transition text-xs group"
                           >
                             <div className="flex items-center gap-2 text-slate-300 group-hover:text-white">
-                              <span className="text-pink-400">📸</span>
+                              <Instagram className="w-4 h-4 text-pink-400"/>
                               <span className="font-medium">Instagram Portfolio</span>
                             </div>
                             <span className="text-[11px] text-pink-400">Follow ➔</span>
@@ -1553,7 +1553,7 @@ export default function App() {
                             className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800/80 transition text-xs group"
                           >
                             <div className="flex items-center gap-2 text-slate-300 group-hover:text-white">
-                              <span className="text-cyan-400">🎵</span>
+                              <Music className="w-4 h-4 text-cyan-400"/>
                               <span className="font-medium">TikTok Behind-the-Scenes</span>
                             </div>
                             <span className="text-[11px] text-cyan-400">Watch ➔</span>
@@ -1567,7 +1567,7 @@ export default function App() {
                             className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800/80 transition text-xs group"
                           >
                             <div className="flex items-center gap-2 text-slate-300 group-hover:text-white">
-                              <span className="text-red-400">▶️</span>
+                              <Youtube className="w-4 h-4 text-red-400"/>
                               <span className="font-medium">YouTube Channel</span>
                             </div>
                             <span className="text-[11px] text-red-400">Subscribe ➔</span>

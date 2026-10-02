@@ -190,13 +190,16 @@ def create_album(
     else:
         final_allow_download = False
 
-    # Dynamic lifespan calculation
-    if is_admin:
-        expires_days = payload.expires_in_days if payload.expires_in_days else plan_cfg.default_lifespan_days
-    elif payload.expires_in_days:
-        expires_days = min(payload.expires_in_days, plan_cfg.max_lifespan_days)
+    # Dynamic lifespan calculation: strictly enforce 15-day maximum album lifespan
+    MAX_ALBUM_LIFESPAN = 15
+    DEFAULT_ALBUM_LIFESPAN = 15
+
+    if payload.expires_in_days is not None:
+        expires_days = min(max(1, payload.expires_in_days), MAX_ALBUM_LIFESPAN)
+    elif is_admin:
+        expires_days = min(getattr(plan_cfg, "default_lifespan_days", DEFAULT_ALBUM_LIFESPAN) or DEFAULT_ALBUM_LIFESPAN, MAX_ALBUM_LIFESPAN)
     else:
-        expires_days = plan_cfg.default_lifespan_days
+        expires_days = min(getattr(plan_cfg, "default_lifespan_days", DEFAULT_ALBUM_LIFESPAN) or DEFAULT_ALBUM_LIFESPAN, MAX_ALBUM_LIFESPAN)
 
     now_utc = datetime.now(timezone.utc)
     expires_at = now_utc + timedelta(days=expires_days)

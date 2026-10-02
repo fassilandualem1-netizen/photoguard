@@ -8,7 +8,7 @@ export default function CreateAlbumModal({ isOpen, onClose, onAlbumCreated }) {
   const [title, setTitle] = useState("");
   const [clientName, setClientName] = useState("");
   const [allowDownload, setAllowDownload] = useState(false);
-  const [expiresInDays, setExpiresInDays] = useState("30");
+  const [expiresInDays, setExpiresInDays] = useState("15");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -31,8 +31,8 @@ export default function CreateAlbumModal({ isOpen, onClose, onAlbumCreated }) {
 
     if (isStudio && expiresInDays) {
       const days = parseInt(expiresInDays, 10);
-      if (isNaN(days) || days < 1 || days > 365) {
-        setError("Lifespan must be between 1 and 365 days.");
+      if (isNaN(days) || days < 1 || days > 15) {
+        setError("Lifespan must be between 1 and 15 days.");
         return;
       }
       payload.expires_in_days = days;
@@ -46,7 +46,7 @@ export default function CreateAlbumModal({ isOpen, onClose, onAlbumCreated }) {
       setTitle("");
       setClientName("");
       setAllowDownload(false);
-      setExpiresInDays("30");
+      setExpiresInDays("15");
 
       if (onAlbumCreated) {
         onAlbumCreated(response.data);
@@ -147,13 +147,13 @@ export default function CreateAlbumModal({ isOpen, onClose, onAlbumCreated }) {
                 id="expires-in-days-input"
                 type="number"
                 min="1"
-                max="365"
+                max="15"
                 value={expiresInDays}
                 onChange={(e) => setExpiresInDays(e.target.value)}
                 className="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/80 transition-all"
               />
               <p className="text-[11px] text-slate-500">
-                Number of days before client selection expires (defaults to 30 days).
+                Number of days before client selection expires (defaults to 15 days, maximum 15 days).
               </p>
             </div>
           )}

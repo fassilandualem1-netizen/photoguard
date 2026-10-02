@@ -10,7 +10,7 @@ class PlanConfiguration(Base):
     plan_name = Column(String(50), unique=True, index=True, nullable=False)  # 'basic' or 'studio'
     storage_quota_bytes = Column(BigInteger, nullable=False)
     default_lifespan_days = Column(Integer, default=7, nullable=False)
-    max_lifespan_days = Column(Integer, default=30, nullable=False)
+    max_lifespan_days = Column(Integer, default=15, nullable=False)
     can_enable_downloads = Column(Boolean, default=False, nullable=False)
     can_customize_branding = Column(Boolean, default=False, nullable=False)
     can_extend_lifespan = Column(Boolean, default=False, nullable=False)

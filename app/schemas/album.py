@@ -13,7 +13,7 @@ class AlbumCreate(BaseModel):
     client_name: str = Field(..., min_length=1, max_length=255, description="Client or family name")
     allow_download: bool = Field(default=False, description="Enable or disable client high-res download")
     pin: Optional[str] = Field(default=None, min_length=6, max_length=6, description="Optional custom 6-digit PIN")
-    expires_in_days: Optional[int] = Field(default=None, ge=1, le=365, description="Initial album lifespan in days")
+    expires_in_days: Optional[int] = Field(default=15, ge=1, le=15, description="Initial album lifespan in days (maximum 15 days)")
 
 class AlbumUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=255)

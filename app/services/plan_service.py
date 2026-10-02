@@ -13,8 +13,8 @@ DEFAULT_PLAN_LIMITS: Dict[str, dict] = {
     },
     "studio": {
         "storage_quota_bytes": 26843545600,  # 25 GB
-        "default_lifespan_days": 30,
-        "max_lifespan_days": 365,
+        "default_lifespan_days": 15,
+        "max_lifespan_days": 15,
         "can_enable_downloads": True,
         "can_customize_branding": True,
         "can_extend_lifespan": True,

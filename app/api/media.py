@@ -1,5 +1,7 @@
 import os
 import logging
+import tempfile
+import shutil
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status
 from sqlalchemy.orm import Session
@@ -186,6 +188,7 @@ def save_direct_upload_url(
 @router.post("/upload/{album_id}", response_model=MediaItemResponse, status_code=status.HTTP_201_CREATED)
 def upload_album_photo(
     album_id: int,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -220,16 +223,29 @@ def upload_album_photo(
             detail="Album is locked. Client has finalized selection."
         )
 
-    # Read uploaded file content
+    # Read uploaded file content via streaming chunking to neutralize OOM vulnerability
     try:
-        file_bytes = file.file.read()
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".tmp")
+        shutil.copyfileobj(file.file, temp_file)
+        temp_file.close()
+        temp_file_path = temp_file.name
+        
+        # Schedule airtight cleanup for chunked file immediately after response cycle
+        def safe_remove_temp():
+            if os.path.exists(temp_file_path):
+                try:
+                    os.remove(temp_file_path)
+                except Exception as e:
+                    logger.warning(f"Could not remove temp file {temp_file_path}: {e}")
+                    
+        background_tasks.add_task(safe_remove_temp)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to read uploaded image: {str(exc)}"
+            detail=f"Failed to read uploaded image stream: {str(exc)}"
         )
 
-    original_size = len(file_bytes)
+    original_size = os.path.getsize(temp_file_path)
     if original_size == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -256,7 +272,7 @@ def upload_album_photo(
     if is_cloudinary_configured():
         try:
             cloud_res = upload_file_to_cloudinary(
-                file_bytes=file_bytes,
+                file_bytes=temp_file_path,
                 filename=file.filename or "photo.jpg",
                 folder=f"photoguard_vault/{album.pin}"
             )
@@ -270,8 +286,9 @@ def upload_album_photo(
     # 2. Secondary: S3 / IDrive e2 Storage (if Cloudinary skipped or failed)
     if not high_res_url and is_s3_configured():
         try:
-            file.file.seek(0)
-            object_path = upload_file_to_s3(file=file, filename=file.filename or "photo.jpg")
+            with open(temp_file_path, "rb") as f:
+                file.file = f
+                object_path = upload_file_to_s3(file=file, filename=file.filename or "photo.jpg")
             cdn_urls = generate_cdn_urls(object_path=object_path)
             high_res_url = cdn_urls["high_res_url"]
             thumbnail_url = cdn_urls["thumbnail_url"]
@@ -291,7 +308,7 @@ def upload_album_photo(
     # Silent AI Compression
     compressed_bytes = None
     try:
-        compressed_bytes = image_processor.compress_image_silent_ai(file_bytes)
+        compressed_bytes = image_processor.compress_image_silent_ai(temp_file_path)
         compressed_size = len(compressed_bytes) if compressed_bytes else int(original_size * 0.15)
     except Exception as ai_exc:
         logger.warning(f"AI image processing warning: {ai_exc}")

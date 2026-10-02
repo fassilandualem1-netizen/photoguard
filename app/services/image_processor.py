@@ -1,6 +1,7 @@
 import io
 import logging
 from typing import Optional
+import typing
 
 logger = logging.getLogger(__name__)
 
@@ -26,19 +27,24 @@ class ImageProcessorService:
 
     @staticmethod
     def compress_image_silent_ai(
-        image_bytes: bytes,
+        image_data: typing.Union[bytes, str],
         max_dimension: int = 3840,
         quality: int = 90
     ) -> bytes:
         """
-        Compresses original RAW/JPEG image bytes using Lanczos filter downsampling and WebP encoding.
+        Compresses original RAW/JPEG image bytes or file path using Lanczos filter downsampling and WebP encoding.
         Corrects EXIF orientation, strips bulky camera metadata, and retains optimal visual fidelity.
         """
         if not Image:
-            return image_bytes
+            return b"" if isinstance(image_data, str) else image_data
 
         try:
-            with Image.open(io.BytesIO(image_bytes)) as img:
+            if isinstance(image_data, str):
+                img_to_open = image_data
+            else:
+                img_to_open = io.BytesIO(image_data)
+                
+            with Image.open(img_to_open) as img:
                 # Normalize EXIF orientation (portrait vs landscape rotation)
                 try:
                     img = ImageOps.exif_transpose(img)

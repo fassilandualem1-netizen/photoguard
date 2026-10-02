@@ -1,7 +1,8 @@
 import os
 import uuid
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
+import typing
 import boto3
 from botocore.client import Config
 from fastapi import UploadFile
@@ -47,9 +48,9 @@ def is_cloudinary_configured() -> bool:
         )
     )
 
-def upload_file_to_cloudinary(file_bytes: bytes, filename: str, folder: str = "photoguard_vault") -> Dict[str, str]:
+def upload_file_to_cloudinary(file_bytes: typing.Union[bytes, str], filename: str, folder: str = "photoguard_vault") -> Dict[str, str]:
     """
-    Uploads photo buffer directly to Cloudinary permanent storage.
+    Uploads photo buffer or file path directly to Cloudinary permanent storage.
     Generates high-resolution secure URL and optimized thumbnail delivery URL.
     """
     if not is_cloudinary_configured():

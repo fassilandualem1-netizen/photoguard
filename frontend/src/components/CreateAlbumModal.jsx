@@ -8,7 +8,7 @@ export default function CreateAlbumModal({ isOpen, onClose, onAlbumCreated }) {
   const [title, setTitle] = useState("");
   const [clientName, setClientName] = useState("");
   const [allowDownload, setAllowDownload] = useState(false);
-  const [expiresInDays, setExpiresInDays] = useState("15");
+  const [expiresInDays, setExpiresInDays] = useState(15);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -46,7 +46,7 @@ export default function CreateAlbumModal({ isOpen, onClose, onAlbumCreated }) {
       setTitle("");
       setClientName("");
       setAllowDownload(false);
-      setExpiresInDays("15");
+      setExpiresInDays(15);
 
       if (onAlbumCreated) {
         onAlbumCreated(response.data);

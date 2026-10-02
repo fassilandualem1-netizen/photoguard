@@ -169,7 +169,8 @@ fun GalleryScreen(
     val isSubmitted = uiState.isSubmitted || uiState.album.isSubmitted || uiState.isLocked || uiState.album.isLocked
     val effectiveMediaItems = remember(uiState.mediaItems, isSubmitted) {
         if (isSubmitted) {
-            uiState.mediaItems.filter { it.isSelected }
+            val selected = uiState.mediaItems.filter { it.isSelected }
+            if (selected.isNotEmpty()) selected else uiState.mediaItems
         } else {
             uiState.mediaItems
         }
@@ -206,8 +207,14 @@ fun GalleryScreen(
         parseBrandAccentColor(uiState.brandColorHex)
     }
 
-    LaunchedEffect(uiState.isSubmitted, uiState.album.allowDownload) {
-        if (uiState.isSubmitted || uiState.album.allowDownload) {
+    LaunchedEffect(isSubmitted) {
+        if (isSubmitted) {
+            currentStep = 1
+        }
+    }
+
+    LaunchedEffect(uiState.album.allowDownload) {
+        if (uiState.album.allowDownload) {
             onSubmitComplete()
         }
     }

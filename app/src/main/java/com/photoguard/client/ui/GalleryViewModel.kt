@@ -238,6 +238,10 @@ class GalleryViewModel(
                 is NetworkResult.Success -> {
                     _uiState.update {
                         it.copy(
+                            album = it.album.copy(
+                                isSubmitted = true,
+                                isLocked = true
+                            ),
                             isLocked = true,
                             isSubmitting = false,
                             isSubmitted = true

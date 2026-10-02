@@ -285,6 +285,22 @@ fun StudioInfoDialog(
                     ) {
                         Text("Close", fontWeight = FontWeight.Bold)
                     }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        PhotoGuardLogo(size = 18.dp, showGlow = false)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Protected by PhotoGuard",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF64748B)
+                        )
+                    }
                 }
             }
         }

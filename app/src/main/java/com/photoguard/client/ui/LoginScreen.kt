@@ -1,8 +1,15 @@
 package com.photoguard.client.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,10 +20,10 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -31,7 +38,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockClock
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -56,8 +62,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -93,178 +102,241 @@ fun LoginScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        modifier = modifier.fillMaxSize().statusBarsPadding(),
-        containerColor = MaterialTheme.colorScheme.background
+        modifier = modifier
+            .fillMaxSize()
+            .imePadding(),
+        containerColor = Color(0xFF0B0F17)
     ) { paddingValues ->
-        BoxWithConstraints(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues),
-            contentAlignment = Alignment.Center
+                .padding(paddingValues)
         ) {
-            val isTablet = maxWidth > 600.dp
-            val containerWidth = if (isTablet) 440.dp else maxWidth
-
-            Column(
+            // Pinned Top Bar: Language Switcher and Security Badge
+            Row(
                 modifier = Modifier
-                    .widthIn(max = containerWidth)
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                    .statusBarsPadding()
+                    .padding(horizontal = 24.dp, vertical = 14.dp)
+                    .align(Alignment.TopCenter),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Language Switcher
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = { isAmharic = !isAmharic }) {
-                        Text(
-                            text = if (isAmharic) "English" else "አማርኛ",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Brand Emblem
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Shield,
-                        contentDescription = "PhotoGuard Shield",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // Title & Subtitle
-                Text(
-                    text = "PhotoGuard",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = (-0.5).sp
-                    ),
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Text(
-                    text = if (isAmharic) "ፎቶዎችን ለመምረጥ ባለ 6 አሃዝ ሚስጥር ቁጥር ያስገቡ"
-                           else "Enter your 6-digit access PIN to unlock your album",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-
-                Spacer(modifier = Modifier.height(28.dp))
-
-                // PIN Input Component
-                val isLockedOut = (uiState as? LoginUiState.Error)?.isRateLimit == true
-                PinInputField(
-                    pin = pin,
-                    onPinChanged = { viewModel.onPinChanged(it) },
-                    enabled = !isLockedOut && uiState !is LoginUiState.Loading,
-                    focusRequester = focusRequester,
-                    onImeDone = { viewModel.verifyPin() },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                // Error / Lockout Display
-                AnimatedVisibility(
-                    visible = uiState is LoginUiState.Error,
-                    enter = fadeIn(),
-                    exit = fadeOut()
-                ) {
-                    if (uiState is LoginUiState.Error) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        ErrorBanner(
-                            error = uiState as LoginUiState.Error,
-                            isAmharic = isAmharic
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Action Unlock Button
-                Button(
-                    onClick = { viewModel.verifyPin() },
-                    enabled = !isLockedOut && pin.length == 6 && uiState !is LoginUiState.Loading,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                ) {
-                    if (uiState is LoginUiState.Loading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.5.dp
-                        )
-                    } else {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = if (isLockedOut) Icons.Default.LockClock else Icons.Default.Lock,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (isAmharic) "አልበም ክፈት" else "Unlock Album",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Verified Badge
+                // Encryption status pill
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0xFF161E2E))
+                        .border(1.dp, Color(0xFF334155).copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "Verified Secure",
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
-                        modifier = Modifier.size(16.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF10B981))
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (isAmharic) "የተጠበቀ እና የተረጋገጠ ግንኙነት" else "Secure & Verified Access",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                        textAlign = TextAlign.Center
+                        text = if (isAmharic) "የተመሰጠረ ግንኙነት" else "End-to-End Encrypted",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 11.sp
+                        ),
+                        color = Color(0xFF94A3B8)
                     )
+                }
+
+                // Language toggle
+                TextButton(
+                    onClick = { isAmharic = !isAmharic },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = Color(0xFFF59E0B)
+                    )
+                ) {
+                    Text(
+                        text = if (isAmharic) "English" else "አማርኛ",
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    )
+                }
+            }
+
+            // Main Content Area: Perfectly Centered Vertically & Horizontally
+            // Slightly upward-biased using weighted spacers so soft keyboard never covers the PIN boxes
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .widthIn(max = 440.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    // Top Spacer
+                    Spacer(modifier = Modifier.weight(1.0f))
+
+                    // Brand New Premium PhotoGuard Logo
+                    PhotoGuardLogo(
+                        size = 96.dp,
+                        showGlow = true
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Title
+                    Text(
+                        text = "PhotoGuard",
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = (-0.5).sp,
+                            fontSize = 28.sp
+                        ),
+                        color = Color.White
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Subtitle
+                    Text(
+                        text = if (isAmharic) "ፎቶዎችን ለመምረጥ ባለ 6 አሃዝ ሚስጥር ቁጥር ያስገቡ"
+                               else "Enter your 6-digit access PIN to unlock your album",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp
+                        ),
+                        color = Color(0xFF94A3B8),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(30.dp))
+
+                    // Highly Interactive 6-Digit PIN Boxes
+                    val isLockedOut = (uiState as? LoginUiState.Error)?.isRateLimit == true
+                    PinInputField(
+                        pin = pin,
+                        onPinChanged = { viewModel.onPinChanged(it) },
+                        enabled = !isLockedOut && uiState !is LoginUiState.Loading,
+                        focusRequester = focusRequester,
+                        onImeDone = { viewModel.verifyPin() },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Error / Lockout Display
+                    AnimatedVisibility(
+                        visible = uiState is LoginUiState.Error,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        if (uiState is LoginUiState.Error) {
+                            Column {
+                                Spacer(modifier = Modifier.height(18.dp))
+                                ErrorBanner(
+                                    error = uiState as LoginUiState.Error,
+                                    isAmharic = isAmharic
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(26.dp))
+
+                    // Action Unlock Button
+                    Button(
+                        onClick = { viewModel.verifyPin() },
+                        enabled = !isLockedOut && pin.length == 6 && uiState !is LoginUiState.Loading,
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFF59E0B),
+                            contentColor = Color(0xFF090D14),
+                            disabledContainerColor = Color(0xFF1E293B),
+                            disabledContentColor = Color(0xFF64748B)
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = if (pin.length == 6) 6.dp else 0.dp,
+                            pressedElevation = 2.dp
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp)
+                    ) {
+                        if (uiState is LoginUiState.Loading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Color(0xFF090D14),
+                                strokeWidth = 2.5.dp
+                            )
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isLockedOut) Icons.Default.LockClock else Icons.Default.Lock,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isAmharic) "አልበም ክፈት" else "Unlock Album",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.3.sp
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    // Verified Badge
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Verified Secure",
+                            tint = Color(0xFF10B981),
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isAmharic) "የተጠበቀ እና የተረጋገጠ ግንኙነት" else "Secure & Verified Access",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 12.sp
+                            ),
+                            color = Color(0xFF64748B),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
+                    // Bottom Spacer: Greater weight shifts content gracefully above center for keyboard clearance
+                    Spacer(modifier = Modifier.weight(1.45f))
                 }
             }
         }
     }
 }
 
+/**
+ * Interactive 6-Digit PIN Boxes
+ * 
+ * Features individual luxury rounded-corner digit cards with dynamic focus states,
+ * amber brand glow elevations, and animated active blinking cursors.
+ */
 @Composable
 private fun PinInputField(
     pin: String,
@@ -274,22 +346,54 @@ private fun PinInputField(
     onImeDone: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var isTextFieldFocused by remember { mutableStateOf(false) }
+
+    // Smooth cursor pulsing animation for active focused cell
+    val infiniteTransition = rememberInfiniteTransition(label = "pinCursorAnim")
+    val cursorAlpha by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(550, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pinCursorAlpha"
+    )
+
     BasicTextField(
         value = pin,
-        onValueChange = onPinChanged,
+        onValueChange = { newValue ->
+            if (newValue.length <= 6 && newValue.all { it.isDigit() }) {
+                onPinChanged(newValue)
+            }
+        },
         enabled = enabled,
         keyboardOptions = KeyboardOptions(
             keyboardType = KeyboardType.NumberPassword,
             imeAction = ImeAction.Done
         ),
         keyboardActions = KeyboardActions(onDone = { onImeDone() }),
-        modifier = modifier.focusRequester(focusRequester),
+        modifier = modifier
+            .focusRequester(focusRequester)
+            .onFocusChanged { isTextFieldFocused = it.isFocused },
         decorationBox = {
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                // Adapt spacing and cell size to available container width
-                val totalSpacing = 40.dp // 5 gaps * 8.dp
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        try {
+                            focusRequester.requestFocus()
+                        } catch (_: Exception) {}
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                val totalSpacing = 40.dp
                 val availableWidth = maxWidth - totalSpacing
-                val cellSize = minOf(48.dp, availableWidth / 6)
+                val cellWidth = minOf(48.dp, availableWidth / 6)
+                val cellHeight = cellWidth * 1.25f // 60dp height on standard screens
                 val spacing = if (maxWidth < 360.dp) 6.dp else 8.dp
 
                 Row(
@@ -298,36 +402,76 @@ private fun PinInputField(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     repeat(6) { index ->
-                        val isFocused = pin.length == index
+                        val isCurrentBox = pin.length == index
+                        val isFocused = isTextFieldFocused && isCurrentBox
                         val char = pin.getOrNull(index)
+                        val isFilled = char != null
+
+                        val borderColor = when {
+                            isFocused -> Color(0xFFF59E0B) // Amber brand accent
+                            isFilled -> Color(0xFFF59E0B).copy(alpha = 0.55f)
+                            else -> Color(0xFF334155).copy(alpha = 0.45f)
+                        }
+
+                        val borderWidth = if (isFocused) 2.dp else 1.dp
+                        val elevation = if (isFocused) 8.dp else if (isFilled) 2.dp else 0.dp
+                        val shape = RoundedCornerShape(14.dp)
+
                         Box(
                             modifier = Modifier
-                                .size(cellSize)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    if (char != null) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                .width(cellWidth)
+                                .height(cellHeight)
+                                .shadow(
+                                    elevation = elevation,
+                                    shape = shape,
+                                    ambientColor = if (isFocused) Color(0xFFF59E0B) else Color.Transparent,
+                                    spotColor = if (isFocused) Color(0xFFF59E0B) else Color.Transparent
                                 )
-                                .border(
-                                    width = if (isFocused) 2.dp else 1.dp,
-                                    color = when {
-                                        isFocused -> MaterialTheme.colorScheme.primary
-                                        char != null -> MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                                        else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                                    },
-                                    shape = RoundedCornerShape(12.dp)
-                                ),
+                                .clip(shape)
+                                .background(
+                                    when {
+                                        isFocused -> Color(0xFF1E2638)
+                                        isFilled -> Color(0xFF161E2E)
+                                        else -> Color(0xFF0F1522)
+                                    }
+                                )
+                                .border(width = borderWidth, color = borderColor, shape = shape),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = char?.toString() ?: "",
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace
-                                ),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                            when {
+                                isFilled -> {
+                                    Text(
+                                        text = char.toString(),
+                                        style = MaterialTheme.typography.titleLarge.copy(
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontFamily = FontFamily.Monospace,
+                                            fontSize = 24.sp
+                                        ),
+                                        color = Color(0xFFF8FAFC)
+                                    )
+                                }
+                                isFocused -> {
+                                    // Animated active cursor indicator
+                                    Box(
+                                        modifier = Modifier
+                                            .width(2.dp)
+                                            .height(24.dp)
+                                            .alpha(cursorAlpha)
+                                            .background(Color(0xFFF59E0B), RoundedCornerShape(1.dp))
+                                    )
+                                }
+                                else -> {
+                                    // Subtle placeholder dot
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF334155).copy(alpha = 0.6f))
+                                    )
+                                }
+                            }
                         }
+
                         if (index < 5) {
                             Spacer(modifier = Modifier.width(spacing))
                         }
@@ -346,20 +490,18 @@ private fun ErrorBanner(
 ) {
     val is429 = error.isRateLimit
     val backgroundColor = if (is429) {
-        MaterialTheme.colorScheme.errorContainer
+        Color(0xFF450A0A).copy(alpha = 0.85f)
     } else {
-        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)
+        Color(0xFF3B0712).copy(alpha = 0.80f)
     }
-    val contentColor = if (is429) {
-        MaterialTheme.colorScheme.onErrorContainer
-    } else {
-        MaterialTheme.colorScheme.onErrorContainer
-    }
+    val contentColor = Color(0xFFFCA5A5)
+    val borderColor = if (is429) Color(0xFFEF4444).copy(alpha = 0.6f) else Color(0xFFF43F5E).copy(alpha = 0.45f)
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = backgroundColor)
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = backgroundColor),
+        border = BorderStroke(1.dp, borderColor)
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -368,7 +510,7 @@ private fun ErrorBanner(
             Icon(
                 imageVector = if (is429) Icons.Default.LockClock else Icons.Default.WarningAmber,
                 contentDescription = null,
-                tint = contentColor,
+                tint = if (is429) Color(0xFFF87171) else Color(0xFFFB7185),
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
@@ -387,7 +529,7 @@ private fun ErrorBanner(
                         text = if (isAmharic) "እባክዎን ከ $formattedTime በኋላ እንደገና ይሞክሩ"
                                else "Too many failed attempts. Try again in $formattedTime",
                         style = MaterialTheme.typography.bodySmall,
-                        color = contentColor
+                        color = contentColor.copy(alpha = 0.85f)
                     )
                 } else {
                     val userFriendlyMsg = when {

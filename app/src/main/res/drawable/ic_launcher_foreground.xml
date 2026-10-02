@@ -4,22 +4,93 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Shield outline -->
+
+    <!-- Outer Shield Rim (Gold Accent) -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,14 L82,26 L82,50 C82,68 66,80 54,86 C42,80 26,68 26,50 L26,26 Z" />
-    <!-- Lock body -->
+        android:fillColor="#F59E0B"
+        android:pathData="M54,16 C68,16 80,21 84,28 C84,52 70,72 54,88 C38,72 24,52 24,28 C28,21 40,16 54,16 Z" />
+
+    <!-- Inner Shield Body (Dark Metallic Obsidian) -->
     <path
-        android:fillColor="#1565C0"
-        android:pathData="M44,52 L44,56 Q44,60 48,60 L60,60 Q64,60 64,56 L64,52 Q64,48 60,48 L48,48 Q44,48 44,52 Z" />
-    <!-- Lock shackle -->
+        android:fillColor="#0B0F17"
+        android:pathData="M54,19.5 C66,19.5 77,24 81,30.5 C81,50.5 68,69 54,84 C40,69 27,50.5 27,30.5 C31,24 42,19.5 54,19.5 Z" />
+
+    <!-- Inner Shield Bevel Stroke -->
     <path
-        android:strokeColor="#1565C0"
-        android:strokeWidth="4"
+        android:strokeColor="#334155"
+        android:strokeWidth="1.2"
         android:fillColor="@android:color/transparent"
-        android:pathData="M48,48 L48,43 Q48,37 54,37 Q60,37 60,43 L60,48" />
-    <!-- Keyhole dot -->
+        android:pathData="M54,24 C63,24 72,27.5 75,32.5 C75,48.5 64,64 54,77 C44,64 33,48.5 33,32.5 C36,27.5 45,24 54,24 Z" />
+
+    <!-- Lens Outer Bezel Fill & Rim -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M57,54 A3,3 0 1,1 51,54 A3,3 0 1,1 57,54 Z" />
+        android:strokeColor="#F59E0B"
+        android:strokeWidth="2"
+        android:fillColor="#1E293B"
+        android:pathData="M54,31 A17,17 0 1,1 53.99,31 Z" />
+
+    <!-- 6 Camera Aperture Blades (Tangential Optical Blades) -->
+    <path
+        android:strokeColor="#D97706"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M54,31 L63,42" />
+    <path
+        android:strokeColor="#D97706"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M68.7,39.5 L60,50" />
+    <path
+        android:strokeColor="#D97706"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M68.7,56.5 L51,55" />
+    <path
+        android:strokeColor="#D97706"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M54,65 L45,54" />
+    <path
+        android:strokeColor="#D97706"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M39.3,56.5 L48,46" />
+    <path
+        android:strokeColor="#D97706"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M39.3,39.5 L57,41" />
+
+    <!-- Central Lens Optic Glass -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M54,41 A7,7 0 1,1 53.99,41 Z" />
+
+    <!-- Central Focal Spot (Radiant Sensor Amber) -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M54,45 A2.8,2.8 0 1,1 53.99,45 Z" />
+
+    <!-- Optical Specular Glare Arc -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M49.5,45 A5.5,5.5 0 0,1 54,42.5" />
+
+    <!-- Lower Shield Security Chevron Accent -->
+    <path
+        android:strokeColor="#F59E0B"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M46,70 L54,76 L62,70" />
 </vector>

@@ -598,14 +598,8 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
                 <Share2 className="w-4 h-4" />
                 <span>Studio Contact & Social Media Channels</span>
               </div>
-              <span
-                className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                  isStudio
-                    ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                    : "bg-slate-800 text-slate-400 border border-slate-700"
-                }`}
-              >
-                {isStudio ? "Studio Plan Active" : "Studio Tier Only"}
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                Direct Channels
               </span>
             </div>
 
@@ -613,135 +607,122 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
               Connect your direct studio channels so clients can easily call, message, and view your portfolio right from their mobile delivery gallery.
             </p>
 
-            {isStudio ? (
-              <form onSubmit={handleSaveSocialLinks} className="space-y-3.5">
-                {/* 1. Phone Number */}
-                <div>
-                  <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5 mb-1">
-                    <Phone className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Contact Phone Number</span>
-                  </label>
-                  <input
-                    type="tel"
-                    id="studio-phone-input"
-                    placeholder="+251 91 123 4567 or (555) 019-2834"
-                    value={contactPhone}
-                    onChange={(e) => setContactPhone(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
-                  />
-                </div>
-
-                {/* 2. Telegram */}
-                <div>
-                  <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5 mb-1">
-                    <Send className="w-3.5 h-3.5 text-sky-400" />
-                    <span>Telegram Channel or Username</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="studio-telegram-input"
-                    placeholder="@yourstudio or https://t.me/yourstudio"
-                    value={telegramUrl}
-                    onChange={(e) => setTelegramUrl(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
-                  />
-                </div>
-
-                {/* 3. Instagram */}
-                <div>
-                  <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5 mb-1">
-                    <Instagram className="w-3.5 h-3.5 text-pink-400" />
-                    <span>Instagram Profile</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="studio-instagram-input"
-                    placeholder="@yourstudio or https://instagram.com/yourstudio"
-                    value={instagramUrl}
-                    onChange={(e) => setInstagramUrl(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
-                  />
-                </div>
-
-                {/* 4. TikTok */}
-                <div>
-                  <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5 mb-1">
-                    <Video className="w-3.5 h-3.5 text-teal-400" />
-                    <span>TikTok Profile</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="studio-tiktok-input"
-                    placeholder="@yourstudio or https://tiktok.com/@yourstudio"
-                    value={tiktokUrl}
-                    onChange={(e) => setTiktokUrl(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
-                  />
-                </div>
-
-                {/* 5. YouTube */}
-                <div>
-                  <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5 mb-1">
-                    <Youtube className="w-3.5 h-3.5 text-red-500" />
-                    <span>YouTube Channel</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="studio-youtube-input"
-                    placeholder="https://youtube.com/@yourstudio"
-                    value={youtubeUrl}
-                    onChange={(e) => setYoutubeUrl(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
-                  />
-                </div>
-
-                {/* Feedback Alerts */}
-                {socialSuccessMsg && (
-                  <div className="p-2.5 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[11px] flex items-center gap-2 animate-in fade-in">
-                    <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span>{socialSuccessMsg}</span>
-                  </div>
-                )}
-
-                {socialErrorMsg && (
-                  <div className="p-2.5 rounded-lg bg-red-950/80 border border-red-500/40 text-red-300 text-[11px] flex items-center gap-2 animate-in fade-in">
-                    <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                    <span>{socialErrorMsg}</span>
-                  </div>
-                )}
-
-                {/* Submit Action Button */}
-                <button
-                  id="save-studio-socials-btn"
-                  type="submit"
-                  disabled={isSavingSocial}
-                  className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-semibold text-xs transition-all shadow-md flex items-center justify-center gap-1.5"
-                >
-                  {isSavingSocial ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Saving Channels...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-3.5 h-3.5" />
-                      <span>Save Contact & Social Channels</span>
-                    </>
-                  )}
-                </button>
-              </form>
-            ) : (
-              <div className="space-y-2 text-slate-400 pt-1">
-                <p className="text-[11px] leading-relaxed">
-                  Display your direct studio contact phone and social media links in the client mobile app.
-                  Upgrade to the <b>Studio Plan</b> to unlock.
-                </p>
-                <div className="flex items-center gap-1.5 text-[11px] text-amber-400 font-medium">
-                  <Lock className="w-3.5 h-3.5" />
-                  <span>Available on Studio Tier</span>
-                </div>
+            <form onSubmit={handleSaveSocialLinks} className="space-y-3.5">
+              {/* 1. Phone Number */}
+              <div>
+                <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5 mb-1">
+                  <Phone className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Phone Number</span>
+                </label>
+                <input
+                  type="tel"
+                  id="studio-phone-input"
+                  placeholder="+251 91 123 4567 or (555) 019-2834"
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                />
               </div>
-            )}
+
+              {/* 2. Telegram Username / URL */}
+              <div>
+                <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5 mb-1">
+                  <Send className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Telegram Username / URL</span>
+                </label>
+                <input
+                  type="text"
+                  id="studio-telegram-input"
+                  placeholder="@yourstudio or https://t.me/yourstudio"
+                  value={telegramUrl}
+                  onChange={(e) => setTelegramUrl(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                />
+              </div>
+
+              {/* 3. Instagram URL */}
+              <div>
+                <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5 mb-1">
+                  <Instagram className="w-3.5 h-3.5 text-pink-400" />
+                  <span>Instagram URL</span>
+                </label>
+                <input
+                  type="text"
+                  id="studio-instagram-input"
+                  placeholder="@yourstudio or https://instagram.com/yourstudio"
+                  value={instagramUrl}
+                  onChange={(e) => setInstagramUrl(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                />
+              </div>
+
+              {/* 4. TikTok URL */}
+              <div>
+                <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5 mb-1">
+                  <Video className="w-3.5 h-3.5 text-teal-400" />
+                  <span>TikTok URL</span>
+                </label>
+                <input
+                  type="text"
+                  id="studio-tiktok-input"
+                  placeholder="@yourstudio or https://tiktok.com/@yourstudio"
+                  value={tiktokUrl}
+                  onChange={(e) => setTiktokUrl(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                />
+              </div>
+
+              {/* 5. YouTube URL */}
+              <div>
+                <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5 mb-1">
+                  <Youtube className="w-3.5 h-3.5 text-red-500" />
+                  <span>YouTube URL</span>
+                </label>
+                <input
+                  type="text"
+                  id="studio-youtube-input"
+                  placeholder="https://youtube.com/@yourstudio"
+                  value={youtubeUrl}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                />
+              </div>
+
+              {/* Feedback Alerts */}
+              {socialSuccessMsg && (
+                <div className="p-2.5 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[11px] flex items-center gap-2 animate-in fade-in">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>{socialSuccessMsg}</span>
+                </div>
+              )}
+
+              {socialErrorMsg && (
+                <div className="p-2.5 rounded-lg bg-red-950/80 border border-red-500/40 text-red-300 text-[11px] flex items-center gap-2 animate-in fade-in">
+                  <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                  <span>{socialErrorMsg}</span>
+                </div>
+              )}
+
+              {/* Submit Action Button */}
+              <button
+                id="save-studio-socials-btn"
+                type="submit"
+                disabled={isSavingSocial}
+                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-semibold text-xs transition-all shadow-md flex items-center justify-center gap-1.5"
+              >
+                {isSavingSocial ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving Channels...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Save Contact & Social Channels</span>
+                  </>
+                )}
+              </button>
+            </form>
           </div>
 
           {/* ========================================================= */}

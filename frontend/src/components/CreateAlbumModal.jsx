@@ -153,7 +153,7 @@ export default function CreateAlbumModal({ isOpen, onClose, onAlbumCreated }) {
                 className="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/80 transition-all"
               />
               <p className="text-[11px] text-slate-500">
-                Number of days before client selection expires (defaults to 15 days, maximum 15 days).
+                Number of days before client selection expires (defaults to 15 days).
               </p>
             </div>
           )}

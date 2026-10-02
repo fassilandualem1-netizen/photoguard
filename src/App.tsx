@@ -1138,7 +1138,7 @@ export default function App() {
                 <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800/80">
                   <span>Current Client Mode:</span>
                   <span className={`font-semibold ${currentAlbum?.allow_download ? 'text-emerald-400' : 'text-amber-400'}`}>
-                    {currentAlbum?.allow_download ? 'Direct Final Delivery 🚀' : 'Proof Selection & Submit 📋'}
+                    {currentAlbum?.allow_download ? 'Direct Final Delivery' : 'Proof Selection & Submit'}
                   </span>
                 </div>
               </div>
@@ -1649,7 +1649,7 @@ export default function App() {
                             ) : (
                               <>
                                 <CheckCircle2 className="w-4 h-4" />
-                                <span>{isAmharic ? 'ምርጫን አጽድቅና ላክ 🔒' : 'Final Submit to Studio'}</span>
+                                <span>{isAmharic ? 'ምርጫን አጽድቅና ላክ' : 'Final Submit to Studio'}</span>
                               </>
                             )}
                           </button>

@@ -18,7 +18,7 @@ android {
         vectorDrawables { useSupportLibrary = true }
         resourceConfigurations += setOf("en", "am")
         
-        buildConfigField("String", "API_BASE_URL", "\"https://photoguard.onrender.com/\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://photoguard.onrender.com/api/\"")
     }
 
     buildTypes {
@@ -27,12 +27,12 @@ android {
             isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("debug")
-            buildConfigField("String", "API_BASE_URL", "\"https://photoguard.onrender.com/\"")
+            buildConfigField("String", "API_BASE_URL", "\"https://photoguard.onrender.com/api/\"")
         }
         debug {
             isMinifyEnabled = false
             applicationIdSuffix = ".debug"
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000/\"")
+            buildConfigField("String", "API_BASE_URL", "\"https://photoguard.onrender.com/api/\"")
         }
     }
 

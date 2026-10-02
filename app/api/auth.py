@@ -250,6 +250,7 @@ def logout(response: Response):
 @router.post("/change-password", response_model=UserResponse, status_code=status.HTTP_200_OK)
 def change_password(
     payload: PasswordChangeRequest,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -295,6 +296,31 @@ def change_password(
         db.commit()
         db.refresh(current_user)
         logger.info(f"[Auth] Successfully updated password for user id={current_user.id} ({current_user.email})")
+
+        # Generate new JWT to prevent lockout after token_version increment
+        raw_role = getattr(current_user, "role", "photographer")
+        if hasattr(raw_role, "value"):
+            role_str = str(raw_role.value).lower()
+        else:
+            role_str = str(raw_role or "photographer").lower().replace("userrole.", "").strip()
+
+        token_payload = {
+            "sub": str(current_user.id),
+            "email": current_user.email,
+            "role": role_str,
+            "token_version": current_user.token_version
+        }
+        access_token = create_access_token(data=token_payload)
+        is_prod = os.environ.get("ENVIRONMENT", "development") == "production"
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=is_prod,
+            samesite="lax",
+            max_age=86400  # 1 day
+        )
+
         return UserResponse.model_validate(current_user)
     except SQLAlchemyError as exc:
         db.rollback()

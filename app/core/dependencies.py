@@ -54,6 +54,15 @@ def get_current_user(
     if token_version is not None and token_version != user_token_version:
         raise revoked_token_exception
 
+    # Enforce forced password reset globally across all secured endpoints
+    if getattr(user, "needs_password_change", False):
+        allowed_paths = ["/api/auth/change-password", "/api/auth/me", "/api/auth/logout"]
+        if request.url.path not in allowed_paths:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You must change your temporary password before accessing this resource.",
+            )
+
     # Hierarchical Security Check:
     # If the user is an assistant/staff, verify that their parent studio/photographer account is also active
     # AND that the parent studio is on the 'studio' plan tier.

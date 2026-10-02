@@ -1098,7 +1098,7 @@ fun StudioBrandedTopBar(
 }
 
 /**
- * Gallery item in Step 1 (All proofs)
+ * Gallery item in Step 1 (All proofs) - Apple / Google Photos Native Style
  */
 @Composable
 fun GalleryItem(
@@ -1109,20 +1109,25 @@ fun GalleryItem(
     onOpenFullScreen: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(8.dp))
             .border(
-                width = if (media.isSelected) 2.dp else 1.dp,
-                color = if (media.isSelected) brandAccent else Color(0xFF334155),
-                shape = RoundedCornerShape(12.dp)
+                width = if (media.isSelected) 2.dp else 0.5.dp,
+                color = if (media.isSelected) brandAccent else Color(0x22FFFFFF),
+                shape = RoundedCornerShape(8.dp)
             )
             .clickable { onOpenFullScreen() }
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .aspectRatio(1f)
+        ) {
             val context = LocalContext.current
             val crispUrl = remember(media.rawUrl, media.thumbnailUrl, media.url) {
                 getCrispAndroidThumbnailUrl(media)
@@ -1142,42 +1147,31 @@ fun GalleryItem(
                 contentScale = ContentScale.Crop,
                 imageLoader = context.imageLoader,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(0.85f)
+                    .fillMaxSize()
+                    .aspectRatio(1f)
             )
 
-            // Minimalist Top-Right Selection Indicator (Clean & Uncluttered)
+            // Minimalist Premium Selection Indicator (Apple / Google Photos Style)
+            // If selected: tiny solid brand-colored circle with a clear checkmark strictly in TOP-RIGHT
+            // If NOT selected: show ABSOLUTELY NOTHING on the thumbnail. 100% clean and unobstructed.
             if (media.isSelected) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .size(24.dp)
+                        .padding(6.dp)
+                        .size(22.dp)
                         .clip(CircleShape)
                         .background(brandAccent)
-                        .border(1.5.dp, Color.White, CircleShape)
-                        .clickable(enabled = !isLocked) { onToggleSelect() },
+                        .border(1.5.dp, Color.White, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = "Selected",
                         tint = Color.White,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(13.dp)
                     )
                 }
-            } else if (!isLocked) {
-                // Subtle, unobtrusive outline target for quick selection
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(Color(0x33000000))
-                        .border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape)
-                        .clickable { onToggleSelect() }
-                )
             }
         }
     }
@@ -1194,58 +1188,60 @@ fun ReviewItemCard(
     onOpenFullScreen: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .border(1.5.dp, brandAccent, RoundedCornerShape(14.dp))
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(8.dp))
+            .border(1.5.dp, brandAccent, RoundedCornerShape(8.dp))
+            .clickable { onOpenFullScreen() }
     ) {
-        Column {
-            Box(modifier = Modifier.fillMaxWidth()) {
-                val context = LocalContext.current
-                val crispUrl = remember(media.rawUrl, media.thumbnailUrl, media.url) {
-                    getCrispAndroidThumbnailUrl(media)
-                }
-                val imageRequest = remember(crispUrl) {
-                    ImageRequest.Builder(context)
-                        .data(crispUrl)
-                        .crossfade(true)
-                        .precision(Precision.EXACT)
-                        .diskCachePolicy(CachePolicy.DISABLED)
-                        .memoryCachePolicy(CachePolicy.ENABLED)
-                        .build()
-                }
-                AsyncImage(
-                    model = imageRequest,
-                    contentDescription = media.filename,
-                    contentScale = ContentScale.Crop,
-                    imageLoader = context.imageLoader,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(0.9f)
-                        .clickable { onOpenFullScreen() }
-                )
-
-                // Remove from selection button (Trash/Minus icon)
-                IconButton(
-                    onClick = onRemove,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .size(32.dp)
-                        .background(Color(0xCCEF4444), CircleShape)
-                ) {
-                    Icon(
-                        Icons.Default.DeleteOutline,
-                        contentDescription = "Remove",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .aspectRatio(1f)
+        ) {
+            val context = LocalContext.current
+            val crispUrl = remember(media.rawUrl, media.thumbnailUrl, media.url) {
+                getCrispAndroidThumbnailUrl(media)
             }
+            val imageRequest = remember(crispUrl) {
+                ImageRequest.Builder(context)
+                    .data(crispUrl)
+                    .crossfade(true)
+                    .precision(Precision.EXACT)
+                    .diskCachePolicy(CachePolicy.DISABLED)
+                    .memoryCachePolicy(CachePolicy.ENABLED)
+                    .build()
+            }
+            AsyncImage(
+                model = imageRequest,
+                contentDescription = media.filename,
+                contentScale = ContentScale.Crop,
+                imageLoader = context.imageLoader,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .aspectRatio(1f)
+            )
 
+            // Remove from selection button (Trash icon)
+            IconButton(
+                onClick = onRemove,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(26.dp)
+                    .background(Color(0xCCEF4444), CircleShape)
+            ) {
+                Icon(
+                    Icons.Default.DeleteOutline,
+                    contentDescription = "Remove",
+                    tint = Color.White,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
         }
     }
 }

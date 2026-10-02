@@ -565,62 +565,102 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        {/* Temporary Credentials Success Banner */}
+        {/* Temporary Credentials Success Modal Overlay */}
         {createdCredentials && (
-          <section className="p-5 rounded-2xl bg-indigo-950/30 border-2 border-indigo-500/60 shadow-xl shadow-indigo-950/50 animate-fade-in relative overflow-hidden">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="p-1 rounded-md bg-indigo-500/20 text-indigo-300">
-                    <Sparkles className="w-4 h-4" />
-                  </span>
-                  <h3 className="text-sm font-bold text-white tracking-wide uppercase font-mono">
-                    New Photographer Provisioned Successfully!
-                  </h3>
-                </div>
-                <p className="text-xs text-slate-300">
-                  Deliver these credentials to the client. They will be forced to choose a private password on initial login.
-                </p>
-                <div className="pt-2 flex flex-wrap items-center gap-3 text-xs font-mono">
-                  <span className="px-2.5 py-1 rounded-md bg-black/50 border border-indigo-800/60 text-slate-300">
-                    User: <strong className="text-white">{createdCredentials.full_name}</strong>
-                  </span>
-                  <span className="px-2.5 py-1 rounded-md bg-black/50 border border-indigo-800/60 text-slate-300">
-                    Email: <strong className="text-white">{createdCredentials.email}</strong>
-                  </span>
-                  <span className="px-2.5 py-1 rounded-md bg-indigo-500/20 border border-indigo-400/50 text-indigo-300">
-                    Plan: <strong className="uppercase">{createdCredentials.plan}</strong>
-                  </span>
-                </div>
-              </div>
-
-              {/* Password Copy Container */}
-              <div className="flex items-center gap-2 w-full md:w-auto bg-black/70 p-2 rounded-xl border border-indigo-500/50">
-                <div className="px-3 py-1 text-center">
-                  <div className="text-[10px] uppercase font-mono text-slate-400">Temporary Password</div>
-                  <div className="text-lg font-bold font-mono tracking-wider text-indigo-300">
-                    {createdCredentials.temp_password}
+          <div
+            id="photographer-created-modal-overlay"
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+          >
+            <div className="w-full max-w-lg rounded-2xl bg-[#0e121b] border-2 border-indigo-500/60 p-6 shadow-2xl shadow-indigo-950/50 space-y-5 relative">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white tracking-wide">
+                      Photographer Provisioned!
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Deliver these credentials to the client.
+                    </p>
                   </div>
                 </div>
                 <button
-                  onClick={() => copyToClipboard(createdCredentials.temp_password)}
-                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs flex items-center gap-2 transition-all shadow-md shadow-indigo-600/30 active:scale-95"
+                  type="button"
+                  onClick={() => setCreatedCredentials(null)}
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                  title="Dismiss"
                 >
-                  {hasCopiedPassword ? (
-                    <>
-                      <Check className="w-4 h-4 text-emerald-300" />
-                      <span>Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" />
-                      <span>Copy Password</span>
-                    </>
-                  )}
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="pt-2 flex flex-col gap-2 text-xs font-mono">
+                <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-black/50 border border-indigo-800/60">
+                  <span className="text-slate-400">User:</span>
+                  <strong className="text-white">{createdCredentials.full_name}</strong>
+                </div>
+                <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-black/50 border border-indigo-800/60">
+                  <span className="text-slate-400">Email:</span>
+                  <strong className="text-white">{createdCredentials.email}</strong>
+                </div>
+                <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-indigo-500/10 border border-indigo-500/30">
+                  <span className="text-indigo-300">Plan:</span>
+                  <strong className="text-indigo-300 uppercase">{createdCredentials.plan}</strong>
+                </div>
+              </div>
+
+              {/* Temporary Password Box */}
+              <div className="space-y-2 mt-4">
+                <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono">
+                  Temporary Password
+                </label>
+                <div className="flex items-center justify-between gap-3 bg-black/90 p-3.5 rounded-xl border border-indigo-500/40">
+                  <span className="font-mono text-xl font-bold tracking-widest text-indigo-300 select-all">
+                    {createdCredentials.temp_password}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(createdCredentials.temp_password)}
+                    className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/30 active:scale-95 shrink-0"
+                  >
+                    {hasCopiedPassword ? (
+                      <>
+                        <Check className="w-4 h-4 text-emerald-300 stroke-[3]" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4 stroke-[2.5]" />
+                        <span>Copy Password</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Critical Security Warning */}
+              <div className="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 flex items-start gap-2.5 text-xs text-indigo-200/90 leading-relaxed mt-4">
+                <AlertTriangle className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                <p>
+                  <strong className="text-indigo-300 font-semibold">Security Warning:</strong> Please copy and deliver this temporary password immediately. The user will be required to change their password on next sign-in.
+                </p>
+              </div>
+
+              {/* Footer Action */}
+              <div className="pt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setCreatedCredentials(null)}
+                  className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/25 active:scale-95"
+                >
+                  Done
                 </button>
               </div>
             </div>
-          </section>
+          </div>
         )}
 
         {/* Navigation Tab Switcher */}

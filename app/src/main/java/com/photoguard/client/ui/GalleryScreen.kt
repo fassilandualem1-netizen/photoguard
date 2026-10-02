@@ -806,7 +806,7 @@ fun GalleryScreen(
                         if (currentMedia != null) {
                             IconButton(
                                 onClick = {
-                                    viewModel.toggleSelect(currentMedia.id)
+                                    if (!isSubmitted) viewModel.toggleSelect(currentMedia.id)
                                 },
                                 modifier = Modifier
                                     .size(40.dp)
@@ -830,14 +830,50 @@ fun GalleryScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(60.dp)
+                            .height(80.dp)
                             .align(Alignment.BottomCenter)
                             .background(
                                 Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, Color(0x99000000))
+                                    colors = listOf(Color.Transparent, Color(0xCC000000))
                                 )
                             )
                     )
+
+                    // Prominent Bottom Selection Toggle / FAB in Full-Screen
+                    if (currentMedia != null && !isSubmitted) {
+                        Surface(
+                            onClick = { viewModel.toggleSelect(currentMedia.id) },
+                            shape = CircleShape,
+                            color = if (currentMedia.isSelected) brandAccent else Color(0xDD1E293B),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.5.dp,
+                                if (currentMedia.isSelected) Color.White.copy(alpha = 0.9f) else Color(0x66FFFFFF)
+                            ),
+                            shadowElevation = 8.dp,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 28.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (currentMedia.isSelected) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = if (currentMedia.isSelected) "Selected" else "Select Photo",
+                                    tint = if (currentMedia.isSelected) Color.White else Color(0xFFCBD5E1),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (currentMedia.isSelected) "Selected" else "Select Photo",
+                                    color = if (currentMedia.isSelected) Color.White else Color(0xFFCBD5E1),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1072,86 +1108,76 @@ fun GalleryItem(
     onToggleSelect: () -> Unit,
     onOpenFullScreen: () -> Unit
 ) {
-    val heartColor by animateColorAsState(
-        targetValue = if (media.isSelected) brandAccent else Color.White,
-        label = "heartColor"
-    )
-
     Card(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
             .border(
                 width = if (media.isSelected) 2.dp else 1.dp,
                 color = if (media.isSelected) brandAccent else Color(0xFF334155),
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(12.dp)
             )
             .clickable { onOpenFullScreen() }
     ) {
-        Column {
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val context = LocalContext.current
-                val crispUrl = remember(media.rawUrl, media.thumbnailUrl, media.url) {
-                    getCrispAndroidThumbnailUrl(media)
-                }
-                val imageRequest = remember(crispUrl) {
-                    ImageRequest.Builder(context)
-                        .data(crispUrl)
-                        .crossfade(true)
-                        .precision(Precision.EXACT)
-                        .diskCachePolicy(CachePolicy.DISABLED)
-                        .memoryCachePolicy(CachePolicy.ENABLED)
-                        .build()
-                }
-                AsyncImage(
-                    model = imageRequest,
-                    contentDescription = media.filename,
-                    contentScale = ContentScale.Crop,
-                    imageLoader = context.imageLoader,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(0.85f)
-                )
+        Box(modifier = Modifier.fillMaxWidth()) {
+            val context = LocalContext.current
+            val crispUrl = remember(media.rawUrl, media.thumbnailUrl, media.url) {
+                getCrispAndroidThumbnailUrl(media)
+            }
+            val imageRequest = remember(crispUrl) {
+                ImageRequest.Builder(context)
+                    .data(crispUrl)
+                    .crossfade(true)
+                    .precision(Precision.EXACT)
+                    .diskCachePolicy(CachePolicy.DISABLED)
+                    .memoryCachePolicy(CachePolicy.ENABLED)
+                    .build()
+            }
+            AsyncImage(
+                model = imageRequest,
+                contentDescription = media.filename,
+                contentScale = ContentScale.Crop,
+                imageLoader = context.imageLoader,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(0.85f)
+            )
 
-                // Top right selection heart button
-                IconButton(
-                    onClick = {
-                        if (!isLocked) onToggleSelect()
-                    },
+            // Minimalist Top-Right Selection Indicator (Clean & Uncluttered)
+            if (media.isSelected) {
+                Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .size(36.dp)
-                        .background(Color(0x80000000), CircleShape)
+                        .padding(8.dp)
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(brandAccent)
+                        .border(1.5.dp, Color.White, CircleShape)
+                        .clickable(enabled = !isLocked) { onToggleSelect() },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (media.isSelected) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = "Select Photo",
-                        tint = heartColor,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                // Top left full screen tap indicator
-                IconButton(
-                    onClick = onOpenFullScreen,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(6.dp)
-                        .size(30.dp)
-                        .background(Color(0x80000000), CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ZoomIn,
-                        contentDescription = "Zoom",
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Selected",
                         tint = Color.White,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(14.dp)
                     )
                 }
-
+            } else if (!isLocked) {
+                // Subtle, unobtrusive outline target for quick selection
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x33000000))
+                        .border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape)
+                        .clickable { onToggleSelect() }
+                )
             }
         }
     }

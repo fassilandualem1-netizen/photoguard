@@ -42,7 +42,9 @@ import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Button
@@ -503,8 +505,63 @@ fun DeliveryScreen(
                                         icon = Icons.Default.Share,
                                         onClick = {
                                             runCatching {
-                                                val url = if (ig.startsWith("http")) ig else "https://instagram.com/$ig"
-                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                                val clean = ig.removePrefix("https://instagram.com/").removePrefix("@").trimEnd('/')
+                                                val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse("http://instagram.com/_u/$clean")).apply {
+                                                    setPackage("com.instagram.android")
+                                                }
+                                                try {
+                                                    context.startActivity(appIntent)
+                                                } catch (e: Exception) {
+                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://instagram.com/$clean")))
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+
+                                uiState.youtubeUrl?.takeIf { it.isNotBlank() }?.let { yt ->
+                                    SocialLinkRow(
+                                        label = "YouTube",
+                                        value = yt.removePrefix("https://youtube.com/"),
+                                        icon = Icons.Default.PlayArrow,
+                                        onClick = {
+                                            runCatching {
+                                                val clean = yt.removePrefix("https://youtube.com/").trimEnd('/')
+                                                val url = if (clean.startsWith("@") || clean.startsWith("c/") || clean.startsWith("channel/")) {
+                                                    "https://youtube.com/$clean"
+                                                } else {
+                                                    "https://youtube.com/@$clean"
+                                                }
+                                                val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                                                    setPackage("com.google.android.youtube")
+                                                }
+                                                try {
+                                                    context.startActivity(appIntent)
+                                                } catch (e: Exception) {
+                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+
+                                uiState.tiktokUrl?.takeIf { it.isNotBlank() }?.let { tt ->
+                                    SocialLinkRow(
+                                        label = "TikTok",
+                                        value = tt.removePrefix("https://tiktok.com/"),
+                                        icon = Icons.Default.MusicNote,
+                                        onClick = {
+                                            runCatching {
+                                                val clean = tt.removePrefix("https://tiktok.com/").removePrefix("@").trimEnd('/')
+                                                val url = "https://tiktok.com/@$clean"
+                                                val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                                                    setPackage("com.zhiliaoapp.musically")
+                                                }
+                                                try {
+                                                    context.startActivity(appIntent)
+                                                } catch (e: Exception) {
+                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                                }
                                             }
                                         }
                                     )
@@ -739,6 +796,8 @@ fun DeliveryScreen(
             contactPhone = uiState.contactPhone,
             telegramUrl = uiState.telegramUrl,
             instagramUrl = uiState.instagramUrl,
+            tiktokUrl = uiState.tiktokUrl,
+            youtubeUrl = uiState.youtubeUrl,
             onDismiss = { showStudioInfoDialog = false }
         )
     }

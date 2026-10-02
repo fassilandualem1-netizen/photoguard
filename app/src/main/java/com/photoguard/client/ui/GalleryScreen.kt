@@ -942,9 +942,11 @@ fun GalleryScreen(
             studioName = uiState.studioName,
             studioLogoUrl = uiState.studioLogoUrl,
             brandAccent = brandAccent,
-            contactPhone = uiState.album.contactPhone ?: uiState.album.socialLinks?.contactPhone,
-            telegramUrl = uiState.album.telegramUrl ?: uiState.album.socialLinks?.telegramUrl,
-            instagramUrl = uiState.album.instagramUrl ?: uiState.album.socialLinks?.instagramUrl,
+            contactPhone = uiState.album.resolvedPhone,
+            telegramUrl = uiState.album.resolvedTelegram,
+            instagramUrl = uiState.album.resolvedInstagram,
+            tiktokUrl = uiState.album.resolvedTikTok,
+            youtubeUrl = uiState.album.resolvedYouTube,
             onDismiss = { showStudioInfoDialog = false }
         )
     }

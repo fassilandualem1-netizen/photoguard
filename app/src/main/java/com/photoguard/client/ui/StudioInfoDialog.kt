@@ -17,10 +17,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Verified
@@ -35,10 +39,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -48,7 +54,8 @@ import coil.compose.AsyncImage
 /**
  * Premium Studio Information Modal Dialog:
  * Opened when user taps the Studio Logo or Studio Name in the TopBar.
- * Displays prominent full-view logo, verified status, and studio contact channels (Phone, Telegram, Instagram).
+ * Displays prominent full-view logo, verified status, and dynamic studio contact channels
+ * (Phone, Telegram, Instagram, YouTube, TikTok) with deep linking and zero hardcoding.
  */
 @Composable
 fun StudioInfoDialog(
@@ -58,9 +65,32 @@ fun StudioInfoDialog(
     contactPhone: String? = null,
     telegramUrl: String? = null,
     instagramUrl: String? = null,
+    tiktokUrl: String? = null,
+    youtubeUrl: String? = null,
+    phoneNumber: String? = null,
+    telegramUsername: String? = null,
+    instagram: String? = null,
+    tiktok: String? = null,
+    youtube: String? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val scrollState = rememberScrollState()
+
+    // Resolve effective values across aliases
+    val effectivePhone = contactPhone?.takeIf { it.isNotBlank() } ?: phoneNumber?.takeIf { it.isNotBlank() }
+    val effectiveTelegram = telegramUrl?.takeIf { it.isNotBlank() } ?: telegramUsername?.takeIf { it.isNotBlank() }
+    val effectiveInstagram = instagramUrl?.takeIf { it.isNotBlank() } ?: instagram?.takeIf { it.isNotBlank() }
+    val effectiveTikTok = tiktokUrl?.takeIf { it.isNotBlank() } ?: tiktok?.takeIf { it.isNotBlank() }
+    val effectiveYouTube = youtubeUrl?.takeIf { it.isNotBlank() } ?: youtube?.takeIf { it.isNotBlank() }
+
+    val hasPhone = !effectivePhone.isNullOrBlank()
+    val hasTelegram = !effectiveTelegram.isNullOrBlank()
+    val hasInstagram = !effectiveInstagram.isNullOrBlank()
+    val hasTikTok = !effectiveTikTok.isNullOrBlank()
+    val hasYouTube = !effectiveYouTube.isNullOrBlank()
+    val hasAnyContact = hasPhone || hasTelegram || hasInstagram || hasTikTok || hasYouTube
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -85,6 +115,7 @@ fun StudioInfoDialog(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .verticalScroll(scrollState)
                         .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -147,12 +178,8 @@ fun StudioInfoDialog(
                         modifier = Modifier.padding(top = 4.dp, bottom = 18.dp)
                     )
 
-                    // Contact / Details Section
-                    val hasPhone = !contactPhone.isNullOrBlank()
-                    val hasTg = !telegramUrl.isNullOrBlank()
-                    val hasIg = !instagramUrl.isNullOrBlank()
-
-                    if (hasPhone || hasTg || hasIg) {
+                    // Contact & Social Media Action Buttons (ZERO HARDCODING)
+                    if (hasAnyContact) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(16.dp),
@@ -160,102 +187,179 @@ fun StudioInfoDialog(
                             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155))
                         ) {
                             Column(
-                                modifier = Modifier.padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
+                                // 1. Direct Phone Call
                                 if (hasPhone) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .clickable {
+                                    val phoneVal = effectivePhone!!.trim()
+                                    StudioContactActionRow(
+                                        label = "Direct Call",
+                                        value = phoneVal,
+                                        actionText = "Call",
+                                        icon = Icons.Default.Phone,
+                                        iconTint = Color(0xFF34D399),
+                                        onClick = {
+                                            try {
+                                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phoneVal"))
+                                                context.startActivity(intent)
+                                            } catch (e: Exception) {
                                                 try {
-                                                    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$contactPhone"))
-                                                    context.startActivity(intent)
-                                                } catch (e: Exception) {
-                                                    Toast.makeText(context, "Studio Phone: $contactPhone", Toast.LENGTH_SHORT).show()
+                                                    val fallback = Intent(Intent.ACTION_VIEW, Uri.parse("tel:$phoneVal"))
+                                                    context.startActivity(fallback)
+                                                } catch (ex: Exception) {
+                                                    Toast.makeText(context, "Phone: $phoneVal", Toast.LENGTH_SHORT).show()
                                                 }
                                             }
-                                            .padding(vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Phone,
-                                            contentDescription = "Phone",
-                                            tint = Color(0xFF34D399),
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text("Direct Phone", fontSize = 11.sp, color = Color(0xFF94A3B8))
-                                            Text(contactPhone!!, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                         }
-                                        Text("Call", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF34D399))
-                                    }
+                                    )
                                 }
 
-                                if (hasTg) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .clickable {
+                                // 2. Telegram Channel / Username
+                                if (hasTelegram) {
+                                    val tgVal = effectiveTelegram!!.trim()
+                                    val cleanTgDomain = tgVal
+                                        .removePrefix("https://t.me/")
+                                        .removePrefix("http://t.me/")
+                                        .removePrefix("t.me/")
+                                        .removePrefix("@")
+                                        .trimEnd('/')
+
+                                    StudioContactActionRow(
+                                        label = "Telegram",
+                                        value = "@$cleanTgDomain",
+                                        actionText = "Message",
+                                        icon = Icons.Default.Send,
+                                        iconTint = Color(0xFF38BDF8),
+                                        onClick = {
+                                            try {
+                                                val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?domain=$cleanTgDomain"))
+                                                context.startActivity(appIntent)
+                                            } catch (e: Exception) {
                                                 try {
-                                                    val url = if (telegramUrl!!.startsWith("http")) telegramUrl else "https://t.me/${telegramUrl.removePrefix("@")}"
-                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                                    context.startActivity(intent)
-                                                } catch (e: Exception) {
-                                                    Toast.makeText(context, "Telegram: $telegramUrl", Toast.LENGTH_SHORT).show()
+                                                    val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/$cleanTgDomain"))
+                                                    context.startActivity(webIntent)
+                                                } catch (ex: Exception) {
+                                                    Toast.makeText(context, "Telegram: @$cleanTgDomain", Toast.LENGTH_SHORT).show()
                                                 }
                                             }
-                                            .padding(vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Send,
-                                            contentDescription = "Telegram",
-                                            tint = Color(0xFF38BDF8),
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text("Telegram", fontSize = 11.sp, color = Color(0xFF94A3B8))
-                                            Text(telegramUrl!!, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                         }
-                                        Text("Open", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8))
-                                    }
+                                    )
                                 }
 
-                                if (hasIg) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .clickable {
+                                // 3. Instagram Profile
+                                if (hasInstagram) {
+                                    val igVal = effectiveInstagram!!.trim()
+                                    val cleanIgUser = igVal
+                                        .removePrefix("https://www.instagram.com/")
+                                        .removePrefix("http://www.instagram.com/")
+                                        .removePrefix("https://instagram.com/")
+                                        .removePrefix("http://instagram.com/")
+                                        .removePrefix("instagram.com/")
+                                        .removePrefix("@")
+                                        .trimEnd('/')
+
+                                    StudioContactActionRow(
+                                        label = "Instagram",
+                                        value = "@$cleanIgUser",
+                                        actionText = "View",
+                                        icon = Icons.Default.Share,
+                                        iconTint = Color(0xFFF43F5E),
+                                        onClick = {
+                                            try {
+                                                val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse("http://instagram.com/_u/$cleanIgUser")).apply {
+                                                    setPackage("com.instagram.android")
+                                                }
+                                                context.startActivity(appIntent)
+                                            } catch (e: Exception) {
                                                 try {
-                                                    val url = if (instagramUrl!!.startsWith("http")) instagramUrl else "https://instagram.com/${instagramUrl.removePrefix("@")}"
-                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                                    context.startActivity(intent)
-                                                } catch (e: Exception) {
-                                                    Toast.makeText(context, "Instagram: $instagramUrl", Toast.LENGTH_SHORT).show()
+                                                    val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://instagram.com/$cleanIgUser"))
+                                                    context.startActivity(webIntent)
+                                                } catch (ex: Exception) {
+                                                    Toast.makeText(context, "Instagram: @$cleanIgUser", Toast.LENGTH_SHORT).show()
                                                 }
                                             }
-                                            .padding(vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Share,
-                                            contentDescription = "Instagram",
-                                            tint = Color(0xFFF43F5E),
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text("Instagram", fontSize = 11.sp, color = Color(0xFF94A3B8))
-                                            Text(instagramUrl!!, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                         }
-                                        Text("View", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFF43F5E))
+                                    )
+                                }
+
+                                // 4. YouTube Channel
+                                if (hasYouTube) {
+                                    val ytVal = effectiveYouTube!!.trim()
+                                    val cleanYt = ytVal
+                                        .removePrefix("https://www.youtube.com/")
+                                        .removePrefix("http://www.youtube.com/")
+                                        .removePrefix("https://youtube.com/")
+                                        .removePrefix("http://youtube.com/")
+                                        .removePrefix("youtube.com/")
+                                        .trimEnd('/')
+                                    val ytDisplay = if (cleanYt.startsWith("@")) cleanYt else "@$cleanYt"
+                                    val ytUrl = if (cleanYt.startsWith("@") || cleanYt.startsWith("c/") || cleanYt.startsWith("channel/")) {
+                                        "https://youtube.com/$cleanYt"
+                                    } else {
+                                        "https://youtube.com/@$cleanYt"
                                     }
+
+                                    StudioContactActionRow(
+                                        label = "YouTube",
+                                        value = ytDisplay,
+                                        actionText = "Watch",
+                                        icon = Icons.Default.PlayArrow,
+                                        iconTint = Color(0xFFEF4444),
+                                        onClick = {
+                                            try {
+                                                val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(ytUrl)).apply {
+                                                    setPackage("com.google.android.youtube")
+                                                }
+                                                context.startActivity(appIntent)
+                                            } catch (e: Exception) {
+                                                try {
+                                                    val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse(ytUrl))
+                                                    context.startActivity(webIntent)
+                                                } catch (ex: Exception) {
+                                                    Toast.makeText(context, "YouTube: $ytDisplay", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+
+                                // 5. TikTok Profile
+                                if (hasTikTok) {
+                                    val ttVal = effectiveTikTok!!.trim()
+                                    val cleanTt = ttVal
+                                        .removePrefix("https://www.tiktok.com/")
+                                        .removePrefix("http://www.tiktok.com/")
+                                        .removePrefix("https://tiktok.com/")
+                                        .removePrefix("http://tiktok.com/")
+                                        .removePrefix("tiktok.com/")
+                                        .removePrefix("@")
+                                        .trimEnd('/')
+                                    val ttDisplay = "@$cleanTt"
+                                    val ttUrl = "https://tiktok.com/@$cleanTt"
+
+                                    StudioContactActionRow(
+                                        label = "TikTok",
+                                        value = ttDisplay,
+                                        actionText = "Follow",
+                                        icon = Icons.Default.MusicNote,
+                                        iconTint = Color(0xFF2DD4BF),
+                                        onClick = {
+                                            try {
+                                                val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(ttUrl)).apply {
+                                                    setPackage("com.zhiliaoapp.musically")
+                                                }
+                                                context.startActivity(appIntent)
+                                            } catch (e: Exception) {
+                                                try {
+                                                    val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse(ttUrl))
+                                                    context.startActivity(webIntent)
+                                                } catch (ex: Exception) {
+                                                    Toast.makeText(context, "TikTok: $ttDisplay", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -303,6 +407,74 @@ fun StudioInfoDialog(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun StudioContactActionRow(
+    label: String,
+    value: String,
+    actionText: String,
+    icon: ImageVector,
+    iconTint: Color,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF0F172A).copy(alpha = 0.6f))
+            .border(1.dp, Color(0xFF334155).copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(iconTint.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = iconTint,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF94A3B8)
+            )
+            Text(
+                text = value,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(iconTint.copy(alpha = 0.12f))
+                .border(1.dp, iconTint.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 10.dp, vertical = 5.dp)
+        ) {
+            Text(
+                text = actionText,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = iconTint
+            )
         }
     }
 }

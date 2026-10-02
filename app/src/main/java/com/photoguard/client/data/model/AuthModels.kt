@@ -53,15 +53,40 @@ data class ClientDownloadResponse(
 data class SocialLinksResponse(
     @SerialName("contact_phone")
     val contactPhone: String? = null,
+    @SerialName("phone_number")
+    val phoneNumber: String? = null,
     @SerialName("tiktok_url")
     val tiktokUrl: String? = null,
+    @SerialName("tiktok")
+    val tiktok: String? = null,
     @SerialName("instagram_url")
     val instagramUrl: String? = null,
+    @SerialName("instagram")
+    val instagram: String? = null,
     @SerialName("telegram_url")
     val telegramUrl: String? = null,
+    @SerialName("telegram_username")
+    val telegramUsername: String? = null,
     @SerialName("youtube_url")
-    val youtubeUrl: String? = null
-)
+    val youtubeUrl: String? = null,
+    @SerialName("youtube")
+    val youtube: String? = null
+) {
+    val resolvedPhone: String?
+        get() = contactPhone?.takeIf { it.isNotBlank() } ?: phoneNumber?.takeIf { it.isNotBlank() }
+
+    val resolvedTelegram: String?
+        get() = telegramUrl?.takeIf { it.isNotBlank() } ?: telegramUsername?.takeIf { it.isNotBlank() }
+
+    val resolvedInstagram: String?
+        get() = instagramUrl?.takeIf { it.isNotBlank() } ?: instagram?.takeIf { it.isNotBlank() }
+
+    val resolvedTikTok: String?
+        get() = tiktokUrl?.takeIf { it.isNotBlank() } ?: tiktok?.takeIf { it.isNotBlank() }
+
+    val resolvedYouTube: String?
+        get() = youtubeUrl?.takeIf { it.isNotBlank() } ?: youtube?.takeIf { it.isNotBlank() }
+}
 
 @Serializable
 data class MediaItemResponse(
@@ -135,14 +160,24 @@ data class AlbumDetailResponse(
     val socialLinks: SocialLinksResponse? = null,
     @SerialName("contact_phone")
     val contactPhone: String? = null,
+    @SerialName("phone_number")
+    val phoneNumber: String? = null,
     @SerialName("tiktok_url")
     val tiktokUrl: String? = null,
+    @SerialName("tiktok")
+    val tiktok: String? = null,
     @SerialName("instagram_url")
     val instagramUrl: String? = null,
+    @SerialName("instagram")
+    val instagram: String? = null,
     @SerialName("telegram_url")
     val telegramUrl: String? = null,
+    @SerialName("telegram_username")
+    val telegramUsername: String? = null,
     @SerialName("youtube_url")
     val youtubeUrl: String? = null,
+    @SerialName("youtube")
+    val youtube: String? = null,
     @SerialName("studio_logo_url")
     val studioLogoUrl: String? = null,
     @SerialName("brand_color")
@@ -161,4 +196,29 @@ data class AlbumDetailResponse(
             ?: photographerName?.takeIf { it.isNotBlank() }
             ?: creatorName?.takeIf { it.isNotBlank() && it != "Studio Owner" }
             ?: "Fasil Studio"
+
+    val resolvedPhone: String?
+        get() = contactPhone?.takeIf { it.isNotBlank() }
+            ?: phoneNumber?.takeIf { it.isNotBlank() }
+            ?: socialLinks?.resolvedPhone
+
+    val resolvedTelegram: String?
+        get() = telegramUrl?.takeIf { it.isNotBlank() }
+            ?: telegramUsername?.takeIf { it.isNotBlank() }
+            ?: socialLinks?.resolvedTelegram
+
+    val resolvedInstagram: String?
+        get() = instagramUrl?.takeIf { it.isNotBlank() }
+            ?: instagram?.takeIf { it.isNotBlank() }
+            ?: socialLinks?.resolvedInstagram
+
+    val resolvedTikTok: String?
+        get() = tiktokUrl?.takeIf { it.isNotBlank() }
+            ?: tiktok?.takeIf { it.isNotBlank() }
+            ?: socialLinks?.resolvedTikTok
+
+    val resolvedYouTube: String?
+        get() = youtubeUrl?.takeIf { it.isNotBlank() }
+            ?: youtube?.takeIf { it.isNotBlank() }
+            ?: socialLinks?.resolvedYouTube
 }

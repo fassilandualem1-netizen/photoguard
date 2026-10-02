@@ -100,7 +100,7 @@ class MainActivity : ComponentActivity() {
                     .build()
             }
             .diskCache(null)
-            .bitmapConfig(Bitmap.Config.HARDWARE)
+            .bitmapConfig(Bitmap.Config.ARGB_8888)
             .allowRgb565(false)
             .precision(Precision.INEXACT)
             .crossfade(250)

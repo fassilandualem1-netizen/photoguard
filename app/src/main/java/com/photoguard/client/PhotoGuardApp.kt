@@ -34,8 +34,8 @@ class PhotoGuardApp : Application(), ImageLoaderFactory {
                     .build()
             }
             .diskCache(null) // STRICT: RAM-only, zero disk retention
-            .bitmapConfig(Bitmap.Config.HARDWARE)
-            .allowHardware(true)
+            .bitmapConfig(Bitmap.Config.ARGB_8888)
+            .allowHardware(false)
             .crossfade(true)
             .build()
     }

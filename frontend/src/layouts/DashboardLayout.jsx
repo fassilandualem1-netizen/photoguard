@@ -37,7 +37,7 @@ export function useDashboardSearch() {
 
 export default function DashboardLayout({
   children,
-  activeTab = "albums",
+  activeTab = "dashboard",
   onTabChange = () => {},
   onChangePasswordClick = () => {}
 }) {
@@ -50,7 +50,13 @@ export default function DashboardLayout({
   const [activeBroadcast, setActiveBroadcast] = useState(null);
   const [isBannerDismissed, setIsBannerDismissed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [currentTab, setCurrentTab] = useState(activeTab || "albums");
+  const [currentTab, setCurrentTab] = useState(activeTab || "dashboard");
+
+  useEffect(() => {
+    if (activeTab) {
+      setCurrentTab(activeTab);
+    }
+  }, [activeTab]);
 
   // Fetch active broadcast announcement on mount
   useEffect(() => {
@@ -136,13 +142,13 @@ export default function DashboardLayout({
         <button
           type="button"
           onClick={() => handleNavClick("dashboard")}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+          className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-medium cursor-pointer transition-all duration-200 ${
             currentTab === "dashboard"
-              ? "bg-[#151a23] text-orange-400 font-semibold border border-orange-500/30 shadow-sm"
-              : "text-slate-400 hover:text-white hover:bg-slate-800/50"
+              ? "bg-white/5 text-white font-medium border-l-2 border-orange-500 rounded-r-xl rounded-l-none pl-3 shadow-sm"
+              : "text-slate-400 hover:text-white hover:bg-white/[0.04] rounded-xl border-l-2 border-transparent"
           }`}
         >
-          <LayoutDashboard className={`w-4 h-4 ${currentTab === "dashboard" ? "text-orange-400" : "text-slate-400"}`} />
+          <LayoutDashboard className={`w-4 h-4 transition-colors duration-200 ${currentTab === "dashboard" ? "text-orange-400" : "text-slate-400"}`} />
           <span>Dashboard</span>
         </button>
 
@@ -150,14 +156,14 @@ export default function DashboardLayout({
         <button
           type="button"
           onClick={() => handleNavClick("albums")}
-          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+          className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-medium cursor-pointer transition-all duration-200 ${
             currentTab === "albums"
-              ? "bg-[#151a23] text-orange-400 font-semibold border border-orange-500/30 shadow-sm"
-              : "text-slate-400 hover:text-white hover:bg-slate-800/50"
+              ? "bg-white/5 text-white font-medium border-l-2 border-orange-500 rounded-r-xl rounded-l-none pl-3 shadow-sm"
+              : "text-slate-400 hover:text-white hover:bg-white/[0.04] rounded-xl border-l-2 border-transparent"
           }`}
         >
           <div className="flex items-center gap-3">
-            <FolderLock className={`w-4 h-4 ${currentTab === "albums" ? "text-orange-400" : "text-slate-400"}`} />
+            <FolderLock className={`w-4 h-4 transition-colors duration-200 ${currentTab === "albums" ? "text-orange-400" : "text-slate-400"}`} />
             <span>Albums</span>
           </div>
         </button>
@@ -166,13 +172,13 @@ export default function DashboardLayout({
         <button
           type="button"
           onClick={() => handleNavClick("clients")}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+          className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-medium cursor-pointer transition-all duration-200 ${
             currentTab === "clients"
-              ? "bg-[#151a23] text-orange-400 font-semibold border border-orange-500/30 shadow-sm"
-              : "text-slate-400 hover:text-white hover:bg-slate-800/50"
+              ? "bg-white/5 text-white font-medium border-l-2 border-orange-500 rounded-r-xl rounded-l-none pl-3 shadow-sm"
+              : "text-slate-400 hover:text-white hover:bg-white/[0.04] rounded-xl border-l-2 border-transparent"
           }`}
         >
-          <Users className={`w-4 h-4 ${currentTab === "clients" ? "text-orange-400" : "text-slate-400"}`} />
+          <Users className={`w-4 h-4 transition-colors duration-200 ${currentTab === "clients" ? "text-orange-400" : "text-slate-400"}`} />
           <span>Clients</span>
         </button>
 
@@ -181,21 +187,21 @@ export default function DashboardLayout({
           <button
             type="button"
             onClick={() => handleNavClick("storage")}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-medium cursor-pointer transition-all duration-200 ${
               currentTab === "storage"
-                ? "bg-[#151a23] text-orange-400 font-semibold border border-orange-500/30"
-                : "text-slate-400 hover:text-white hover:bg-slate-800/50"
+                ? "bg-white/5 text-white font-medium border-l-2 border-orange-500 rounded-r-xl rounded-l-none pl-3 shadow-sm"
+                : "text-slate-400 hover:text-white hover:bg-white/[0.04] rounded-xl border-l-2 border-transparent"
             }`}
           >
-            <HardDrive className={`w-4 h-4 ${currentTab === "storage" ? "text-orange-400" : "text-slate-400"} shrink-0`} />
+            <HardDrive className={`w-4 h-4 transition-colors duration-200 ${currentTab === "storage" ? "text-orange-400" : "text-slate-400"} shrink-0`} />
             <span>Storage</span>
           </button>
 
-          {/* Integrated Inline Storage Progress Bar */}
-          <div className="mt-1.5 mx-1 p-2.5 rounded-xl bg-[#151a23] border border-slate-800">
+          {/* Integrated Inline Storage Progress Bar (Quiet Sub-panel) */}
+          <div className="mt-2 mx-1 p-3 rounded-xl bg-slate-900/40 border border-slate-800/60">
             <div className="flex items-center justify-between text-[11px] mb-1.5">
               <span className="text-slate-400 font-medium">Used Space</span>
-              <span className="font-mono text-orange-400 font-semibold">
+              <span className="font-mono text-orange-400/90 font-medium">
                 {formatBytes(storageUsed)} / {formatBytes(storageQuota)}
               </span>
             </div>
@@ -205,7 +211,7 @@ export default function DashboardLayout({
                 style={{ width: `${storagePercentage}%` }}
               />
             </div>
-            <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1">
+            <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1.5">
               <span>{storagePercentage}% full</span>
               <span>{Math.max(0, 100 - storagePercentage)}% free</span>
             </div>
@@ -224,7 +230,7 @@ export default function DashboardLayout({
             setIsMobileSidebarOpen(false);
             setIsProfileModalOpen(true);
           }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all cursor-pointer"
+          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.04] transition-all duration-200 cursor-pointer border-l-2 border-transparent"
         >
           <User className="w-4 h-4 text-slate-400" />
           <span>Profile & Branding</span>
@@ -237,7 +243,7 @@ export default function DashboardLayout({
             setIsMobileSidebarOpen(false);
             setIsTeamModalOpen(true);
           }}
-          className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all cursor-pointer"
+          className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.04] transition-all duration-200 cursor-pointer border-l-2 border-transparent"
         >
           <div className="flex items-center gap-3">
             <Users className="w-4 h-4 text-slate-400" />
@@ -262,7 +268,7 @@ export default function DashboardLayout({
             setIsMobileSidebarOpen(false);
             setIsProfileModalOpen(true);
           }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all cursor-pointer"
+          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.04] transition-all duration-200 cursor-pointer border-l-2 border-transparent"
         >
           <Sliders className="w-4 h-4 text-slate-400" />
           <span>Account Settings</span>
@@ -278,7 +284,7 @@ export default function DashboardLayout({
               onChangePasswordClick();
             }
           }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all cursor-pointer"
+          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.04] transition-all duration-200 cursor-pointer border-l-2 border-transparent"
         >
           <KeyRound className="w-4 h-4 text-slate-400" />
           <span>Change Password</span>
@@ -289,7 +295,7 @@ export default function DashboardLayout({
           href="https://t.me/fassilandualem"
           target="_blank"
           rel="noopener noreferrer"
-          className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-sky-300 hover:bg-slate-800/50 transition-all group"
+          className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-sky-300 hover:bg-white/[0.04] transition-all duration-200 group border-l-2 border-transparent"
         >
           <div className="flex items-center gap-3">
             <LifeBuoy className="w-4 h-4 text-sky-400" />
@@ -310,7 +316,7 @@ export default function DashboardLayout({
             setIsMobileSidebarOpen(false);
             logout();
           }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all cursor-pointer"
+          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-200 cursor-pointer border-l-2 border-transparent"
         >
           <LogOut className="w-4 h-4 text-red-400" />
           <span>Sign Out</span>

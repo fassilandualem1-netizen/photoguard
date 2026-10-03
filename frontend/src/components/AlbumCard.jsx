@@ -59,9 +59,9 @@ export default function AlbumCard({
             <ImageIcon className="w-10 h-10 text-slate-700 group-hover:text-orange-400/80 transition-colors" />
           )}
 
-          {/* Top Left: 6-Digit PIN Pill */}
+          {/* Top Left: 6-Digit PIN Pill without harsh button border */}
           {pinCode && (
-            <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md border border-orange-500/30 text-xs font-mono font-bold text-orange-400 tracking-wider shadow-sm">
+            <div className="absolute top-3 left-3 px-2.5 py-1 rounded-md bg-orange-500/15 backdrop-blur-md text-xs font-mono font-bold text-orange-400 tracking-wider shadow-sm">
               PIN {pinCode}
             </div>
           )}
@@ -69,17 +69,17 @@ export default function AlbumCard({
           {/* Top Right: Status Badge */}
           <div className="absolute top-3 right-3 flex items-center gap-1.5">
             {isSubmitted ? (
-              <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-[10px] font-medium text-emerald-400 backdrop-blur-md">
-                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+              <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-[10px] font-medium text-green-400 backdrop-blur-md">
+                <CheckCircle2 className="w-3 h-3 text-green-400" />
                 Submitted
               </span>
             ) : isExpired ? (
-              <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/10 border border-red-500/30 text-[10px] font-medium text-red-400 backdrop-blur-md">
+              <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-[10px] font-medium text-red-400 backdrop-blur-md">
                 <Clock className="w-3 h-3 text-red-400" />
                 Expired
               </span>
             ) : (
-              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-500/10 border border-orange-500/30 text-[10px] font-medium text-orange-400 backdrop-blur-md">
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-[10px] font-medium text-orange-400 backdrop-blur-md">
                 <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />
                 Selecting
               </span>
@@ -162,7 +162,7 @@ export default function AlbumCard({
           }}
           disabled={isDeleting}
           title="Delete Album"
-          className="absolute bottom-3.5 right-2.5 p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer"
+          className="absolute bottom-3 right-2.5 p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/15 hover:border hover:border-red-500/30 transition-all duration-200 cursor-pointer"
         >
           {isDeleting ? (
             <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />

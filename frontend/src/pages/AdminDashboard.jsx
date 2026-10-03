@@ -10,12 +10,13 @@ import {
   Activity,
   UserPlus,
   Shield,
+  ShieldCheck,
   Search,
   RefreshCw,
   Copy,
   Check,
   AlertTriangle,
-  Sparkles,
+  CheckCircle2,
   Sliders,
   Power,
   Layers,
@@ -441,12 +442,13 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shadow-lg shadow-indigo-500/20 border border-indigo-400/30">
-              <Shield className="w-5 h-5 text-white" />
+              <ShieldCheck className="w-5 h-5 text-white" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-base font-bold tracking-tight text-white font-mono">
-                  PhotoGuard
+                <span className="text-base font-bold tracking-tight text-white font-mono flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                  <span>PhotoGuard</span>
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 uppercase">
                   Super Admin
@@ -510,7 +512,7 @@ export default function AdminDashboard() {
                       className="flex items-center gap-2.5 w-full px-3 py-2 text-xs text-amber-300 hover:text-white hover:bg-amber-500/10 rounded-xl transition-colors font-medium"
                     >
                       <Images className="w-4 h-4 text-amber-400" />
-                      <span>Switch to Photographer View / Galleries</span>
+                      <span>Switch to Photographer View</span>
                     </Link>
 
                     <button
@@ -594,7 +596,7 @@ export default function AdminDashboard() {
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">System Health</p>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
                   <span className="text-xs font-semibold text-emerald-400 font-mono">Operational</span>
                 </div>
               </div>
@@ -617,10 +619,10 @@ export default function AdminDashboard() {
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-white tracking-tight">
-                      Register New Photographer
+                      Add Photographer
                     </h3>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Provision a new photographer studio account with auto-generated secure credentials.
+                      Create a new photographer account with temporary credentials.
                     </p>
                   </div>
                 </div>
@@ -734,12 +736,12 @@ export default function AdminDashboard() {
                     {isRegistering ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Provisioning...</span>
+                        <span>Creating...</span>
                       </>
                     ) : (
                       <>
                         <UserPlus className="w-4 h-4" />
-                        <span>Create Photographer</span>
+                        <span>Create Account</span>
                       </>
                     )}
                   </button>
@@ -760,14 +762,14 @@ export default function AdminDashboard() {
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
-                    <Sparkles className="w-5 h-5" />
+                    <CheckCircle2 className="w-5 h-5" />
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-white tracking-wide">
-                      Photographer Provisioned!
+                      Account Created
                     </h3>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Deliver these credentials to the client.
+                      Temporary login credentials:
                     </p>
                   </div>
                 </div>
@@ -885,8 +887,8 @@ export default function AdminDashboard() {
             <Megaphone className="w-4 h-4" />
             <span>Broadcasts</span>
             {currentBroadcast && currentBroadcast.is_active ? (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
                 Live
               </span>
             ) : (
@@ -934,7 +936,7 @@ export default function AdminDashboard() {
             <AlertTriangle className="w-4 h-4" />
             <span>System Health</span>
             {systemErrors.length > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30">
                 {systemErrors.length}
               </span>
             )}
@@ -970,16 +972,16 @@ export default function AdminDashboard() {
               </div>
               <div>
                 <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-                  <span>Global Dashboard Broadcast</span>
+                  <span>Dashboard Broadcasts</span>
                   {currentBroadcast && currentBroadcast.is_active && (
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
                       Live Banner Active
                     </span>
                   )}
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Publish real-time announcement banners to all photographers' workspaces & dashboards.
+                  Publish announcement banners to photographer dashboards.
                 </p>
               </div>
             </div>
@@ -1047,7 +1049,7 @@ export default function AdminDashboard() {
               </div>
             ) : (
               <div className="p-4 rounded-xl bg-[#080a0f] border border-indigo-950/70 text-slate-400 text-xs flex items-center justify-between">
-                <span>Zero active announcements displayed right now. Photographers see a clean dashboard header.</span>
+                <span>No active announcements. Dashboards are currently clear.</span>
                 <span className="text-[11px] text-slate-500 font-mono">Status: Idle</span>
               </div>
             )}
@@ -1056,7 +1058,7 @@ export default function AdminDashboard() {
           {/* New Broadcast Composition Form */}
           <form onSubmit={handlePublishBroadcast} className="space-y-4 pt-2">
             <div className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider font-mono">
-              Compose & Broadcast New Announcement
+              New Announcement
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
               <div className="sm:col-span-8 space-y-1.5">
@@ -1066,7 +1068,7 @@ export default function AdminDashboard() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Scheduled Maintenance Notice or Spring Studio Promotion"
+                  placeholder="e.g. Scheduled Maintenance or Platform Update"
                   value={broadcastForm.title}
                   onChange={(e) =>
                     setBroadcastForm({ ...broadcastForm, title: e.target.value })
@@ -1076,7 +1078,7 @@ export default function AdminDashboard() {
               </div>
               <div className="sm:col-span-4 space-y-1.5">
                 <label className="text-xs font-semibold text-slate-300">
-                  Banner Type & Color Theme
+                  Type
                 </label>
                 <select
                   value={broadcastForm.type}
@@ -1085,21 +1087,21 @@ export default function AdminDashboard() {
                   }
                   className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-sky-400 transition-colors capitalize"
                 >
-                  <option value="info">Info (Sky Blue - General Updates)</option>
-                  <option value="warning">Warning (Amber Yellow - Maintenance & Critical)</option>
-                  <option value="promo">Promo (Emerald Green - Features & Deals)</option>
+                  <option value="info">Info</option>
+                  <option value="warning">Warning</option>
+                  <option value="promo">Promotion</option>
                 </select>
               </div>
             </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-300">
-                Message Body
+                Message
               </label>
               <textarea
                 required
                 rows={3}
-                placeholder="Enter detailed instructions or announcement text for all photographers..."
+                placeholder="Enter announcement text for photographers..."
                 value={broadcastForm.message}
                 onChange={(e) =>
                   setBroadcastForm({ ...broadcastForm, message: e.target.value })
@@ -1110,7 +1112,7 @@ export default function AdminDashboard() {
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
               <span className="text-[11px] text-slate-500">
-                <Zap className="w-3 h-3" /> Publishing automatically deactivates previous announcements.
+                <Zap className="w-3 h-3 text-sky-400" /> Publishing deactivates previous active announcements.
               </span>
               <button
                 type="submit"
@@ -1120,12 +1122,12 @@ export default function AdminDashboard() {
                 {isPublishingBroadcast ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                    <span>Broadcasting...</span>
+                    <span>Publishing...</span>
                   </>
                 ) : (
                   <>
                     <Megaphone className="w-4 h-4 text-white" />
-                    <span>Publish Announcement Live</span>
+                    <span>Publish Announcement</span>
                   </>
                 )}
               </button>
@@ -1138,14 +1140,14 @@ export default function AdminDashboard() {
           <div className="flex items-center justify-between pb-3 border-b border-indigo-950/60">
             <div>
               <h3 className="text-sm font-bold text-white tracking-tight">
-                Announcement History & Archives
+                Announcement History
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Audit trail of previous broadcast messages sent across the platform.
+                Past broadcast messages sent to users.
               </p>
             </div>
             <span className="text-xs font-mono text-slate-400">
-              {broadcastList.length} Total Messages
+              {broadcastList.length} Announcements
             </span>
           </div>
 
@@ -1167,14 +1169,14 @@ export default function AdminDashboard() {
                     <td colSpan={6} className="py-10 text-center text-slate-500">
                       <div className="flex items-center justify-center gap-2">
                         <RefreshCw className="w-4 h-4 animate-spin text-sky-400" />
-                        <span>Loading broadcast records...</span>
+                        <span>Loading announcements...</span>
                       </div>
                     </td>
                   </tr>
                 ) : broadcastList.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-8 text-center text-slate-500">
-                      No broadcast announcements found in archive.
+                      No broadcast announcements found.
                     </td>
                   </tr>
                 ) : (
@@ -1182,12 +1184,13 @@ export default function AdminDashboard() {
                     <tr key={item.id} className="hover:bg-slate-900/40 transition-colors">
                       <td className="py-3 px-4">
                         {item.is_active ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 w-fit">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 w-fit">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
                             Active
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono text-slate-500 bg-slate-800/60 border border-slate-700/40">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono text-slate-400 bg-slate-800/60 border border-slate-700/40 flex items-center gap-1.5 w-fit">
+                            <span className="w-2 h-2 rounded-full bg-slate-500" />
                             Archived
                           </span>
                         )}
@@ -1220,7 +1223,7 @@ export default function AdminDashboard() {
                             type="button"
                             onClick={() => handleDeactivateBroadcast(item.id)}
                             disabled={deactivatingId === item.id}
-                            className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[11px] font-semibold transition-colors disabled:opacity-50"
+                            className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
                           >
                             Deactivate
                           </button>
@@ -1248,20 +1251,20 @@ export default function AdminDashboard() {
             </div>
             <div>
               <h2 className="text-base font-bold text-white tracking-tight">
-                Security & Administrative Audit Ledger
+                Audit Logs
               </h2>
               <p className="text-xs text-slate-400 font-sans">
-                Immutable log of administrative overrides, password resets, suspensions, and quota changes
+                History of administrative actions and account changes.
               </p>
             </div>
           </div>
           <button
             onClick={fetchAuditLogs}
             disabled={loadingAuditLogs}
-            className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium flex items-center gap-1.5 transition-colors"
+            className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loadingAuditLogs ? "animate-spin text-amber-400" : ""}`} />
-            <span>Refresh Ledger</span>
+            <span>Refresh</span>
           </button>
         </div>
 
@@ -1280,7 +1283,7 @@ export default function AdminDashboard() {
               {auditLogs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-12 text-center text-slate-500 font-sans">
-                    {loadingAuditLogs ? "Loading security audit records..." : "No audit records found."}
+                    {loadingAuditLogs ? "Loading audit records..." : "No audit records found."}
                   </td>
                 </tr>
               ) : (
@@ -1331,13 +1334,13 @@ export default function AdminDashboard() {
           <div>
             <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-rose-400" />
-              <span>System Health & Unresolved Crashes</span>
+              <span>System Health & Errors</span>
               <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30">
                 {systemErrors.length} {systemErrors.length === 1 ? "Incident" : "Incidents"}
               </span>
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Centralized SRE monitoring for unhandled runtime crashes, database disconnects, and API faults.
+              Monitor runtime errors and API incidents.
             </p>
           </div>
 
@@ -1345,10 +1348,10 @@ export default function AdminDashboard() {
             type="button"
             onClick={fetchSystemErrors}
             disabled={loadingErrors}
-            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-2 border border-slate-700/60 transition-colors"
+            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-2 border border-slate-700/60 transition-colors cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loadingErrors ? "animate-spin" : ""}`} />
-            <span>Refresh Crashes</span>
+            <span>Refresh</span>
           </button>
         </div>
 
@@ -1380,8 +1383,11 @@ export default function AdminDashboard() {
                       <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
                         <Check className="w-5 h-5 stroke-[2.5]" />
                       </div>
-                      <span className="text-sm font-semibold text-slate-300">All Systems Operational</span>
-                      <span className="text-xs text-slate-500">Zero unresolved database or runtime crashes recorded.</span>
+                      <span className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                        All Systems Operational
+                      </span>
+                      <span className="text-xs text-slate-500">No unresolved system errors recorded.</span>
                     </div>
                   </td>
                 </tr>
@@ -1462,7 +1468,7 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white tracking-wide">
-                    Emergency Password Reset
+                    Password Reset
                   </h3>
                   <p className="text-xs text-slate-400 font-mono mt-0.5">
                     User: <span className="text-amber-300 font-medium">{resetModalData.email}</span>
@@ -1491,7 +1497,7 @@ export default function AdminDashboard() {
                 <button
                   type="button"
                   onClick={() => handleCopyResetPassword(resetModalData.temporary_password)}
-                  className="px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/20 active:scale-95 shrink-0"
+                  className="px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/20 active:scale-95 shrink-0 cursor-pointer"
                 >
                   {hasCopiedResetPassword ? (
                     <>
@@ -1512,7 +1518,7 @@ export default function AdminDashboard() {
             <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-200/90 leading-relaxed">
               <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <p>
-                <strong className="text-amber-300 font-semibold">Security Warning:</strong> Please copy and deliver this temporary password immediately. For strict security, this password cannot be retrieved or shown again once closed. The user will be required to change their password on next sign-in.
+                <strong className="text-amber-300 font-semibold">Security Note:</strong> Please share this temporary password with the user. It will not be shown again. The user must change it upon sign-in.
               </p>
             </div>
 
@@ -1521,9 +1527,9 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => setResetModalData(null)}
-                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
+                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors cursor-pointer"
               >
-                Done & Close
+                Done
               </button>
             </div>
           </div>

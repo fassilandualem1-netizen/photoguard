@@ -61,7 +61,7 @@ export default function AdminPhotographerTable({
             </span>
           </h2>
           <p className="text-xs text-slate-400">
-            Manage accounts, quota overrides, and subscription statuses
+            Manage photographer accounts and billing.
           </p>
         </div>
 
@@ -86,7 +86,7 @@ export default function AdminPhotographerTable({
               className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-md shadow-indigo-600/30 shrink-0 cursor-pointer active:scale-95"
             >
               <UserPlus className="w-4 h-4" />
-              <span>+ Add New Photographer</span>
+              <span>Add Photographer</span>
             </button>
           )}
         </div>
@@ -154,10 +154,14 @@ export default function AdminPhotographerTable({
                     </td>
 
                     {/* Storage */}
-                    <td className="py-5 px-4 min-w-[170px]">
+                    <td
+                      className="py-5 px-4 min-w-[170px] cursor-pointer group"
+                      onClick={() => handleEditQuota?.(p.id, p.storage_quota_limit)}
+                      title="Click to edit storage allocation"
+                    >
                       <div className="flex items-center justify-between text-[11px] text-slate-300 font-mono mb-1">
                         <span>{formatBytes ? formatBytes(p.storage_used) : `${p.storage_used} B`}</span>
-                        <span className="text-slate-500">/ {quotaGb} GB</span>
+                        <span className="text-slate-500 group-hover:text-indigo-400 transition-colors">/ {quotaGb} GB</span>
                       </div>
                       <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
                         <div
@@ -183,7 +187,7 @@ export default function AdminPhotographerTable({
                       <div className="mt-1">
                         {p.assistants_count > 0 ? (
                           <span
-                            title={`Includes data aggregated from ${p.assistants_count} studio assistant(s): ${p.assistants?.map((a) => a.full_name).join(", ") || ""}`}
+                            title={`Includes data from ${p.assistants_count} studio assistant(s): ${p.assistants?.map((a) => a.full_name).join(", ") || ""}`}
                             className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/25"
                           >
                             <Users className="w-3 h-3 text-amber-400" />
@@ -191,7 +195,7 @@ export default function AdminPhotographerTable({
                           </span>
                         ) : (
                           <span className="text-[10px] text-slate-500 font-mono">
-                            Root Solo Account
+                            Solo Account
                           </span>
                         )}
                       </div>
@@ -207,8 +211,8 @@ export default function AdminPhotographerTable({
                         }`}
                       >
                         <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            p.is_active ? "bg-emerald-400 animate-pulse" : "bg-red-400"
+                          className={`w-2 h-2 rounded-full ${
+                            p.is_active ? "bg-emerald-500" : "bg-red-500"
                           }`}
                         />
                         {p.is_active ? "Active" : "Suspended"}
@@ -247,23 +251,79 @@ export default function AdminPhotographerTable({
                           <div
                             id={`actions-dropdown-menu-${p.id}`}
                             role="menu"
-                            className={`absolute right-0 w-48 rounded-xl bg-slate-800 border border-slate-700 shadow-2xl shadow-black/80 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 ${
+                            className={`absolute right-0 w-52 rounded-xl bg-slate-800 border border-slate-700 shadow-2xl shadow-black/80 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 ${
                               isBottomRow ? "bottom-full mb-1.5" : "top-full mt-1.5"
                             }`}
                           >
-                            {/* Edit Plan & Quota */}
+                            {/* Switch to Basic Tier */}
                             <button
                               type="button"
                               role="menuitem"
+                              disabled={p.subscription_plan === "basic"}
                               onClick={() => {
                                 setOpenDropdownId(null);
-                                handleEditQuota?.(p.id, p.storage_quota_limit);
+                                if (p.subscription_plan !== "basic") {
+                                  handleTogglePlan?.(p.id, p.subscription_plan);
+                                }
                               }}
-                              className="flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-slate-200 hover:text-white hover:bg-slate-700/70 transition-colors cursor-pointer text-left"
+                              className={`flex items-center justify-between w-full px-3.5 py-2 text-xs transition-colors text-left ${
+                                p.subscription_plan === "basic"
+                                  ? "text-slate-500 cursor-not-allowed bg-slate-800/40"
+                                  : "text-slate-200 hover:text-white hover:bg-slate-700/70 cursor-pointer"
+                              }`}
                             >
-                              <Sliders className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                              <span>Edit Plan & Quota</span>
+                              <div className="flex items-center gap-2.5">
+                                <Layers
+                                  className={`w-3.5 h-3.5 shrink-0 ${
+                                    p.subscription_plan === "basic"
+                                      ? "text-slate-600"
+                                      : "text-indigo-400"
+                                  }`}
+                                />
+                                <span>Switch to Basic Tier</span>
+                              </div>
+                              {p.subscription_plan === "basic" && (
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                  Current
+                                </span>
+                              )}
                             </button>
+
+                            {/* Switch to Studio Tier */}
+                            <button
+                              type="button"
+                              role="menuitem"
+                              disabled={p.subscription_plan === "studio"}
+                              onClick={() => {
+                                setOpenDropdownId(null);
+                                if (p.subscription_plan !== "studio") {
+                                  handleTogglePlan?.(p.id, p.subscription_plan);
+                                }
+                              }}
+                              className={`flex items-center justify-between w-full px-3.5 py-2 text-xs transition-colors text-left ${
+                                p.subscription_plan === "studio"
+                                  ? "text-slate-500 cursor-not-allowed bg-slate-800/40"
+                                  : "text-purple-300 hover:text-purple-200 hover:bg-purple-950/40 cursor-pointer"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <Zap
+                                  className={`w-3.5 h-3.5 shrink-0 ${
+                                    p.subscription_plan === "studio"
+                                      ? "text-slate-600"
+                                      : "text-purple-400"
+                                  }`}
+                                />
+                                <span>Switch to Studio Tier</span>
+                              </div>
+                              {p.subscription_plan === "studio" && (
+                                <span className="text-[10px] text-purple-400/70 font-mono">
+                                  Current
+                                </span>
+                              )}
+                            </button>
+
+                            <div className="my-1 border-t border-slate-700/60" />
 
                             {/* Reset Password */}
                             <button

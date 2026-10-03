@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
 import api from "../api/axios";
 import AdminPhotographerTable from "../components/AdminPhotographerTable";
 import { useAuth } from "../context/AuthContext";
@@ -29,6 +28,8 @@ import {
   LogOut,
   ChevronDown,
   Images,
+  CircleUser,
+  Aperture,
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -441,7 +442,7 @@ export default function AdminDashboard() {
       <aside className="w-64 bg-[#05070d] border-r border-slate-800 flex flex-col shrink-0">
         {/* Logo Area */}
         <div className="p-6 flex items-center gap-3">
-          <Shield className="text-indigo-500 w-8 h-8 shrink-0" />
+          <img src="/logo.svg" alt="PhotoGuard Logo" className="w-8 h-8 object-contain shrink-0" />
           <div>
             <div className="flex items-center gap-2">
               <span className="text-white font-bold text-xl tracking-tight">PhotoGuard</span>
@@ -562,18 +563,16 @@ export default function AdminDashboard() {
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-indigo-400" : ""}`} />
             </button>
 
-            {/* Avatar (R) dropdown */}
+            {/* Avatar Profile Dropdown */}
             <div className="relative" ref={profileMenuRef}>
               <button
                 type="button"
                 id="admin-profile-menu-btn"
                 onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                className="flex items-center gap-2 p-1 rounded-full hover:ring-2 hover:ring-indigo-500/30 transition-all cursor-pointer"
+                className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-slate-800/60 transition-all cursor-pointer text-slate-300 hover:text-white"
                 aria-label="Admin Profile Menu"
               >
-                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-700 text-white font-bold text-sm flex items-center justify-center shadow-md border border-indigo-400/40 shrink-0">
-                  {(user?.full_name || user?.email || "R").charAt(0).toUpperCase()}
-                </div>
+                <CircleUser className="w-6 h-6 text-indigo-400 shrink-0" />
                 <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isProfileMenuOpen ? "rotate-180" : ""}`} />
               </button>
 
@@ -595,16 +594,7 @@ export default function AdminDashboard() {
                     </span>
                   </div>
 
-                  <div className="p-1 space-y-0.5">
-                    <Link
-                      to="/dashboard"
-                      onClick={() => setIsProfileMenuOpen(false)}
-                      className="flex items-center gap-2.5 w-full px-3 py-2 text-xs text-amber-300 hover:text-white hover:bg-amber-500/10 rounded-xl transition-colors font-medium"
-                    >
-                      <Images className="w-4 h-4 text-amber-400" />
-                      <span>Switch to Photographer View</span>
-                    </Link>
-
+                  <div className="p-1">
                     <button
                       type="button"
                       onClick={() => {

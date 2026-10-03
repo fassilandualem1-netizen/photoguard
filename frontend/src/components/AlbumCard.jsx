@@ -62,8 +62,8 @@ export default function AlbumCard({
           {/* Top Right: Status Badge */}
           <div className="absolute top-3 right-3 flex items-center gap-1.5">
             {isSubmitted ? (
-              <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-950/80 border border-amber-500/40 text-[10px] font-medium text-amber-300 backdrop-blur-md">
-                <Lock className="w-3 h-3 text-amber-400" />
+              <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-[10px] font-medium text-emerald-300 backdrop-blur-md">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
                 Submitted
               </span>
             ) : isExpired ? (
@@ -72,8 +72,8 @@ export default function AlbumCard({
                 Expired
               </span>
             ) : (
-              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-[10px] font-medium text-emerald-300 backdrop-blur-md">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/80 border border-amber-500/40 text-[10px] font-medium text-amber-300 backdrop-blur-md">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                 Selecting
               </span>
             )}

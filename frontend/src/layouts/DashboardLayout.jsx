@@ -18,6 +18,8 @@ import {
   AlertTriangle,
   Megaphone,
   ChevronDown,
+  Cloud,
+  Shield,
 } from "lucide-react";
 import ProfileSettingsModal from "../components/ProfileSettingsModal";
 import ChangePasswordModal from "../components/ChangePasswordModal";
@@ -152,41 +154,30 @@ export default function DashboardLayout({
       <header className="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-[#0d0f12]/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Logo / Brand */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             {user?.studio_logo_url && isStudio ? (
               <img
                 src={user.studio_logo_url}
-                alt={user.full_name || "Studio Logo"}
-                className="h-9 max-w-[120px] object-contain rounded-lg"
+                alt="Studio Logo"
+                className="h-8 max-w-[120px] object-contain rounded-lg"
                 onError={(e) => {
                   e.currentTarget.style.display = "none";
                 }}
               />
             ) : (
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md"
-                style={{
-                  backgroundColor: user?.brand_color || "#F59E0B",
-                  boxShadow: `0 4px 14px ${(user?.brand_color || "#F59E0B")}33`
-                }}
-              >
-                <ShieldCheck className="w-4 h-4 text-black stroke-[2.2]" />
+              <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center shadow-sm">
+                <Shield className="w-4 h-4 text-amber-400 stroke-[2.2]" />
               </div>
             )}
-            <div className="flex items-baseline gap-2">
-              <span className="font-semibold text-base sm:text-lg tracking-tight text-white">
-                {user?.studio_logo_url && isStudio ? user.full_name : "PhotoGuard"}
-              </span>
-              <span className="hidden sm:inline-block text-[11px] px-2 py-0.5 rounded-full border border-slate-700/80 bg-slate-800/60 text-slate-300 font-medium capitalize">
-                {isAssistant ? "Studio Assistant" : (user?.subscription_plan || "Basic")}
-              </span>
-            </div>
+            <span className="font-bold text-base sm:text-lg tracking-tight text-white">
+              PhotoGuard
+            </span>
           </div>
 
           {/* Quick Storage Indicator (Desktop Only, Subdued & Clean) */}
           <div className="hidden md:flex items-center gap-4 text-xs text-slate-400">
-            <div className="flex items-center gap-2">
-              <HardDrive className="w-3.5 h-3.5 text-slate-500" />
+            <div className="flex items-center gap-1.5">
+              <Cloud className="w-4 h-4 text-slate-400 shrink-0" />
               <span>{formatBytes(storageUsed)} / {formatBytes(storageQuota)}</span>
             </div>
             <div className="w-24 h-1.5 rounded-full bg-slate-800 overflow-hidden">
@@ -217,16 +208,13 @@ export default function DashboardLayout({
               id="profile-menu-btn"
               type="button"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="flex items-center gap-2.5 pl-2 pr-3 py-1.5 rounded-full border border-slate-800 bg-slate-900/70 hover:bg-slate-800 hover:border-slate-700 transition-all text-slate-200 hover:text-white cursor-pointer group shadow-sm"
+              className="flex items-center gap-1.5 p-1 rounded-full border border-slate-800 bg-slate-900/80 hover:bg-slate-800 hover:border-slate-700 transition-all text-slate-200 hover:text-white cursor-pointer group shadow-sm"
               aria-label="Open User Profile Menu"
             >
-              <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center shadow-sm shrink-0">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center shadow-sm shrink-0">
                 {(user?.full_name || "F").charAt(0).toUpperCase()}
               </div>
-              <span className="text-xs font-semibold tracking-tight max-w-[130px] truncate hidden sm:inline">
-                {user?.full_name ? (user.full_name.toLowerCase().includes("studio") ? user.full_name : `${user.full_name} Studio`) : "Fasil Studio"}
-              </span>
-              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-transform duration-200 ${isMenuOpen ? "rotate-180" : ""}`} />
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-transform duration-200 mr-1.5 ${isMenuOpen ? "rotate-180" : ""}`} />
             </button>
 
             {/* Pristine Dropdown */}

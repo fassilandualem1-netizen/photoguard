@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import AdminDashboard from "./AdminDashboard";
 import CreateAlbumModal from "../components/CreateAlbumModal";
+import AlbumCard from "../components/AlbumCard";
 import api from "../api/axios";
 import {
   Plus,
@@ -19,6 +20,8 @@ import {
   User,
   CheckCircle2,
   Crown,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 
 export default function DashboardHome() {
@@ -30,6 +33,7 @@ export default function DashboardHome() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [deletingId, setDeletingId] = useState(null);
+  const [viewMode, setViewMode] = useState("list"); // 'list' | 'grid'
 
   // If user is Admin and NOT explicitly toggled to view galleries, render AdminDashboard
   const [viewAsPhotographer, setViewAsPhotographer] = useState(false);
@@ -215,9 +219,9 @@ export default function DashboardHome() {
 
       {/* Fast Filter Bar (Scalable for 20+ albums) */}
       {albums.length > 0 && (
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="Search by title, client name, or 6-digit PIN..."
@@ -226,11 +230,44 @@ export default function DashboardHome() {
               className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-amber-400/60 transition-colors"
             />
           </div>
-          {searchQuery && (
-            <span className="text-xs text-slate-400 font-mono">
-              Found {filteredAlbums.length} of {albums.length}
-            </span>
-          )}
+
+          <div className="flex items-center gap-3 self-end sm:self-auto">
+            {searchQuery && (
+              <span className="text-xs text-slate-400 font-mono hidden md:inline">
+                Found {filteredAlbums.length} of {albums.length}
+              </span>
+            )}
+
+            {/* View Mode Toggle: List vs Grid */}
+            <div className="flex items-center p-1 rounded-xl bg-slate-900/80 border border-slate-800">
+              <button
+                type="button"
+                id="view-mode-list-btn"
+                onClick={() => setViewMode("list")}
+                title="List View"
+                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                  viewMode === "list"
+                    ? "bg-amber-400 text-slate-950 font-semibold shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <List className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                id="view-mode-grid-btn"
+                onClick={() => setViewMode("grid")}
+                title="Grid View"
+                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                  viewMode === "grid"
+                    ? "bg-amber-400 text-slate-950 font-semibold shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -260,6 +297,21 @@ export default function DashboardHome() {
       ) : filteredAlbums.length === 0 ? (
         <div className="p-12 text-center rounded-2xl border border-slate-800 bg-slate-900/30 text-slate-400 text-xs">
           No albums match "{searchQuery}". Try a different keyword or PIN.
+        </div>
+      ) : viewMode === "grid" ? (
+        /* Responsive CSS Grid View */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="grid-album-list">
+          {filteredAlbums.map((album) => {
+            if (!album || !album.id) return null;
+            return (
+              <AlbumCard
+                key={album.id}
+                album={album}
+                onDelete={handleDeleteAlbum}
+                isDeleting={deletingId === album.id}
+              />
+            );
+          })}
         </div>
       ) : (
         /* Sleek, Dense Horizontal List View (Scalable for 20+ Albums) */
@@ -348,8 +400,8 @@ export default function DashboardHome() {
                   {/* Status Badge */}
                   <div className="shrink-0">
                     {isSubmitted ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-950/80 border border-amber-500/40 text-[10px] font-medium text-amber-300">
-                        <Lock className="w-3 h-3 text-amber-400" />
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-[10px] font-medium text-emerald-300">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
                         <span>Submitted</span>
                       </span>
                     ) : isExpired ? (
@@ -358,8 +410,8 @@ export default function DashboardHome() {
                         <span>Expired</span>
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-[10px] font-medium text-emerald-300">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/80 border border-amber-500/40 text-[10px] font-medium text-amber-300">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                         <span>Selecting</span>
                       </span>
                     )}

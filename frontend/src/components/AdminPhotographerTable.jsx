@@ -93,7 +93,7 @@ export default function AdminPhotographerTable({
       </div>
 
       {/* Directory Table */}
-      <div className="overflow-x-auto min-h-[260px] pb-10">
+      <div className="overflow-x-auto min-h-[360px] pb-48">
         <table className="w-full text-left text-xs">
           <thead>
             <tr className="border-b border-slate-800/80 text-slate-400 font-mono text-[11px] uppercase tracking-wider">
@@ -115,7 +115,9 @@ export default function AdminPhotographerTable({
             ) : (
               filteredPhotographers.map((p, index) => {
                 const isBottomRow =
-                  index >= filteredPhotographers.length - 2 && filteredPhotographers.length > 2;
+                  filteredPhotographers.length > 5 &&
+                  index >= filteredPhotographers.length - 2 &&
+                  index >= 3;
                 const quotaGb = (p.storage_quota_limit / (1024 * 1024 * 1024)).toFixed(1);
                 const usagePercent = Math.min(
                   100,
@@ -258,41 +260,34 @@ export default function AdminPhotographerTable({
                                 setOpenDropdownId(null);
                                 handleEditQuota?.(p.id, p.storage_quota_limit);
                               }}
-                              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors text-left cursor-pointer"
+                              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-xs text-slate-200 hover:text-white hover:bg-slate-800 transition-colors text-left cursor-pointer"
                             >
                               <Sliders className="w-4 h-4 text-slate-400 shrink-0" />
-                              <span>Edit Account details (Plan & Quota)</span>
+                              <span className="font-medium">Edit Account details (Plan & Quota)</span>
                             </button>
 
                             {/* 2. Switch to Basic Tier */}
                             <button
                               type="button"
                               role="menuitem"
-                              disabled={p.subscription_plan === "basic"}
                               onClick={() => {
                                 setOpenDropdownId(null);
                                 if (p.subscription_plan !== "basic") {
                                   handleTogglePlan?.(p.id, p.subscription_plan);
                                 }
                               }}
-                              className={`flex items-center justify-between w-full px-4 py-2.5 text-xs transition-colors text-left ${
+                              className={`flex items-center justify-between w-full px-4 py-2.5 text-xs transition-colors text-left cursor-pointer ${
                                 p.subscription_plan === "basic"
-                                  ? "text-slate-500 cursor-not-allowed bg-slate-900/30"
-                                  : "text-slate-300 hover:text-white hover:bg-slate-800/80 cursor-pointer"
+                                  ? "text-slate-300 bg-slate-800/50"
+                                  : "text-slate-200 hover:text-white hover:bg-slate-800"
                               }`}
                             >
                               <div className="flex items-center gap-2.5">
-                                <Layers
-                                  className={`w-4 h-4 shrink-0 ${
-                                    p.subscription_plan === "basic"
-                                      ? "text-slate-600"
-                                      : "text-slate-400"
-                                  }`}
-                                />
+                                <Layers className="w-4 h-4 text-indigo-400 shrink-0" />
                                 <span>Switch to Basic Tier</span>
                               </div>
                               {p.subscription_plan === "basic" && (
-                                <span className="text-[10px] text-slate-500 font-mono">
+                                <span className="text-[10px] text-indigo-300 bg-indigo-950/80 border border-indigo-700/50 px-2 py-0.5 rounded font-mono">
                                   Current
                                 </span>
                               )}
@@ -302,31 +297,24 @@ export default function AdminPhotographerTable({
                             <button
                               type="button"
                               role="menuitem"
-                              disabled={p.subscription_plan === "studio"}
                               onClick={() => {
                                 setOpenDropdownId(null);
                                 if (p.subscription_plan !== "studio") {
                                   handleTogglePlan?.(p.id, p.subscription_plan);
                                 }
                               }}
-                              className={`flex items-center justify-between w-full px-4 py-2.5 text-xs transition-colors text-left ${
+                              className={`flex items-center justify-between w-full px-4 py-2.5 text-xs transition-colors text-left cursor-pointer ${
                                 p.subscription_plan === "studio"
-                                  ? "text-slate-500 cursor-not-allowed bg-slate-900/30"
-                                  : "text-slate-300 hover:text-white hover:bg-slate-800/80 cursor-pointer"
+                                  ? "text-purple-200 bg-purple-950/40"
+                                  : "text-slate-200 hover:text-white hover:bg-slate-800"
                               }`}
                             >
                               <div className="flex items-center gap-2.5">
-                                <Zap
-                                  className={`w-4 h-4 shrink-0 ${
-                                    p.subscription_plan === "studio"
-                                      ? "text-slate-600"
-                                      : "text-slate-400"
-                                  }`}
-                                />
+                                <Zap className="w-4 h-4 text-purple-400 shrink-0" />
                                 <span>Switch to Studio Tier</span>
                               </div>
                               {p.subscription_plan === "studio" && (
-                                <span className="text-[10px] text-purple-400/80 font-mono">
+                                <span className="text-[10px] text-purple-300 bg-purple-950/80 border border-purple-700/50 px-2 py-0.5 rounded font-mono">
                                   Current
                                 </span>
                               )}
@@ -342,15 +330,15 @@ export default function AdminPhotographerTable({
                                 setOpenDropdownId(null);
                                 handleResetPassword?.(p.id, p.email);
                               }}
-                              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer text-left"
+                              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-xs text-slate-200 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer text-left"
                             >
-                              <KeyRound className="w-4 h-4 text-slate-400 shrink-0" />
+                              <KeyRound className="w-4 h-4 text-amber-400 shrink-0" />
                               <span>Reset Password</span>
                             </button>
 
                             <div className="my-1 border-t border-slate-700/60" />
 
-                            {/* 5. Suspend Account (red text with red Power icon) */}
+                            {/* 5. Suspend Account (Red text/icon) */}
                             <button
                               type="button"
                               role="menuitem"

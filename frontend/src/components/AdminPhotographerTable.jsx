@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Search,
   Mail,
@@ -10,6 +10,7 @@ import {
   Sliders,
   RefreshCw,
   UserPlus,
+  MoreVertical,
 } from "lucide-react";
 
 export default function AdminPhotographerTable({
@@ -25,6 +26,30 @@ export default function AdminPhotographerTable({
   formatBytes,
   onOpenRegisterModal,
 }) {
+  const [openDropdownId, setOpenDropdownId] = useState(null);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown on click outside or Escape key
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setOpenDropdownId(null);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setOpenDropdownId(null);
+      }
+    };
+    if (openDropdownId !== null) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openDropdownId]);
   return (
     <section className="p-6 rounded-2xl bg-[#0e121b] border border-indigo-950/70 shadow-xl shadow-black/30">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-indigo-950/60">
@@ -68,7 +93,7 @@ export default function AdminPhotographerTable({
       </div>
 
       {/* Directory Table */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto min-h-[260px] pb-10">
         <table className="w-full text-left text-xs">
           <thead>
             <tr className="border-b border-indigo-950/80 text-slate-400 font-mono uppercase tracking-wider">
@@ -88,7 +113,9 @@ export default function AdminPhotographerTable({
                 </td>
               </tr>
             ) : (
-              filteredPhotographers.map((p) => {
+              filteredPhotographers.map((p, index) => {
+                const isBottomRow =
+                  index >= filteredPhotographers.length - 2 && filteredPhotographers.length > 2;
                 const quotaGb = (p.storage_quota_limit / (1024 * 1024 * 1024)).toFixed(1);
                 const usagePercent = Math.min(
                   100,
@@ -109,18 +136,21 @@ export default function AdminPhotographerTable({
 
                     {/* Plan */}
                     <td className="py-5 px-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider font-mono border ${
+                      <button
+                        type="button"
+                        onClick={() => handleTogglePlan?.(p.id, p.subscription_plan)}
+                        title={`Click to switch plan (Current: ${p.subscription_plan.toUpperCase()})`}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider font-mono border transition-all hover:scale-105 active:scale-95 cursor-pointer ${
                           p.subscription_plan === "studio"
-                            ? "bg-purple-950/80 text-purple-300 border-purple-500/40 shadow-sm shadow-purple-500/10"
-                            : "bg-slate-800/80 text-slate-300 border-slate-700/80 shadow-sm"
+                            ? "bg-purple-950/80 text-purple-300 border-purple-500/40 hover:border-purple-400 shadow-sm shadow-purple-500/10"
+                            : "bg-slate-800/80 text-slate-300 border-slate-700/80 hover:border-slate-500 shadow-sm"
                         }`}
                       >
                         {p.subscription_plan === "studio" && (
                           <Zap className="w-3 h-3 text-purple-400" />
                         )}
                         {p.subscription_plan}
-                      </span>
+                      </button>
                     </td>
 
                     {/* Storage */}
@@ -187,62 +217,95 @@ export default function AdminPhotographerTable({
 
                     {/* Actions */}
                     <td className="py-5 px-4 text-right">
-                      <div className="inline-flex items-center gap-1.5">
-                        {/* Toggle Suspend / Active */}
+                      <div
+                        className="relative inline-block text-left"
+                        ref={openDropdownId === p.id ? dropdownRef : null}
+                      >
+                        {/* More Options Button */}
                         <button
-                          onClick={() => handleToggleSuspend?.(p.id, p.is_active)}
-                          disabled={isLoading}
-                          title={
-                            p.is_active
-                              ? "Suspend Root Account (Cascades suspension to all assistants)"
-                              : "Activate Root Account (Re-enables studio access)"
+                          type="button"
+                          id={`photographer-actions-btn-${p.id}`}
+                          onClick={() =>
+                            setOpenDropdownId(openDropdownId === p.id ? null : p.id)
                           }
-                          className={`p-2 rounded-lg text-xs font-medium border transition-all ${
-                            p.is_active
-                              ? "bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30 hover:scale-105 active:scale-95"
-                              : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:scale-105 active:scale-95"
-                          }`}
-                        >
-                          <Power className="w-3.5 h-3.5" />
-                        </button>
-
-                        {/* Toggle Plan (Basic <-> Studio) */}
-                        <button
-                          onClick={() => handleTogglePlan?.(p.id, p.subscription_plan)}
                           disabled={isLoading}
-                          title={
-                            p.subscription_plan === "basic"
-                              ? "Upgrade to Studio Tier (Unlocks assistants, custom branding & downloads)"
-                              : "Downgrade to Basic Tier (Deactivates assistants)"
-                          }
-                          className="p-2 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 transition-all hover:scale-105 active:scale-95"
+                          title="More Options"
+                          aria-label="More Options"
+                          aria-haspopup="true"
+                          aria-expanded={openDropdownId === p.id}
+                          className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 border border-transparent hover:border-slate-700 transition-colors cursor-pointer"
                         >
-                          <Layers className="w-3.5 h-3.5" />
-                        </button>
-
-                        {/* Reset Password */}
-                        <button
-                          onClick={() => handleResetPassword?.(p.id, p.email)}
-                          disabled={isLoading}
-                          title="Reset Password for Root Account (Generates fresh temporary credentials)"
-                          className="p-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-all hover:scale-105 active:scale-95"
-                        >
-                          <KeyRound className="w-3.5 h-3.5" />
-                        </button>
-
-                        {/* Edit Quota Limit Override */}
-                        <button
-                          onClick={() => handleEditQuota?.(p.id, p.storage_quota_limit)}
-                          disabled={isLoading || actionLoadingId === p.id}
-                          title="Override Storage Quota Limit (GB) (e.g. 5, 25, 50, 9999 for Unlimited)"
-                          className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
-                        >
-                          {actionLoadingId === p.id ? (
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                          {isLoading ? (
+                            <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
                           ) : (
-                            <Sliders className="w-3.5 h-3.5" />
+                            <MoreVertical className="w-4 h-4" />
                           )}
                         </button>
+
+                        {/* Dropdown Menu Popover */}
+                        {openDropdownId === p.id && (
+                          <div
+                            id={`actions-dropdown-menu-${p.id}`}
+                            role="menu"
+                            className={`absolute right-0 w-48 rounded-xl bg-slate-800 border border-slate-700 shadow-2xl shadow-black/80 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 ${
+                              isBottomRow ? "bottom-full mb-1.5" : "top-full mt-1.5"
+                            }`}
+                          >
+                            {/* Edit Plan & Quota */}
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setOpenDropdownId(null);
+                                handleEditQuota?.(p.id, p.storage_quota_limit);
+                              }}
+                              className="flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-slate-200 hover:text-white hover:bg-slate-700/70 transition-colors cursor-pointer text-left"
+                            >
+                              <Sliders className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                              <span>Edit Plan & Quota</span>
+                            </button>
+
+                            {/* Reset Password */}
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setOpenDropdownId(null);
+                                handleResetPassword?.(p.id, p.email);
+                              }}
+                              className="flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-slate-200 hover:text-white hover:bg-slate-700/70 transition-colors cursor-pointer text-left"
+                            >
+                              <KeyRound className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <span>Reset Password</span>
+                            </button>
+
+                            <div className="my-1 border-t border-slate-700/60" />
+
+                            {/* Suspend Account (Power icon, make the text/icon red to indicate danger) */}
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setOpenDropdownId(null);
+                                handleToggleSuspend?.(p.id, p.is_active);
+                              }}
+                              className={`flex items-center gap-2.5 w-full px-3.5 py-2 text-xs transition-colors cursor-pointer text-left font-medium ${
+                                p.is_active
+                                  ? "text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                  : "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                              }`}
+                            >
+                              <Power
+                                className={`w-3.5 h-3.5 shrink-0 ${
+                                  p.is_active ? "text-red-400" : "text-emerald-400"
+                                }`}
+                              />
+                              <span>
+                                {p.is_active ? "Suspend Account" : "Activate Account"}
+                              </span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>

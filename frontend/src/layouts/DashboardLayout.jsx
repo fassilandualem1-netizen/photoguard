@@ -17,6 +17,7 @@ import {
   Info,
   AlertTriangle,
   Megaphone,
+  ChevronDown,
 } from "lucide-react";
 import ProfileSettingsModal from "../components/ProfileSettingsModal";
 import ChangePasswordModal from "../components/ChangePasswordModal";
@@ -210,23 +211,22 @@ export default function DashboardLayout({
             </Link>
           )}
 
-          {/* Clean Hamburger Menu Trigger */}
+          {/* Modern SaaS Profile Menu Trigger */}
           <div className="relative" ref={menuRef}>
             <button
-              id="hamburger-menu-btn"
+              id="profile-menu-btn"
               type="button"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-800/80 hover:border-slate-700 transition-all text-slate-300 hover:text-white"
-              aria-label="Open Navigation Menu"
+              className="flex items-center gap-2.5 pl-2 pr-3 py-1.5 rounded-full border border-slate-800 bg-slate-900/70 hover:bg-slate-800 hover:border-slate-700 transition-all text-slate-200 hover:text-white cursor-pointer group shadow-sm"
+              aria-label="Open User Profile Menu"
             >
-              <span className="text-xs font-medium max-w-[120px] truncate hidden sm:inline">
-                {user?.full_name || "Account"}
+              <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center shadow-sm shrink-0">
+                {(user?.full_name || "F").charAt(0).toUpperCase()}
+              </div>
+              <span className="text-xs font-semibold tracking-tight max-w-[130px] truncate hidden sm:inline">
+                {user?.full_name ? (user.full_name.toLowerCase().includes("studio") ? user.full_name : `${user.full_name} Studio`) : "Fasil Studio"}
               </span>
-              {isMenuOpen ? (
-                <X className="w-4 h-4 text-slate-300" />
-              ) : (
-                <Menu className="w-4 h-4 text-slate-300" />
-              )}
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-transform duration-200 ${isMenuOpen ? "rotate-180" : ""}`} />
             </button>
 
             {/* Pristine Dropdown */}

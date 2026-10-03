@@ -732,88 +732,90 @@ export default function AlbumDetail() {
               )}
             </button>
 
-            {/* ONE-CLICK SHARE PIN DROPDOWN */}
-            <div className="relative z-50" ref={shareDropdownRef}>
-              <button
-                type="button"
-                id="share-pin-dropdown-btn"
-                onClick={() => setIsShareOpen(!isShareOpen)}
-                className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-emerald-500/20 cursor-pointer"
-                title="Share PIN directly with client via WhatsApp, Telegram, or message"
-              >
-                <Share2 className="w-4 h-4 text-slate-950 stroke-[2.5]" />
-                <span>Share PIN</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isShareOpen ? "rotate-180" : ""}`} />
-              </button>
+            {/* ONE-CLICK SHARE PIN DROPDOWN: Hidden when client has submitted */}
+            {!isSubmitted && (
+              <div className="relative z-50" ref={shareDropdownRef}>
+                <button
+                  type="button"
+                  id="share-pin-dropdown-btn"
+                  onClick={() => setIsShareOpen(!isShareOpen)}
+                  className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-emerald-500/20 cursor-pointer"
+                  title="Share PIN directly with client via WhatsApp, Telegram, or message"
+                >
+                  <Share2 className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                  <span>Share PIN</span>
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isShareOpen ? "rotate-180" : ""}`} />
+                </button>
 
-              {isShareOpen && (
-                <div className="absolute right-0 top-full mt-2 w-80 sm:w-88 rounded-2xl border border-slate-700/90 bg-[#12161f] p-3.5 shadow-2xl shadow-black/95 z-50 space-y-2.5 animate-in fade-in zoom-in-95 duration-150">
-                  <div className="px-2 py-1 border-b border-slate-800/80">
-                    <p className="text-xs font-semibold text-white flex items-center gap-1.5">
-                      <Share2 className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Share PIN with Client</span>
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                      Private PIN: <span className="font-mono font-bold text-amber-400 text-xs">{albumPin}</span>
-                    </p>
-                  </div>
+                {isShareOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-80 sm:w-88 rounded-2xl border border-slate-700/90 bg-[#12161f] p-3.5 shadow-2xl shadow-black/95 z-50 space-y-2.5 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-2 py-1 border-b border-slate-800/80">
+                      <p className="text-xs font-semibold text-white flex items-center gap-1.5">
+                        <Share2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Share PIN with Client</span>
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                        Private PIN: <span className="font-mono font-bold text-amber-400 text-xs">{albumPin}</span>
+                      </p>
+                    </div>
 
-                  {/* WhatsApp Direct Link */}
-                  <a
-                    id="share-whatsapp-btn"
-                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => setIsShareOpen(false)}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-emerald-200 hover:text-white bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-500/30 hover:border-emerald-500/60 transition-all text-left group cursor-pointer"
-                  >
-                    <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0 group-hover:scale-105 transition-transform">
-                      <MessageCircle className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-bold text-white">Share via WhatsApp</div>
-                      <div className="text-[10px] text-emerald-400/80">Direct pre-filled chat invite</div>
-                    </div>
-                    <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-300 transition-colors" />
-                  </a>
-
-                  {/* Telegram Direct Link */}
-                  <a
-                    id="share-telegram-btn"
-                    href={`https://t.me/share/url?url=${encodeURIComponent("https://photoguard.com/app")}&text=${encodeURIComponent(shareText)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => setIsShareOpen(false)}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-sky-200 hover:text-white bg-sky-950/50 hover:bg-sky-900/60 border border-sky-500/30 hover:border-sky-500/60 transition-all text-left group cursor-pointer"
-                  >
-                    <div className="w-7 h-7 rounded-lg bg-sky-500/20 flex items-center justify-center text-sky-400 shrink-0 group-hover:scale-105 transition-transform">
-                      <Send className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-bold text-white">Share via Telegram</div>
-                      <div className="text-[10px] text-sky-400/80">Instant messenger broadcast</div>
-                    </div>
-                    <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-sky-300 transition-colors" />
-                  </a>
-
-                  <div className="border-t border-slate-800/80 pt-2 space-y-2">
-                    <button
-                      type="button"
-                      id="copy-invite-text-btn"
-                      onClick={handleCopyInviteMessage}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-amber-300 hover:text-white hover:bg-amber-500/10 border border-transparent hover:border-amber-500/30 transition-colors text-left cursor-pointer"
+                    {/* WhatsApp Direct Link */}
+                    <a
+                      id="share-whatsapp-btn"
+                      href={`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setIsShareOpen(false)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-emerald-200 hover:text-white bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-500/30 hover:border-emerald-500/60 transition-all text-left group cursor-pointer"
                     >
-                      <Copy className="w-4 h-4 text-amber-400 shrink-0" />
-                      <span>{copiedInvite ? "Copied to Clipboard!" : "Copy Invitation Message"}</span>
-                    </button>
+                      <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0 group-hover:scale-105 transition-transform">
+                        <MessageCircle className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-bold text-white">Share via WhatsApp</div>
+                        <div className="text-[10px] text-emerald-400/80">Direct pre-filled chat invite</div>
+                      </div>
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-300 transition-colors" />
+                    </a>
 
-                    <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80 text-[10px] text-slate-400 font-mono leading-relaxed select-all">
-                      "{shareText}"
+                    {/* Telegram Direct Link */}
+                    <a
+                      id="share-telegram-btn"
+                      href={`https://t.me/share/url?url=${encodeURIComponent("https://photoguard.com/app")}&text=${encodeURIComponent(shareText)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setIsShareOpen(false)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-sky-200 hover:text-white bg-sky-950/50 hover:bg-sky-900/60 border border-sky-500/30 hover:border-sky-500/60 transition-all text-left group cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-sky-500/20 flex items-center justify-center text-sky-400 shrink-0 group-hover:scale-105 transition-transform">
+                        <Send className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-bold text-white">Share via Telegram</div>
+                        <div className="text-[10px] text-sky-400/80">Instant messenger broadcast</div>
+                      </div>
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-sky-300 transition-colors" />
+                    </a>
+
+                    <div className="border-t border-slate-800/80 pt-2 space-y-2">
+                      <button
+                        type="button"
+                        id="copy-invite-text-btn"
+                        onClick={handleCopyInviteMessage}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-amber-300 hover:text-white hover:bg-amber-500/10 border border-transparent hover:border-amber-500/30 transition-colors text-left cursor-pointer"
+                      >
+                        <Copy className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>{copiedInvite ? "Copied to Clipboard!" : "Copy Invitation Message"}</span>
+                      </button>
+
+                      <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80 text-[10px] text-slate-400 font-mono leading-relaxed select-all">
+                        "{shareText}"
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {/* Studio Plan Lifespan Extension */}
             {isStudio && (

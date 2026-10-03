@@ -211,14 +211,17 @@ function LoginContent({ onLoginSuccess }) {
   return (
     <div
       id="login-container"
-      className="min-h-screen w-full flex items-center justify-center p-4 sm:p-6 bg-[#06080c] text-slate-100 selection:bg-[#FF1A4B]/30 selection:text-amber-200 relative overflow-hidden"
+      className="min-h-screen w-full flex flex-col items-center justify-between p-4 sm:p-6 bg-[#06080c] text-slate-100 selection:bg-[#FF1A4B]/30 selection:text-amber-200 relative overflow-hidden"
     >
       {/* Premium Ambient Background Accents */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[540px] h-[540px] bg-gradient-to-tr from-[#FF1A4B]/10 via-[#F59E0B]/10 to-transparent rounded-full blur-3xl pointer-events-none" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-[#06080c]/60 to-[#06080c] pointer-events-none" />
 
+      {/* Spacer for optical vertical balance */}
+      <div className="w-full h-4 hidden sm:block" />
+
       {/* Centered Login Card */}
-      <div className="w-full max-w-[440px] relative z-10">
+      <div className="w-full max-w-[440px] relative z-10 my-auto">
         <div className="p-8 sm:p-10 rounded-3xl bg-[#0b0e14]/90 border border-slate-800/80 shadow-[0_24px_70px_-12px_rgba(0,0,0,0.85),0_0_40px_rgba(245,158,11,0.06)] backdrop-blur-2xl">
           {/* Studio Brand Header */}
           <div className="flex flex-col items-center text-center mb-8">
@@ -273,7 +276,7 @@ function LoginContent({ onLoginSuccess }) {
                   placeholder="photographer@studio.com"
                   required
                   autoComplete="email"
-                  className="w-full bg-slate-900/90 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all shadow-inner"
+                  className="w-full bg-slate-900/90 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25 transition-all shadow-inner"
                 />
               </div>
             </div>
@@ -297,7 +300,7 @@ function LoginContent({ onLoginSuccess }) {
                   placeholder="••••••••••••"
                   required
                   autoComplete="current-password"
-                  className="w-full bg-slate-900/90 border border-slate-800 rounded-xl pl-10 pr-11 py-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all shadow-inner"
+                  className="w-full bg-slate-900/90 border border-slate-800 rounded-xl pl-10 pr-11 py-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25 transition-all shadow-inner"
                 />
                 <button
                   type="button"
@@ -331,6 +334,13 @@ function LoginContent({ onLoginSuccess }) {
           </form>
         </div>
       </div>
+
+      {/* Minimalist Professional Footer */}
+      <footer className="relative z-10 py-3 text-center">
+        <p className="text-xs sm:text-sm text-slate-500">
+          © 2026 PhotoGuard Studio. All rights reserved.
+        </p>
+      </footer>
     </div>
   );
 }

@@ -131,6 +131,22 @@ export default function CreateAlbumModal({ isOpen, onClose, onAlbumCreated }) {
             />
           </div>
 
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                Access PIN
+              </label>
+              <span className="text-[11px] font-mono text-slate-500">Auto-Generated</span>
+            </div>
+            <input
+              id="album-pin-input"
+              type="text"
+              value="Auto-generated on creation"
+              readOnly
+              className="w-full bg-slate-800/60 border border-slate-800/80 rounded-xl px-4 py-2.5 text-sm text-slate-400 opacity-70 cursor-not-allowed select-none focus:outline-none"
+            />
+          </div>
+
           {/* Conditional Expiration for Studio Tier */}
           {isStudio && (
             <div className="space-y-1.5">

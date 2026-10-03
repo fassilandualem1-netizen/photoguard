@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useDashboardSearch } from "../layouts/DashboardLayout";
 import AdminDashboard from "./AdminDashboard";
 import CreateAlbumModal from "../components/CreateAlbumModal";
 import AlbumCard from "../components/AlbumCard";
@@ -9,7 +10,6 @@ import {
   Plus,
   Image as ImageIcon,
   Clock,
-  Lock,
   AlertCircle,
   RefreshCw,
   FolderPlus,
@@ -17,21 +17,19 @@ import {
   Trash2,
   ChevronRight,
   Search,
-  User,
   CheckCircle2,
-  Crown,
   LayoutGrid,
   List,
 } from "lucide-react";
 
 export default function DashboardHome() {
-  const { isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const { searchQuery, setSearchQuery } = useDashboardSearch();
   const [albums, setAlbums] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [deletingId, setDeletingId] = useState(null);
   const [viewMode, setViewMode] = useState("list"); // 'list' | 'grid'
 
@@ -119,7 +117,7 @@ export default function DashboardHome() {
   // Filter albums by search query (title, client name, or PIN)
   const filteredAlbums = useMemo(() => {
     const safeAlbums = Array.isArray(albums) ? albums : [];
-    if (!searchQuery.trim()) return safeAlbums;
+    if (!searchQuery || !searchQuery.trim()) return safeAlbums;
     const q = searchQuery.toLowerCase().trim();
     return safeAlbums.filter((a) => {
       if (!a) return false;
@@ -134,9 +132,9 @@ export default function DashboardHome() {
     return (
       <div
         id="photographer-dashboard-loading"
-        className="flex flex-col items-center justify-center py-20 text-slate-400"
+        className="flex flex-col items-center justify-center py-24 text-slate-400"
       >
-        <div className="w-8 h-8 rounded-full border-2 border-amber-400 border-t-transparent animate-spin mb-3" />
+        <div className="w-8 h-8 rounded-full border-2 border-orange-400 border-t-transparent animate-spin mb-3" />
         <p className="text-xs font-mono uppercase tracking-wider text-slate-500">
           Loading client galleries...
         </p>
@@ -148,7 +146,7 @@ export default function DashboardHome() {
     return (
       <div
         id="photographer-dashboard-error"
-        className="p-6 rounded-2xl border border-red-500/20 bg-red-950/40 text-red-300 flex flex-col items-start gap-4"
+        className="p-6 rounded-2xl border border-red-500/20 bg-red-950/40 text-red-300 flex flex-col items-start gap-4 max-w-xl mx-auto my-12"
       >
         <div className="flex items-center gap-3">
           <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
@@ -157,7 +155,7 @@ export default function DashboardHome() {
         <button
           type="button"
           onClick={fetchAlbums}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-900/60 hover:bg-red-800/60 border border-red-700/60 text-xs font-semibold text-white transition-colors"
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-900/60 hover:bg-red-800/60 border border-red-700/60 text-xs font-semibold text-white transition-colors cursor-pointer"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           <span>Retry</span>
@@ -168,21 +166,22 @@ export default function DashboardHome() {
 
   return (
     <div id="photographer-dashboard-container" className="space-y-6">
-      {/* Top Action Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-800/80">
+      {/* 3. Title Section & Primary Action */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+            <h1 className="text-2xl font-bold tracking-tight text-white">
               Client Proof Galleries
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-xs font-mono">
-              {albums.length} Total
+            {/* Soft bg-slate-800 text-slate-300 rounded badge saying "4 TOTAL" */}
+            <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 text-xs font-semibold uppercase tracking-wider">
+              {albums.length} TOTAL
             </span>
             {isAdmin && (
               <button
                 type="button"
                 onClick={() => setViewAsPhotographer(false)}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 hover:text-white text-xs font-semibold transition-all"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 hover:text-white text-xs font-semibold transition-all cursor-pointer"
               >
                 <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
                 <span>Return to Admin Center</span>
@@ -190,95 +189,94 @@ export default function DashboardHome() {
             )}
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Manage high-resolution collections, track live client selections, and generate secure 6-digit access PINs.
+            Manage high-resolution collections, monitor client proofs, and distribute secure 6-digit access PINs.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <button
             type="button"
             onClick={fetchAlbums}
-            className="p-2.5 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-800/80 text-slate-400 hover:text-white transition-colors"
+            className="p-2.5 rounded-xl border border-slate-800 bg-[#151a23] hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
             aria-label="Refresh albums"
             title="Refresh galleries"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
 
+          {/* Primary Action: Premium gradient/solid orange button for "+ Create New Album" */}
           <button
             id="create-new-album-btn"
             type="button"
             onClick={handleCreateAlbum}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-xs transition-all shadow-lg shadow-amber-500/10"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-orange-400/90 hover:bg-orange-500 text-black font-medium text-xs transition-all shadow-lg shadow-orange-500/20 cursor-pointer"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>Create New Album</span>
+            <span>+ Create New Album</span>
           </button>
         </div>
       </div>
 
-      {/* Fast Filter Bar (Scalable for 20+ albums) */}
-      {albums.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search by title, client name, or 6-digit PIN..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-amber-400/60 transition-colors"
-            />
-          </div>
+      {/* Secondary Toolbar: Search/filter input below title + Grid/List view toggle icons on far right */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search by title, client name, or 6-digit PIN..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 rounded-xl bg-[#151a23] border border-slate-800 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-orange-500/60 focus:ring-1 focus:ring-orange-500/20 transition-all"
+          />
+        </div>
 
-          <div className="flex items-center gap-3 self-end sm:self-auto">
-            {searchQuery && (
-              <span className="text-xs text-slate-400 font-mono hidden md:inline">
-                Found {filteredAlbums.length} of {albums.length}
-              </span>
-            )}
+        <div className="flex items-center gap-3 self-end sm:self-auto">
+          {searchQuery && (
+            <span className="text-xs text-slate-400 font-mono hidden md:inline">
+              Found {filteredAlbums.length} of {albums.length}
+            </span>
+          )}
 
-            {/* View Mode Toggle: List vs Grid */}
-            <div className="flex items-center p-1 rounded-xl bg-slate-900/80 border border-slate-800">
-              <button
-                type="button"
-                id="view-mode-list-btn"
-                onClick={() => setViewMode("list")}
-                title="List View"
-                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                  viewMode === "list"
-                    ? "bg-amber-400 text-slate-950 font-semibold shadow-sm"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                <List className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                id="view-mode-grid-btn"
-                onClick={() => setViewMode("grid")}
-                title="Grid View"
-                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                  viewMode === "grid"
-                    ? "bg-amber-400 text-slate-950 font-semibold shadow-sm"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-            </div>
+          {/* Grid / List view toggle icons on far right */}
+          <div className="flex items-center p-1 rounded-xl bg-[#151a23] border border-slate-800">
+            <button
+              type="button"
+              id="view-mode-list-btn"
+              onClick={() => setViewMode("list")}
+              title="List View"
+              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                viewMode === "list"
+                  ? "bg-orange-400 text-black font-semibold shadow-sm"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              id="view-mode-grid-btn"
+              onClick={() => setViewMode("grid")}
+              title="Grid View"
+              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                viewMode === "grid"
+                  ? "bg-orange-400 text-black font-semibold shadow-sm"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Empty State */}
       {albums.length === 0 ? (
         <div
           id="empty-albums-state"
-          className="rounded-3xl border border-slate-800/80 bg-slate-900/30 backdrop-blur-md p-12 sm:p-16 flex flex-col items-center justify-center text-center max-w-xl mx-auto my-12"
+          className="rounded-3xl border border-slate-800 bg-[#151a23]/60 backdrop-blur-md p-12 sm:p-16 flex flex-col items-center justify-center text-center max-w-xl mx-auto my-12"
         >
-          <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-amber-500/20 to-amber-400/5 border border-amber-500/30 flex items-center justify-center mb-6 shadow-xl shadow-amber-500/5">
-            <FolderPlus className="w-8 h-8 text-amber-400 stroke-[1.8]" />
+          <div className="w-16 h-16 rounded-3xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center mb-6 shadow-xl shadow-orange-500/5">
+            <FolderPlus className="w-8 h-8 text-orange-400 stroke-[1.8]" />
           </div>
           <h3 className="text-lg font-bold text-white mb-2">No Galleries Created Yet</h3>
           <p className="text-xs sm:text-sm text-slate-400 max-w-md mb-8 leading-relaxed">
@@ -288,14 +286,14 @@ export default function DashboardHome() {
             id="empty-create-album-btn"
             type="button"
             onClick={handleCreateAlbum}
-            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-xs transition-all shadow-lg shadow-amber-500/15"
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-orange-400/90 hover:bg-orange-500 text-black font-medium text-xs transition-all shadow-lg shadow-orange-500/15 cursor-pointer"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>Create Your First Album</span>
+            <span>+ Create New Album</span>
           </button>
         </div>
       ) : filteredAlbums.length === 0 ? (
-        <div className="p-12 text-center rounded-2xl border border-slate-800 bg-slate-900/30 text-slate-400 text-xs">
+        <div className="p-12 text-center rounded-2xl border border-slate-800 bg-[#151a23] text-slate-400 text-xs">
           No albums match "{searchQuery}". Try a different keyword or PIN.
         </div>
       ) : viewMode === "grid" ? (
@@ -314,136 +312,129 @@ export default function DashboardHome() {
           })}
         </div>
       ) : (
-        /* Sleek, Dense Horizontal List View (Scalable for 20+ Albums) */
-        <div className="space-y-2.5" id="compact-album-list">
+        /* Redesign Table to Cards: Stacked list of distinct, rounded cards (bg-[#151a23] border border-slate-800 rounded-xl p-4 mb-3) */
+        <div className="space-y-3" id="compact-album-list">
           {filteredAlbums.map((album) => {
             if (!album || !album.id) return null;
             const daysLeft = calculateDaysLeft(album.expires_at);
             const isSubmitted = album.status === "submitted" || album.is_locked;
-            const isExpired = album.is_expired || daysLeft === 0;
+            const isExpired = album.is_expired || (daysLeft !== null && daysLeft === 0);
             const photoCount = album.photo_count ?? album.media_count ?? 0;
-            const selectedCount = album.selected_count ?? 0;
             const pinCode = album.pin || album.client_pin;
             const isDeleting = deletingId === album.id;
+            const ownerName = album.creator_name || album.client_name || user?.full_name || "Studio Owner";
 
             return (
               <div
                 key={album.id}
                 id={`album-row-${album.id}`}
                 onClick={() => navigate(`/dashboard/albums/${album.id}`)}
-                className="group px-4 py-3.5 rounded-xl border border-slate-800/90 bg-slate-900/40 hover:bg-slate-900/90 hover:border-slate-700 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer shadow-sm relative overflow-hidden"
+                className="group bg-[#151a23] border border-slate-800 rounded-xl p-4 mb-3 hover:border-slate-700 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer shadow-sm relative overflow-hidden"
               >
-                {/* Left Section: PIN + Title + Client Name */}
+                {/* 4. Left: Avatar image, sleek orange PIN badge, Gallery Title, and Owner Name */}
                 <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                  {/* 6-Digit PIN Badge */}
-                  {pinCode ? (
-                    <div
-                      title="Client 6-Digit Access PIN"
-                      className="px-2.5 py-1 rounded-lg bg-amber-950/60 border border-amber-500/40 text-amber-400 font-mono text-xs font-bold tracking-wider shrink-0 flex items-center gap-1 shadow-sm"
-                    >
-                      <span className="text-[10px] text-amber-500/70 font-sans font-medium uppercase">PIN</span>
-                      <span>{pinCode}</span>
-                    </div>
-                  ) : (
-                    <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
-                      <ImageIcon className="w-4 h-4 text-slate-500" />
-                    </div>
-                  )}
-
-                  {/* Title & Client Name */}
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-sm font-semibold text-white group-hover:text-amber-400 transition-colors truncate">
-                        {album.title}
-                      </h3>
-
-                      {/* Creator Tracking Badge */}
-                      {String(album.creator_role || "photographer").toLowerCase().trim() === "assistant" ? (
-                        <span
-                          title={`Created by Studio Assistant: ${album.creator_name || "Assistant"}`}
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 bg-cyan-950/80 text-cyan-300 border border-cyan-400/50 shadow-sm shadow-cyan-500/20"
-                        >
-                          <User className="w-3 h-3" /> Ast: {album.creator_name || "Assistant"}
-                        </span>
-                      ) : (
-                        <span
-                          title="Created by Studio Root Owner"
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 bg-slate-800/90 text-amber-300/90 border border-amber-500/20"
-                        >
-                          <Crown className="w-3 h-3" /> Owner
-                        </span>
-                      )}
-
-                      {selectedCount > 0 && (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.2 rounded-full shrink-0">
-                          <CheckCircle2 className="w-3 h-3" />
-                          {selectedCount} Selected
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5 truncate">
-                      <span className="flex items-center gap-1 truncate text-slate-400">
-                        <User className="w-3 h-3 text-slate-500 shrink-0" />
-                        <span className="truncate">{album.client_name || "Unassigned Client"}</span>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Section: Status Badge, Photo Count, Expiry, Delete Button */}
-                <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/60">
-                  {/* Photo Count */}
-                  <span className="text-xs font-mono text-slate-300 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700/60 shrink-0">
-                    {photoCount} {photoCount === 1 ? "Photo" : "Photos"}
-                  </span>
-
-                  {/* Status Badge */}
-                  <div className="shrink-0">
-                    {isSubmitted ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-[10px] font-medium text-emerald-300">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                        <span>Submitted</span>
-                      </span>
-                    ) : isExpired ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-950/80 border border-red-500/40 text-[10px] font-medium text-red-300">
-                        <Clock className="w-3 h-3 text-red-400" />
-                        <span>Expired</span>
-                      </span>
+                  {/* Avatar image */}
+                  <div className="w-10 h-10 rounded-xl bg-slate-800/80 border border-slate-700/60 flex items-center justify-center font-bold text-xs text-orange-400 shrink-0 overflow-hidden shadow-inner">
+                    {album.cover_photo_url ? (
+                      <img
+                        src={album.cover_photo_url}
+                        alt={album.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/80 border border-amber-500/40 text-[10px] font-medium text-amber-300">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                        <span>Selecting</span>
+                      <span className="uppercase font-mono">
+                        {(album.title || "G").charAt(0)}
                       </span>
                     )}
                   </div>
 
-                  {/* Lifespan Indicator */}
-                  <span className="hidden md:flex items-center gap-1 text-[11px] text-slate-400 font-mono shrink-0">
-                    <Clock className="w-3 h-3 text-slate-500" />
-                    {daysLeft !== null ? (isExpired ? "0d" : `${daysLeft}d left`) : "Permanent"}
+                  {/* Sleek orange PIN badge */}
+                  {pinCode ? (
+                    <div
+                      title="Client 6-Digit Access PIN"
+                      className="text-orange-400 border border-orange-500/30 bg-orange-500/10 px-2.5 py-1 rounded-md text-[11px] font-mono font-bold shrink-0 flex items-center gap-1 shadow-sm"
+                    >
+                      <span className="text-[9px] text-orange-500/70 uppercase">PIN</span>
+                      <span>{pinCode}</span>
+                    </div>
+                  ) : (
+                    <div className="w-7 h-7 rounded-md bg-slate-800 flex items-center justify-center shrink-0">
+                      <ImageIcon className="w-3.5 h-3.5 text-slate-500" />
+                    </div>
+                  )}
+
+                  {/* Gallery Title & Owner Name */}
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-white group-hover:text-orange-400 transition-colors truncate">
+                      {album.title || "Untitled Album"}
+                    </h3>
+                    <p className="text-xs text-slate-400 truncate mt-0.5">
+                      {ownerName}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 4. Middle: Photo count pill (bg-slate-800) and Status Badge */}
+                <div className="flex items-center gap-3 shrink-0">
+                  {/* Photo count pill */}
+                  <span className="bg-slate-800 text-slate-300 text-xs font-mono px-2.5 py-1 rounded-lg border border-slate-700/60 shrink-0">
+                    {photoCount} {photoCount === 1 ? "Photo" : "Photos"}
                   </span>
 
-                  {/* Action Buttons: Delete & Open */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      id={`delete-album-btn-${album.id}`}
-                      onClick={(e) => handleDeleteAlbum(e, album.id, album.title)}
-                      disabled={isDeleting}
-                      title="Delete Album"
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-950/50 border border-transparent hover:border-red-800/60 transition-colors"
-                    >
-                      {isDeleting ? (
-                        <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <Trash2 className="w-4 h-4" />
-                      )}
-                    </button>
+                  {/* Status Badge: Green border/text for "Submitted", Orange border/text for "Selecting" with a dot indicator */}
+                  <div className="shrink-0">
+                    {isSubmitted ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Submitted</span>
+                      </span>
+                    ) : isExpired ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium">
+                        <Clock className="w-3.5 h-3.5 text-red-400" />
+                        <span>Expired</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />
+                        <span>Selecting</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
 
-                    <span className="text-slate-600 group-hover:text-amber-400 transition-colors p-1">
-                      <ChevronRight className="w-4 h-4" />
+                {/* 4. Right: Time remaining (clock icon + "14d left"), subtle Trash icon, and ChevronRight icon */}
+                <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                  {/* Time remaining */}
+                  <div className="flex items-center gap-1.5 text-xs text-slate-400 font-mono">
+                    <Clock className="w-3.5 h-3.5 text-slate-500" />
+                    <span>
+                      {daysLeft !== null ? (isExpired ? "0d left" : `${daysLeft}d left`) : "14d left"}
                     </span>
                   </div>
+
+                  {/* Subtle Trash icon */}
+                  <button
+                    type="button"
+                    id={`delete-album-btn-${album.id}`}
+                    onClick={(e) => handleDeleteAlbum(e, album.id, album.title)}
+                    disabled={isDeleting}
+                    title="Delete Album"
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                  >
+                    {isDeleting ? (
+                      <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
+                  </button>
+
+                  {/* ChevronRight icon */}
+                  <span className="text-slate-500 group-hover:text-orange-400 transition-colors">
+                    <ChevronRight className="w-4 h-4" />
+                  </span>
                 </div>
               </div>
             );

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import api from "../api/axios";
 import AdminPhotographerTable from "../components/AdminPhotographerTable";
 import { useAuth } from "../context/AuthContext";
+import { PhotoGuardLuxuryLogo } from "./Login";
 import {
   Users,
   HardDrive,
@@ -29,7 +30,6 @@ import {
   ChevronDown,
   Images,
   CircleUser,
-  Aperture,
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -442,7 +442,7 @@ export default function AdminDashboard() {
       <aside className="w-64 bg-[#05070d] border-r border-slate-800 flex flex-col shrink-0">
         {/* Logo Area */}
         <div className="p-6 flex items-center gap-3">
-          <img src="/logo.svg" alt="PhotoGuard Logo" className="w-8 h-8 object-contain shrink-0" />
+          <PhotoGuardLuxuryLogo className="w-8 h-8 object-contain" />
           <div>
             <div className="flex items-center gap-2">
               <span className="text-white font-bold text-xl tracking-tight">PhotoGuard</span>

@@ -436,63 +436,154 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#090b10] text-slate-100 selection:bg-indigo-500 selection:text-white">
-      {/* Top Command Bar */}
-      <header className="border-b border-indigo-950/60 bg-[#0d1017]/80 backdrop-blur-md sticky top-0 z-30 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shadow-lg shadow-indigo-500/20 border border-indigo-400/30">
-              <ShieldCheck className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-base font-bold tracking-tight text-white font-mono flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-indigo-400" />
-                  <span>PhotoGuard</span>
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 uppercase">
-                  Super Admin
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 font-sans">
-                System Administration
-              </p>
+    <div className="flex h-screen bg-[#0b0f19] text-slate-300 font-sans overflow-hidden">
+      {/* LEFT SIDEBAR */}
+      <aside className="w-64 bg-[#05070d] border-r border-slate-800 flex flex-col shrink-0">
+        {/* Logo Area */}
+        <div className="p-6 flex items-center gap-3">
+          <Shield className="text-indigo-500 w-8 h-8 shrink-0" />
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-white font-bold text-xl tracking-tight">PhotoGuard</span>
+              <span className="text-[10px] bg-indigo-900/50 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-700/50 font-mono">
+                SUPER ADMIN
+              </span>
             </div>
           </div>
+        </div>
 
-          <div className="flex items-center gap-3">
+        {/* Navigation Links (Vertical) */}
+        <nav className="flex-1 px-4 space-y-2 mt-4">
+          {/* Directory */}
+          <button
+            type="button"
+            id="sidebar-nav-directory"
+            onClick={() => handleTabChange("directory")}
+            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+              activeTab === "directory"
+                ? "bg-[#13192b] text-indigo-400 font-semibold border border-indigo-800/40"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <Users className="w-5 h-5 text-indigo-400" />
+              <span>Directory</span>
+            </div>
+            <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-indigo-900/60 text-indigo-300 border border-indigo-700/40">
+              {filteredPhotographers.length}
+            </span>
+          </button>
+
+          {/* Broadcasts */}
+          <button
+            type="button"
+            id="sidebar-nav-broadcasts"
+            onClick={() => handleTabChange("broadcasts")}
+            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+              activeTab === "broadcasts"
+                ? "bg-[#13192b] text-sky-400 font-semibold border border-sky-800/40"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <Megaphone className="w-5 h-5 text-sky-400" />
+              <span>Broadcasts</span>
+            </div>
+            {currentBroadcast && currentBroadcast.is_active ? (
+              <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                Live
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-slate-800 text-slate-400 border border-slate-700/40">
+                {broadcastList.length}
+              </span>
+            )}
+          </button>
+
+          {/* Audit Logs */}
+          <button
+            type="button"
+            id="sidebar-nav-audit-logs"
+            onClick={() => handleTabChange("audit_logs")}
+            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+              activeTab === "audit_logs"
+                ? "bg-[#13192b] text-amber-400 font-semibold border border-amber-800/40"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <Shield className="w-5 h-5 text-amber-400" />
+              <span>Audit Logs</span>
+            </div>
+            {auditLogs.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                {auditLogs.length}
+              </span>
+            )}
+          </button>
+
+          {/* System Health */}
+          <button
+            type="button"
+            id="sidebar-nav-system-health"
+            onClick={() => handleTabChange("system_health")}
+            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+              activeTab === "system_health"
+                ? "bg-[#13192b] text-rose-400 font-semibold border border-rose-800/40"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-5 h-5 text-rose-400" />
+              <span>System Health</span>
+            </div>
+            {systemErrors.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                {systemErrors.length}
+              </span>
+            )}
+          </button>
+        </nav>
+      </aside>
+
+      {/* MAIN CONTENT AREA */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* TOP HEADER */}
+        <header className="h-[72px] flex items-center justify-between px-8 border-b border-slate-800 bg-[#0b0f19] shrink-0">
+          <h1 className="text-xl text-slate-400 font-normal">System Administration</h1>
+          <div className="flex items-center gap-4">
+            {/* Refresh Icon */}
             <button
               onClick={fetchData}
-              className="p-2 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-indigo-300 border border-slate-800 transition-colors cursor-pointer"
+              className="p-2.5 rounded-xl bg-[#131826] hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 transition-colors cursor-pointer"
               title="Refresh Analytics"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-indigo-400" : ""}`} />
             </button>
-            <div className="h-6 w-px bg-slate-800/80" />
 
-            {/* Sleek Avatar / Profile Dropdown */}
+            {/* Avatar (R) dropdown */}
             <div className="relative" ref={profileMenuRef}>
               <button
                 type="button"
                 id="admin-profile-menu-btn"
                 onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                className="flex items-center gap-2 p-1.5 pr-2.5 rounded-full border border-slate-800 bg-slate-900/80 hover:bg-slate-800 hover:border-slate-700 transition-all text-slate-200 hover:text-white cursor-pointer group shadow-sm"
+                className="flex items-center gap-2 p-1 rounded-full hover:ring-2 hover:ring-indigo-500/30 transition-all cursor-pointer"
                 aria-label="Admin Profile Menu"
               >
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-indigo-700 text-white font-bold text-xs flex items-center justify-center shadow-sm shrink-0 border border-indigo-400/30">
-                  {(user?.full_name || user?.email || "A").charAt(0).toUpperCase()}
+                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-700 text-white font-bold text-sm flex items-center justify-center shadow-md border border-indigo-400/40 shrink-0">
+                  {(user?.full_name || user?.email || "R").charAt(0).toUpperCase()}
                 </div>
-                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-transform duration-200 ${isProfileMenuOpen ? "rotate-180" : ""}`} />
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isProfileMenuOpen ? "rotate-180" : ""}`} />
               </button>
 
               {/* Popover */}
               {isProfileMenuOpen && (
                 <div
                   id="admin-profile-dropdown"
-                  className="absolute right-0 mt-2 w-64 rounded-2xl border border-indigo-950/80 bg-[#0e121b]/95 backdrop-blur-xl shadow-2xl shadow-black/80 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                  className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-800 bg-[#0e121b]/95 backdrop-blur-xl shadow-2xl shadow-black/80 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                 >
-                  {/* User Email & Role */}
-                  <div className="px-4 py-3 border-b border-indigo-950/60">
+                  <div className="px-4 py-3 border-b border-slate-800">
                     <p className="text-xs font-semibold text-white truncate">
                       {user?.full_name || "Super Admin"}
                     </p>
@@ -504,7 +595,6 @@ export default function AdminDashboard() {
                     </span>
                   </div>
 
-                  {/* Actions */}
                   <div className="p-1 space-y-0.5">
                     <Link
                       to="/dashboard"
@@ -531,417 +621,71 @@ export default function AdminDashboard() {
               )}
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* Error Notification */}
-        {errorBanner && (
-          <div className="p-4 rounded-xl bg-red-950/40 border border-red-800/60 text-red-300 flex items-center gap-3 text-sm animate-fade-in">
-            <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
-            <span>{errorBanner}</span>
-          </div>
-        )}
+        {/* SCROLLABLE BODY */}
+        <main className="flex-1 overflow-y-auto p-8">
+          {/* Error Notification */}
+          {errorBanner && (
+            <div className="mb-6 p-4 rounded-xl bg-red-950/40 border border-red-800/60 text-red-300 flex items-center gap-3 text-sm animate-fade-in">
+              <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+              <span>{errorBanner}</span>
+            </div>
+          )}
 
-        {/* Section 1: Compact Horizontal Metrics Ribbon */}
-        <section className="rounded-2xl bg-[#0e121b] border border-indigo-950/70 p-3 sm:px-6 shadow-xl shadow-black/40 backdrop-blur-md">
-          <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-indigo-950/60 gap-3 lg:gap-0">
+          {/* 4 STAT CARDS GRID */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {/* Photographers */}
-            <div className="flex items-center gap-3 lg:pr-6">
-              <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
-                <Users className="w-4 h-4" />
+            <div className="bg-[#0e1320] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-indigo-400 shrink-0">
+                <Users className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Photographers</p>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-lg font-bold text-white font-mono">{stats.total_photographers}</span>
-                  <span className="text-[11px] text-slate-500">accounts</span>
-                </div>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono">PHOTOGRAPHERS</p>
+                <div className="text-2xl font-bold text-white font-mono mt-0.5">{stats.total_photographers}</div>
+                <p className="text-xs text-slate-500 mt-0.5 truncate">Registered studio accounts</p>
               </div>
             </div>
 
             {/* Storage Used */}
-            <div className="flex items-center gap-3 pt-3 lg:pt-0 lg:px-6">
-              <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 shrink-0">
-                <HardDrive className="w-4 h-4" />
+            <div className="bg-[#0e1320] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-cyan-400 shrink-0">
+                <HardDrive className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Storage Used</p>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-lg font-bold text-white font-mono">{stats.total_storage_used_gb}</span>
-                  <span className="text-[11px] text-slate-500">GB</span>
-                </div>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono">STORAGE USED</p>
+                <div className="text-2xl font-bold text-white font-mono mt-0.5">{stats.total_storage_used_gb} GB</div>
+                <p className="text-xs text-slate-500 mt-0.5 truncate">Total allocated space used</p>
               </div>
             </div>
 
-            {/* Active Albums */}
-            <div className="flex items-center gap-3 pt-3 lg:pt-0 lg:px-6">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                <FolderLock className="w-4 h-4" />
+            {/* Active Galleries */}
+            <div className="bg-[#0e1320] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400 shrink-0">
+                <FolderLock className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Active Galleries</p>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-lg font-bold text-white font-mono">{stats.total_albums}</span>
-                  <span className="text-[11px] text-slate-500 font-mono">({stats.total_photos} photos)</span>
-                </div>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono">ACTIVE GALLERIES</p>
+                <div className="text-2xl font-bold text-white font-mono mt-0.5">{stats.total_albums}</div>
+                <p className="text-xs text-slate-500 mt-0.5 truncate">Active galleries ({stats.total_photos} photos)</p>
               </div>
             </div>
 
             {/* System Health */}
-            <div className="flex items-center gap-3 pt-3 lg:pt-0 lg:pl-6">
-              <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
-                <Activity className="w-4 h-4" />
+            <div className="bg-[#0e1320] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-indigo-400 shrink-0">
+                <Activity className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">System Health</p>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span className="text-xs font-semibold text-emerald-400 font-mono">Operational</span>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono">SYSTEM HEALTH</p>
+                <div className="text-xl font-bold text-emerald-400 font-mono flex items-center gap-2 mt-0.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Operational</span>
                 </div>
+                <p className="text-xs text-slate-500 mt-0.5 truncate">All systems running normally</p>
               </div>
             </div>
           </div>
-        </section>
-
-        {/* Register New Photographer Dialog/Modal */}
-        {isRegisterModalOpen && (
-          <div
-            id="register-photographer-modal-overlay"
-            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
-          >
-            <div className="w-full max-w-xl rounded-2xl bg-[#0e121b] border border-indigo-950/80 p-6 sm:p-7 shadow-2xl shadow-black/80 space-y-5 relative animate-in fade-in zoom-in-95 duration-150">
-              {/* Header */}
-              <div className="flex items-start justify-between gap-3 pb-4 border-b border-indigo-950/60">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20 shrink-0">
-                    <UserPlus className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-white tracking-tight">
-                      Add Photographer
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Create a new photographer account with temporary credentials.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsRegisterModalOpen(false)}
-                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
-                  title="Close modal"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Form inside Dialog */}
-              <form onSubmit={handleRegisterSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Full Name */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                      Full Name / Studio
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Dawit Studio"
-                      value={registerForm.full_name}
-                      onChange={(e) =>
-                        setRegisterForm({ ...registerForm, full_name: e.target.value })
-                      }
-                      className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
-                    />
-                  </div>
-
-                  {/* Email */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="photographer@example.com"
-                      value={registerForm.email}
-                      onChange={(e) =>
-                        setRegisterForm({ ...registerForm, email: e.target.value })
-                      }
-                      className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
-                    />
-                  </div>
-
-                  {/* Tier Plan */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                      Tier Plan
-                    </label>
-                    <select
-                      value={registerForm.subscription_plan}
-                      onChange={(e) => {
-                        const selectedPlan = e.target.value;
-                        setRegisterForm({
-                          ...registerForm,
-                          subscription_plan: selectedPlan,
-                        });
-                        if (selectedPlan === "studio") {
-                          setCustomQuotaGB(25);
-                        } else {
-                          setCustomQuotaGB(5);
-                        }
-                      }}
-                      className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
-                    >
-                      <option value="basic">Basic (Default: 5 GB)</option>
-                      <option value="studio">Studio (Default: 25 GB)</option>
-                    </select>
-                  </div>
-
-                  {/* Storage Quota */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                      Storage Quota (GB)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      required
-                      placeholder="5"
-                      value={customQuotaGB}
-                      onChange={(e) => setCustomQuotaGB(e.target.value)}
-                      className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all font-mono"
-                    />
-                    <p className="text-[10px] text-slate-500 font-mono">
-                      (Enter 9999 for Unlimited)
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-indigo-950/60">
-                  <button
-                    type="button"
-                    onClick={() => setIsRegisterModalOpen(false)}
-                    className="px-4 py-2.5 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isRegistering}
-                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/25 active:scale-95 cursor-pointer"
-                  >
-                    {isRegistering ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Creating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <UserPlus className="w-4 h-4" />
-                        <span>Create Account</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Temporary Credentials Success Modal Overlay */}
-        {createdCredentials && (
-          <div
-            id="photographer-created-modal-overlay"
-            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
-          >
-            <div className="w-full max-w-lg rounded-2xl bg-[#0e121b] border-2 border-indigo-500/60 p-6 shadow-2xl shadow-indigo-950/50 space-y-5 relative">
-              {/* Header */}
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
-                    <CheckCircle2 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-white tracking-wide">
-                      Account Created
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Temporary login credentials:
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCreatedCredentials(null)}
-                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
-                  title="Dismiss"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="pt-2 flex flex-col gap-2 text-xs font-mono">
-                <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-black/50 border border-indigo-800/60">
-                  <span className="text-slate-400">User:</span>
-                  <strong className="text-white">{createdCredentials.full_name}</strong>
-                </div>
-                <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-black/50 border border-indigo-800/60">
-                  <span className="text-slate-400">Email:</span>
-                  <strong className="text-white">{createdCredentials.email}</strong>
-                </div>
-                <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-indigo-500/10 border border-indigo-500/30">
-                  <span className="text-indigo-300">Plan:</span>
-                  <strong className="text-indigo-300 uppercase">{createdCredentials.plan}</strong>
-                </div>
-              </div>
-
-              {/* Temporary Password Box */}
-              <div className="space-y-2 mt-4">
-                <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono">
-                  Temporary Password
-                </label>
-                <div className="flex items-center justify-between gap-3 bg-black/90 p-3.5 rounded-xl border border-indigo-500/40">
-                  <span className="font-mono text-xl font-bold tracking-widest text-indigo-300 select-all">
-                    {createdCredentials.temp_password}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(createdCredentials.temp_password)}
-                    className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/30 active:scale-95 shrink-0"
-                  >
-                    {hasCopiedPassword ? (
-                      <>
-                        <Check className="w-4 h-4 text-emerald-300 stroke-[3]" />
-                        <span>Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4 stroke-[2.5]" />
-                        <span>Copy Password</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Critical Security Warning */}
-              <div className="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 flex items-start gap-2.5 text-xs text-indigo-200/90 leading-relaxed mt-4">
-                <AlertTriangle className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-                <p>
-                  <strong className="text-indigo-300 font-semibold">Security Warning:</strong> Please copy and deliver this temporary password immediately. The user will be required to change their password on next sign-in.
-                </p>
-              </div>
-
-              {/* Footer Action */}
-              <div className="pt-4 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setCreatedCredentials(null)}
-                  className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/25 active:scale-95"
-                >
-                  Done
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Unified & Compact Navigation Tabs */}
-        <div className="flex items-center gap-1 sm:gap-2 border-b border-indigo-950/80 overflow-x-auto scrollbar-none">
-          <button
-            type="button"
-            id="admin-directory-tab"
-            onClick={() => handleTabChange("directory")}
-            className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === "directory"
-                ? "border-indigo-500 text-indigo-400 font-bold"
-                : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700"
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Directory</span>
-            <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
-                activeTab === "directory"
-                  ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
-                  : "bg-slate-800/80 text-slate-400"
-              }`}
-            >
-              {filteredPhotographers.length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            id="admin-broadcasts-tab"
-            onClick={() => handleTabChange("broadcasts")}
-            className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === "broadcasts"
-                ? "border-sky-500 text-sky-400 font-bold"
-                : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700"
-            }`}
-          >
-            <Megaphone className="w-4 h-4" />
-            <span>Broadcasts</span>
-            {currentBroadcast && currentBroadcast.is_active ? (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                Live
-              </span>
-            ) : (
-              <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
-                  activeTab === "broadcasts"
-                    ? "bg-sky-500/20 text-sky-300 border border-sky-500/30"
-                    : "bg-slate-800/80 text-slate-400"
-                }`}
-              >
-                {broadcastList.length > 0 ? broadcastList.length : "0"}
-              </span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            id="admin-audit-logs-tab"
-            onClick={() => handleTabChange("audit_logs")}
-            className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === "audit_logs"
-                ? "border-amber-500 text-amber-400 font-bold"
-                : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700"
-            }`}
-          >
-            <Shield className="w-4 h-4" />
-            <span>Audit Logs</span>
-            {auditLogs.length > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                {auditLogs.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            id="admin-system-health-tab"
-            onClick={() => handleTabChange("system_health")}
-            className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === "system_health"
-                ? "border-rose-500 text-rose-400 font-bold"
-                : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700"
-            }`}
-          >
-            <AlertTriangle className="w-4 h-4" />
-            <span>System Health</span>
-            {systemErrors.length > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                {systemErrors.length}
-              </span>
-            )}
-          </button>
-        </div>
 
         {/* Tab 1: Directory */}
         {activeTab === "directory" && (
@@ -1450,8 +1194,253 @@ export default function AdminDashboard() {
         </div>
       </section>
     )}
-  </main>
+        </main>
+      </div>
 
+      {/* Register New Photographer Dialog/Modal */}
+      {isRegisterModalOpen && (
+        <div
+          id="register-photographer-modal-overlay"
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+        >
+          <div className="w-full max-w-xl rounded-2xl bg-[#0e121b] border border-slate-800 p-6 sm:p-7 shadow-2xl shadow-black/80 space-y-5 relative animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20 shrink-0">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white tracking-tight">
+                    Add Photographer
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Create a new photographer account with temporary credentials.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRegisterModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Close modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form inside Dialog */}
+            <form onSubmit={handleRegisterSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Full Name */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Full Name / Studio
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Dawit Studio"
+                    value={registerForm.full_name}
+                    onChange={(e) =>
+                      setRegisterForm({ ...registerForm, full_name: e.target.value })
+                    }
+                    className="w-full bg-[#080a0f] border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
+                  />
+                </div>
+
+                {/* Email */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="photographer@example.com"
+                    value={registerForm.email}
+                    onChange={(e) =>
+                      setRegisterForm({ ...registerForm, email: e.target.value })
+                    }
+                    className="w-full bg-[#080a0f] border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
+                  />
+                </div>
+
+                {/* Tier Plan */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Tier Plan
+                  </label>
+                  <select
+                    value={registerForm.subscription_plan}
+                    onChange={(e) => {
+                      const selectedPlan = e.target.value;
+                      setRegisterForm({
+                        ...registerForm,
+                        subscription_plan: selectedPlan,
+                      });
+                      if (selectedPlan === "studio") {
+                        setCustomQuotaGB(25);
+                      } else {
+                        setCustomQuotaGB(5);
+                      }
+                    }}
+                    className="w-full bg-[#080a0f] border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
+                  >
+                    <option value="basic">Basic (Default: 5 GB)</option>
+                    <option value="studio">Studio (Default: 25 GB)</option>
+                  </select>
+                </div>
+
+                {/* Storage Quota */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Storage Quota (GB)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    required
+                    placeholder="5"
+                    value={customQuotaGB}
+                    onChange={(e) => setCustomQuotaGB(e.target.value)}
+                    className="w-full bg-[#080a0f] border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all font-mono"
+                  />
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    (Enter 9999 for Unlimited)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsRegisterModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isRegistering}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/25 active:scale-95 cursor-pointer"
+                >
+                  {isRegistering ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Creating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      <span>Create Account</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Temporary Credentials Success Modal Overlay */}
+      {createdCredentials && (
+        <div
+          id="photographer-created-modal-overlay"
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+        >
+          <div className="w-full max-w-lg rounded-2xl bg-[#0e121b] border-2 border-indigo-500/60 p-6 shadow-2xl shadow-indigo-950/50 space-y-5 relative">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white tracking-wide">
+                    Account Created
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Temporary login credentials:
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreatedCredentials(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                title="Dismiss"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="pt-2 flex flex-col gap-2 text-xs font-mono">
+              <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-black/50 border border-indigo-800/60">
+                <span className="text-slate-400">User:</span>
+                <strong className="text-white">{createdCredentials.full_name}</strong>
+              </div>
+              <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-black/50 border border-indigo-800/60">
+                <span className="text-slate-400">Email:</span>
+                <strong className="text-white">{createdCredentials.email}</strong>
+              </div>
+              <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-indigo-500/10 border border-indigo-500/30">
+                <span className="text-indigo-300">Plan:</span>
+                <strong className="text-indigo-300 uppercase">{createdCredentials.plan}</strong>
+              </div>
+            </div>
+
+            {/* Temporary Password Box */}
+            <div className="space-y-2 mt-4">
+              <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono">
+                Temporary Password
+              </label>
+              <div className="flex items-center justify-between gap-3 bg-black/90 p-3.5 rounded-xl border border-indigo-500/40">
+                <span className="font-mono text-xl font-bold tracking-widest text-indigo-300 select-all">
+                  {createdCredentials.temp_password}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(createdCredentials.temp_password)}
+                  className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/30 active:scale-95 shrink-0"
+                >
+                  {hasCopiedPassword ? (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-300 stroke-[3]" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 stroke-[2.5]" />
+                      <span>Copy Password</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Critical Security Warning */}
+            <div className="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 flex items-start gap-2.5 text-xs text-indigo-200/90 leading-relaxed mt-4">
+              <AlertTriangle className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+              <p>
+                <strong className="text-indigo-300 font-semibold">Security Warning:</strong> Please copy and deliver this temporary password immediately. The user will be required to change their password on next sign-in.
+              </p>
+            </div>
+
+            {/* Footer Action */}
+            <div className="pt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setCreatedCredentials(null)}
+                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/25 active:scale-95"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* High-Visibility Password Reset Modal Overlay */}
       {resetModalData && (

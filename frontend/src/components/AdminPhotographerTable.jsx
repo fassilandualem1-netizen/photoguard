@@ -51,30 +51,30 @@ export default function AdminPhotographerTable({
     };
   }, [openDropdownId]);
   return (
-    <section className="p-6 rounded-2xl bg-[#0e121b] border border-indigo-950/70 shadow-xl shadow-black/30">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-indigo-950/60">
+    <section className="p-6 rounded-2xl bg-[#0e1320] border border-slate-800/80 shadow-xl">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-800/80">
         <div>
           <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
             <span>Directory</span>
-            <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+            <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-indigo-900/50 text-indigo-300 border border-indigo-700/50">
               {filteredPhotographers.length}
             </span>
           </h2>
-          <p className="text-xs text-slate-400">
-            Manage photographer accounts and billing.
+          <p className="text-xs text-slate-400 mt-1">
+            Manage accounts, quota overrides, and subscription statuses
           </p>
         </div>
 
         {/* Search Input & Action Button */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
-          <div className="w-full sm:w-72 relative">
+          <div className="w-full sm:w-80 relative">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
               placeholder="Search by name, email, or plan..."
               value={searchQuery}
               onChange={(e) => setSearchQuery?.(e.target.value)}
-              className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl pl-10 pr-3.5 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
+              className="w-full bg-[#131826] border border-slate-800 rounded-xl pl-10 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all"
             />
           </div>
 
@@ -83,10 +83,10 @@ export default function AdminPhotographerTable({
               type="button"
               id="open-register-photographer-btn"
               onClick={onOpenRegisterModal}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-md shadow-indigo-600/30 shrink-0 cursor-pointer active:scale-95"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-medium text-xs transition-all shadow-md shadow-indigo-600/30 shrink-0 cursor-pointer active:scale-95"
             >
               <UserPlus className="w-4 h-4" />
-              <span>Add Photographer</span>
+              <span>+ Add New Photographer</span>
             </button>
           )}
         </div>
@@ -96,7 +96,7 @@ export default function AdminPhotographerTable({
       <div className="overflow-x-auto min-h-[260px] pb-10">
         <table className="w-full text-left text-xs">
           <thead>
-            <tr className="border-b border-indigo-950/80 text-slate-400 font-mono uppercase tracking-wider">
+            <tr className="border-b border-slate-800/80 text-slate-400 font-mono text-[11px] uppercase tracking-wider">
               <th className="py-3.5 px-4">Photographer</th>
               <th className="py-3.5 px-4">Plan Tier</th>
               <th className="py-3.5 px-4">Storage Allocation</th>
@@ -105,7 +105,7 @@ export default function AdminPhotographerTable({
               <th className="py-3.5 px-4 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-indigo-950/60">
+          <tbody className="divide-y divide-slate-800/60">
             {filteredPhotographers.length === 0 ? (
               <tr>
                 <td colSpan={6} className="py-12 text-center text-slate-500">
@@ -124,44 +124,39 @@ export default function AdminPhotographerTable({
                 const isLoading = actionLoadingId === p.id;
 
                 return (
-                  <tr key={p.id} className="hover:bg-indigo-950/20 transition-colors">
+                  <tr key={p.id} className="hover:bg-slate-900/40 transition-colors">
                     {/* Name & Email */}
                     <td className="py-5 px-4">
                       <div className="font-semibold text-white">{p.full_name}</div>
-                      <div className="text-slate-400 font-mono text-[11px] flex items-center gap-1 mt-0.5">
-                        <Mail className="w-3 h-3 text-indigo-400/60" />
+                      <div className="text-slate-400 font-mono text-[11px] flex items-center gap-1.5 mt-0.5">
+                        <Mail className="w-3.5 h-3.5 text-slate-500" />
                         <span>{p.email}</span>
                       </div>
                     </td>
 
                     {/* Plan */}
                     <td className="py-5 px-4">
-                      <button
-                        type="button"
-                        onClick={() => handleTogglePlan?.(p.id, p.subscription_plan)}
-                        title={`Click to switch plan (Current: ${p.subscription_plan.toUpperCase()})`}
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider font-mono border transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider font-mono border ${
                           p.subscription_plan === "studio"
-                            ? "bg-purple-950/80 text-purple-300 border-purple-500/40 hover:border-purple-400 shadow-sm shadow-purple-500/10"
-                            : "bg-slate-800/80 text-slate-300 border-slate-700/80 hover:border-slate-500 shadow-sm"
+                            ? "bg-[#28133b] text-purple-300 border-purple-800/60 shadow-sm shadow-purple-500/10"
+                            : "bg-slate-800/80 text-slate-300 border-slate-700/80 shadow-sm"
                         }`}
                       >
-                        {p.subscription_plan === "studio" && (
-                          <Zap className="w-3 h-3 text-purple-400" />
+                        {p.subscription_plan === "studio" ? (
+                          <Zap className="w-3.5 h-3.5 text-purple-400" />
+                        ) : (
+                          <Layers className="w-3.5 h-3.5 text-slate-400" />
                         )}
-                        {p.subscription_plan}
-                      </button>
+                        <span>{p.subscription_plan}</span>
+                      </span>
                     </td>
 
                     {/* Storage */}
-                    <td
-                      className="py-5 px-4 min-w-[170px] cursor-pointer group"
-                      onClick={() => handleEditQuota?.(p.id, p.storage_quota_limit)}
-                      title="Click to edit storage allocation"
-                    >
-                      <div className="flex items-center justify-between text-[11px] text-slate-300 font-mono mb-1">
-                        <span>{formatBytes ? formatBytes(p.storage_used) : `${p.storage_used} B`}</span>
-                        <span className="text-slate-500 group-hover:text-indigo-400 transition-colors">/ {quotaGb} GB</span>
+                    <td className="py-5 px-4 min-w-[170px]">
+                      <div className="flex items-center justify-between text-[11px] text-slate-300 font-mono mb-1.5">
+                        <span className="font-semibold text-white">{formatBytes ? formatBytes(p.storage_used) : `${p.storage_used} B`}</span>
+                        <span className="text-slate-500">/ {quotaGb} GB</span>
                       </div>
                       <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
                         <div
@@ -179,10 +174,10 @@ export default function AdminPhotographerTable({
 
                     {/* Albums & Media */}
                     <td className="py-5 px-4">
-                      <div className="text-slate-200 font-mono text-xs">
-                        <strong>{p.total_albums}</strong> <span className="text-slate-400 font-sans">albums</span>
-                        <span className="text-slate-600 mx-1">•</span>
-                        <strong>{p.total_media}</strong> <span className="text-slate-400 font-sans">media</span>
+                      <div className="text-white font-mono text-xs">
+                        <span>{p.total_albums} albums</span>
+                        <span className="text-slate-600 mx-1.5">•</span>
+                        <span>{p.total_media} media</span>
                       </div>
                       <div className="mt-1">
                         {p.assistants_count > 0 ? (
@@ -195,7 +190,7 @@ export default function AdminPhotographerTable({
                           </span>
                         ) : (
                           <span className="text-[10px] text-slate-500 font-mono">
-                            Solo Account
+                            Root Solo Account
                           </span>
                         )}
                       </div>
@@ -204,10 +199,10 @@ export default function AdminPhotographerTable({
                     {/* Status */}
                     <td className="py-5 px-4">
                       <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${
                           p.is_active
-                            ? "bg-emerald-950/80 text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/10"
-                            : "bg-red-950/80 text-red-300 border-red-500/40 shadow-sm shadow-red-500/10"
+                            ? "bg-emerald-950/60 text-emerald-400 border-emerald-800/50 shadow-sm shadow-emerald-500/10"
+                            : "bg-red-950/60 text-red-400 border-red-800/50 shadow-sm shadow-red-500/10"
                         }`}
                       >
                         <span
@@ -215,7 +210,7 @@ export default function AdminPhotographerTable({
                             p.is_active ? "bg-emerald-500" : "bg-red-500"
                           }`}
                         />
-                        {p.is_active ? "Active" : "Suspended"}
+                        <span>{p.is_active ? "Active" : "Suspended"}</span>
                       </span>
                     </td>
 
@@ -225,7 +220,7 @@ export default function AdminPhotographerTable({
                         className="relative inline-block text-left"
                         ref={openDropdownId === p.id ? dropdownRef : null}
                       >
-                        {/* More Options Button */}
+                        {/* Single More Options Button */}
                         <button
                           type="button"
                           id={`photographer-actions-btn-${p.id}`}
@@ -237,12 +232,12 @@ export default function AdminPhotographerTable({
                           aria-label="More Options"
                           aria-haspopup="true"
                           aria-expanded={openDropdownId === p.id}
-                          className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 border border-transparent hover:border-slate-700 transition-colors cursor-pointer"
+                          className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer"
                         >
                           {isLoading ? (
                             <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
                           ) : (
-                            <MoreVertical className="w-4 h-4" />
+                            <MoreVertical className="w-5 h-5 text-slate-400" />
                           )}
                         </button>
 
@@ -251,11 +246,25 @@ export default function AdminPhotographerTable({
                           <div
                             id={`actions-dropdown-menu-${p.id}`}
                             role="menu"
-                            className={`absolute right-0 w-52 rounded-xl bg-slate-800 border border-slate-700 shadow-2xl shadow-black/80 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 ${
+                            className={`absolute right-0 w-64 rounded-xl bg-[#0f1422] border border-slate-700/80 shadow-2xl shadow-black/90 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 ${
                               isBottomRow ? "bottom-full mb-1.5" : "top-full mt-1.5"
                             }`}
                           >
-                            {/* Switch to Basic Tier */}
+                            {/* 1. Edit Account details (Plan & Quota) */}
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setOpenDropdownId(null);
+                                handleEditQuota?.(p.id, p.storage_quota_limit);
+                              }}
+                              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors text-left cursor-pointer"
+                            >
+                              <Sliders className="w-4 h-4 text-slate-400 shrink-0" />
+                              <span>Edit Account details (Plan & Quota)</span>
+                            </button>
+
+                            {/* 2. Switch to Basic Tier */}
                             <button
                               type="button"
                               role="menuitem"
@@ -266,18 +275,18 @@ export default function AdminPhotographerTable({
                                   handleTogglePlan?.(p.id, p.subscription_plan);
                                 }
                               }}
-                              className={`flex items-center justify-between w-full px-3.5 py-2 text-xs transition-colors text-left ${
+                              className={`flex items-center justify-between w-full px-4 py-2.5 text-xs transition-colors text-left ${
                                 p.subscription_plan === "basic"
-                                  ? "text-slate-500 cursor-not-allowed bg-slate-800/40"
-                                  : "text-slate-200 hover:text-white hover:bg-slate-700/70 cursor-pointer"
+                                  ? "text-slate-500 cursor-not-allowed bg-slate-900/30"
+                                  : "text-slate-300 hover:text-white hover:bg-slate-800/80 cursor-pointer"
                               }`}
                             >
                               <div className="flex items-center gap-2.5">
                                 <Layers
-                                  className={`w-3.5 h-3.5 shrink-0 ${
+                                  className={`w-4 h-4 shrink-0 ${
                                     p.subscription_plan === "basic"
                                       ? "text-slate-600"
-                                      : "text-indigo-400"
+                                      : "text-slate-400"
                                   }`}
                                 />
                                 <span>Switch to Basic Tier</span>
@@ -289,7 +298,7 @@ export default function AdminPhotographerTable({
                               )}
                             </button>
 
-                            {/* Switch to Studio Tier */}
+                            {/* 3. Switch to Studio Tier */}
                             <button
                               type="button"
                               role="menuitem"
@@ -300,24 +309,24 @@ export default function AdminPhotographerTable({
                                   handleTogglePlan?.(p.id, p.subscription_plan);
                                 }
                               }}
-                              className={`flex items-center justify-between w-full px-3.5 py-2 text-xs transition-colors text-left ${
+                              className={`flex items-center justify-between w-full px-4 py-2.5 text-xs transition-colors text-left ${
                                 p.subscription_plan === "studio"
-                                  ? "text-slate-500 cursor-not-allowed bg-slate-800/40"
-                                  : "text-purple-300 hover:text-purple-200 hover:bg-purple-950/40 cursor-pointer"
+                                  ? "text-slate-500 cursor-not-allowed bg-slate-900/30"
+                                  : "text-slate-300 hover:text-white hover:bg-slate-800/80 cursor-pointer"
                               }`}
                             >
                               <div className="flex items-center gap-2.5">
                                 <Zap
-                                  className={`w-3.5 h-3.5 shrink-0 ${
+                                  className={`w-4 h-4 shrink-0 ${
                                     p.subscription_plan === "studio"
                                       ? "text-slate-600"
-                                      : "text-purple-400"
+                                      : "text-slate-400"
                                   }`}
                                 />
                                 <span>Switch to Studio Tier</span>
                               </div>
                               {p.subscription_plan === "studio" && (
-                                <span className="text-[10px] text-purple-400/70 font-mono">
+                                <span className="text-[10px] text-purple-400/80 font-mono">
                                   Current
                                 </span>
                               )}
@@ -325,7 +334,7 @@ export default function AdminPhotographerTable({
 
                             <div className="my-1 border-t border-slate-700/60" />
 
-                            {/* Reset Password */}
+                            {/* 4. Reset Password */}
                             <button
                               type="button"
                               role="menuitem"
@@ -333,15 +342,15 @@ export default function AdminPhotographerTable({
                                 setOpenDropdownId(null);
                                 handleResetPassword?.(p.id, p.email);
                               }}
-                              className="flex items-center gap-2.5 w-full px-3.5 py-2 text-xs text-slate-200 hover:text-white hover:bg-slate-700/70 transition-colors cursor-pointer text-left"
+                              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer text-left"
                             >
-                              <KeyRound className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <KeyRound className="w-4 h-4 text-slate-400 shrink-0" />
                               <span>Reset Password</span>
                             </button>
 
                             <div className="my-1 border-t border-slate-700/60" />
 
-                            {/* Suspend Account (Power icon, make the text/icon red to indicate danger) */}
+                            {/* 5. Suspend Account (red text with red Power icon) */}
                             <button
                               type="button"
                               role="menuitem"
@@ -349,17 +358,9 @@ export default function AdminPhotographerTable({
                                 setOpenDropdownId(null);
                                 handleToggleSuspend?.(p.id, p.is_active);
                               }}
-                              className={`flex items-center gap-2.5 w-full px-3.5 py-2 text-xs transition-colors cursor-pointer text-left font-medium ${
-                                p.is_active
-                                  ? "text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                                  : "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
-                              }`}
+                              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors cursor-pointer text-left font-medium"
                             >
-                              <Power
-                                className={`w-3.5 h-3.5 shrink-0 ${
-                                  p.is_active ? "text-red-400" : "text-emerald-400"
-                                }`}
-                              />
+                              <Power className="w-4 h-4 text-red-400 shrink-0" />
                               <span>
                                 {p.is_active ? "Suspend Account" : "Activate Account"}
                               </span>

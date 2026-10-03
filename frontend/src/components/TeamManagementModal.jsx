@@ -9,7 +9,6 @@ import {
   Check,
   AlertCircle,
   Loader2,
-  Sparkles,
   KeyRound
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
@@ -184,24 +183,24 @@ export default function TeamManagementModal({ isOpen, onClose }) {
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Locked State for Non-Studio Users */}
           {!hasStudioAccess ? (
-            <div className="py-8 px-6 text-center space-y-4 rounded-xl border border-amber-400/20 bg-amber-400/5">
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-amber-400 shadow-inner">
-                <Lock className="w-7 h-7" />
+            <div className="py-8 px-6 text-center space-y-4 rounded-xl border border-slate-800 bg-slate-950/40">
+              <div className="w-12 h-12 mx-auto rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400">
+                <Lock className="w-5 h-5" />
               </div>
-              <div className="max-w-md mx-auto space-y-2">
-                <h3 className="text-lg font-bold text-slate-100">
-                  Studio Assistants is a Studio Exclusive
+              <div className="max-w-md mx-auto space-y-1">
+                <h3 className="text-base font-semibold text-white">
+                  Studio Plan Required
                 </h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Delegate client communication, album management, and high-speed uploads to your team members without sharing your master credentials. Assistants consume your studio quota automatically.
+                <p className="text-xs text-slate-400">
+                  Upgrade to the Studio Plan to invite team members and manage assistant accounts.
                 </p>
               </div>
 
-              <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <div className="pt-2 flex items-center justify-center gap-3">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="w-full sm:w-auto px-4 py-2 text-xs font-medium rounded-lg text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors"
+                  className="px-4 py-2 text-xs font-medium rounded-lg text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors"
                 >
                   Close
                 </button>
@@ -213,10 +212,9 @@ export default function TeamManagementModal({ isOpen, onClose }) {
                     const upgradeBtn = document.getElementById("upgrade-to-studio-btn");
                     if (upgradeBtn) upgradeBtn.click();
                   }}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2 text-xs font-semibold rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 hover:from-amber-300 hover:to-amber-400 shadow-md shadow-amber-500/20 transition-all"
+                  className="inline-flex items-center justify-center px-4 py-2 text-xs font-semibold rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-md transition-colors"
                 >
-                  <Sparkles className="w-4 h-4 text-slate-950" />
-                  Upgrade to Studio Plan
+                  Upgrade to Studio
                 </a>
               </div>
             </div>

@@ -1,14 +1,11 @@
 import React, { useState } from "react";
 import {
   X,
-  KeyRound,
   Eye,
   EyeOff,
   Check,
   AlertCircle,
-  Loader2,
-  Lock,
-  ShieldCheck
+  Loader2
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
@@ -128,18 +125,13 @@ export default function ChangePasswordModal({ isOpen, onClose }) {
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-              <KeyRound className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-white">
-                Change Password
-              </h3>
-              <p className="text-xs text-slate-400">
-                Update your account password securely
-              </p>
-            </div>
+          <div>
+            <h3 className="text-base font-bold text-white">
+              Change Password
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Update your account password
+            </p>
           </div>
           <button
             id="close-change-password-modal-btn"
@@ -168,7 +160,7 @@ export default function ChangePasswordModal({ isOpen, onClose }) {
                 type={showCurrentPassword ? "text" : "password"}
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="Enter current password"
+                placeholder="Current password"
                 disabled={isLoading}
                 autoComplete="current-password"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 pr-10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
@@ -202,7 +194,7 @@ export default function ChangePasswordModal({ isOpen, onClose }) {
                 type={showNewPassword ? "text" : "password"}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new password (min. 6 characters)"
+                placeholder="New password"
                 disabled={isLoading}
                 autoComplete="new-password"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 pr-10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
@@ -239,7 +231,7 @@ export default function ChangePasswordModal({ isOpen, onClose }) {
                 type={showConfirmPassword ? "text" : "password"}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm your new password"
+                placeholder="Confirm new password"
                 disabled={isLoading}
                 autoComplete="new-password"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 pr-10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
@@ -298,10 +290,7 @@ export default function ChangePasswordModal({ isOpen, onClose }) {
                   <span>Updating...</span>
                 </>
               ) : (
-                <>
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Update Password</span>
-                </>
+                <span>Update Password</span>
               )}
             </button>
           </div>

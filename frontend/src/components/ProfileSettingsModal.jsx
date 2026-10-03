@@ -49,6 +49,11 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
 
   const fileInputRef = useRef(null);
 
+  // Consolidated Save State
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState(null);
+  const [saveErrorMsg, setSaveErrorMsg] = useState(null);
+
   // Telegram Deep-Linking State
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const [isDisconnectingTelegram, setIsDisconnectingTelegram] = useState(false);
@@ -284,6 +289,57 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
   };
 
   // ==========================================
+  // CONSOLIDATED SAVE CHANGES HANDLER
+  // ==========================================
+  const handleSaveChanges = async (e) => {
+    if (e) e.preventDefault();
+    setIsSaving(true);
+    setSaveSuccessMsg(null);
+    setSaveErrorMsg(null);
+
+    const trimmedLogo = studioLogoUrl ? studioLogoUrl.trim() : null;
+    const trimmedColor = brandColor ? brandColor.trim() : "#F59E0B";
+
+    const payload = {
+      contact_phone: contactPhone ? contactPhone.trim() : null,
+      telegram_url: telegramUrl ? telegramUrl.trim() : null,
+      instagram_url: instagramUrl ? instagramUrl.trim() : null,
+      tiktok_url: tiktokUrl ? tiktokUrl.trim() : null,
+      youtube_url: youtubeUrl ? youtubeUrl.trim() : null,
+      phone_number: contactPhone ? contactPhone.trim() : null,
+      telegram_username: telegramUrl ? telegramUrl.trim() : null,
+      instagram: instagramUrl ? instagramUrl.trim() : null,
+      tiktok: tiktokUrl ? tiktokUrl.trim() : null,
+      youtube: youtubeUrl ? youtubeUrl.trim() : null
+    };
+
+    if (isStudio) {
+      payload.studio_logo_url = trimmedLogo || null;
+      payload.brand_color = trimmedColor || null;
+    }
+
+    try {
+      await api.put("/api/auth/profile", payload);
+      try {
+        await api.put("/api/v1/photographers/me/social-links", payload);
+      } catch (socialErr) {
+        // Fallback endpoint handled silently
+      }
+
+      if (refreshProfile) {
+        await refreshProfile();
+      }
+
+      setSaveSuccessMsg("Settings updated successfully.");
+    } catch (err) {
+      const detail = err?.response?.data?.detail || "Failed to update settings.";
+      setSaveErrorMsg(detail);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ==========================================
   // SECTION 3: TELEGRAM DEEP LINK & SYNC
   // ==========================================
   const handleCheckConnection = async () => {
@@ -363,13 +419,13 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
 
         <div className="space-y-6">
           {/* ========================================================= */}
-          {/* SECTION 1: CUSTOM STUDIO WHITE-LABELING (DEDICATED FORM) */}
+          {/* SECTION 1: STUDIO BRANDING                                */}
           {/* ========================================================= */}
           <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
               <div className="flex items-center gap-2 text-amber-400 font-semibold text-xs">
                 <Palette className="w-4 h-4" />
-                <span>Custom Studio White-Labeling</span>
+                <span>Studio Branding</span>
               </div>
               <span
                 className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
@@ -383,9 +439,9 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
             </div>
 
             {isStudio ? (
-              <form onSubmit={handleSaveBranding} className="space-y-4">
+              <div className="space-y-4">
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  White-label the client mobile application with your photography studio logo and brand accent color.
+                  Customize the client mobile application with your studio logo and brand color.
                 </p>
 
                 {/* Direct Studio Logo Upload */}
@@ -555,31 +611,11 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
                   </div>
                 )}
 
-                {/* Distinct Submit Button for Section 1 */}
-                <button
-                  id="save-studio-branding-btn"
-                  type="submit"
-                  disabled={isSavingBranding || isUploadingLogo}
-                  className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-semibold text-xs transition-all shadow-md flex items-center justify-center gap-1.5"
-                >
-                  {isSavingBranding ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Saving Studio Branding...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Palette className="w-3.5 h-3.5" />
-                      <span>Save Custom Studio Branding</span>
-                    </>
-                  )}
-                </button>
-              </form>
+              </div>
             ) : (
               <div className="space-y-2 text-slate-400 pt-1">
                 <p className="text-[11px] leading-relaxed">
-                  Display your photography studio logo and brand accent color in the client mobile app.
-                  Upgrade to the <b>Studio Plan</b> to unlock complete white-label branding.
+                  Upgrade to the <b>Studio Plan</b> to customize your studio logo and mobile app brand color.
                 </p>
                 <div className="flex items-center gap-1.5 text-[11px] text-amber-400 font-medium">
                   <Lock className="w-3.5 h-3.5" />
@@ -607,7 +643,7 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
               Connect your direct studio channels so clients can easily call, message, and view your portfolio right from their mobile delivery gallery.
             </p>
 
-            <form onSubmit={handleSaveSocialLinks} className="space-y-3.5">
+            <div className="space-y-3.5">
               {/* 1. Phone Number */}
               <div>
                 <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5 mb-1">
@@ -703,26 +739,7 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
                 </div>
               )}
 
-              {/* Submit Action Button */}
-              <button
-                id="save-studio-socials-btn"
-                type="submit"
-                disabled={isSavingSocial}
-                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-semibold text-xs transition-all shadow-md flex items-center justify-center gap-1.5"
-              >
-                {isSavingSocial ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Saving Channels...</span>
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-3.5 h-3.5" />
-                    <span>Save Contact & Social Channels</span>
-                  </>
-                )}
-              </button>
-            </form>
+            </div>
           </div>
 
           {/* ========================================================= */}
@@ -857,16 +874,51 @@ export default function ProfileSettingsModal({ isOpen, onClose }) {
           </div>
         </div>
 
-        {/* Modal Footer Close */}
-        <div className="pt-2">
-          <button
-            id="close-profile-modal-footer-btn"
-            type="button"
-            onClick={onClose}
-            className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white transition-colors"
-          >
-            Done
-          </button>
+        {/* Consolidated Save Action & Feedback */}
+        <div className="pt-2 space-y-3 border-t border-slate-800/80">
+          {saveSuccessMsg && (
+            <div className="p-2.5 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[11px] flex items-center gap-2 animate-in fade-in">
+              <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span>{saveSuccessMsg}</span>
+            </div>
+          )}
+
+          {saveErrorMsg && (
+            <div className="p-2.5 rounded-lg bg-red-950/80 border border-red-500/40 text-red-300 text-[11px] flex items-center gap-2 animate-in fade-in">
+              <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+              <span>{saveErrorMsg}</span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            <button
+              id="close-profile-modal-footer-btn"
+              type="button"
+              onClick={onClose}
+              className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 hover:text-white transition-colors border border-slate-700 cursor-pointer"
+            >
+              Close
+            </button>
+            <button
+              id="save-settings-btn"
+              type="button"
+              onClick={handleSaveChanges}
+              disabled={isSaving || isUploadingLogo}
+              className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-semibold text-xs transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Saving Changes...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save Changes</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

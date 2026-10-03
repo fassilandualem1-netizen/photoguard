@@ -3,7 +3,6 @@ import { useAuth } from "../context/AuthContext";
 import {
   Lock,
   Mail,
-  ShieldCheck,
   ArrowRight,
   AlertCircle,
   Eye,
@@ -227,15 +226,12 @@ function LoginContent({ onLoginSuccess }) {
               <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#FF1A4B] to-[#F59E0B] blur-lg opacity-40 group-hover:opacity-60 transition-opacity" />
               <PhotoGuardLuxuryLogo className="w-16 h-16 relative" />
             </div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2">
               <span className="font-extrabold text-2xl tracking-tight text-white">PhotoGuard</span>
               <span className="text-[10px] uppercase tracking-widest px-2.5 py-0.5 rounded-full border border-amber-500/30 bg-gradient-to-r from-[#FF1A4B]/15 to-[#F59E0B]/15 text-amber-300 font-bold font-mono">
                 Studio
               </span>
             </div>
-            <p className="text-xs text-slate-400 font-medium tracking-wide">
-              Professional Proofing & Anti-Theft Vault
-            </p>
           </div>
 
           {/* Welcome Text */}
@@ -333,19 +329,6 @@ function LoginContent({ onLoginSuccess }) {
               )}
             </button>
           </form>
-
-          {/* Secure Studio Notice */}
-          <div className="mt-6 pt-5 border-t border-slate-800/80 flex items-center justify-center gap-2 text-xs text-slate-500 text-center">
-            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>Accounts provisioned by Studio Administrator</span>
-          </div>
-        </div>
-
-        {/* Minimalist Console Footer */}
-        <div className="mt-6 text-center text-xs text-slate-600 flex items-center justify-center gap-3">
-          <span>PhotoGuard Enterprise v7.0</span>
-          <span>•</span>
-          <span className="font-mono">AES-256 VAULT</span>
         </div>
       </div>
     </div>

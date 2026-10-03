@@ -75,10 +75,7 @@ export default function CreateAlbumModal({ isOpen, onClose, onAlbumCreated }) {
               <FolderPlus className="w-5 h-5 text-amber-400" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white tracking-tight">Create Client Gallery</h2>
-              <p className="text-xs text-slate-400">
-                Set up a secure collection and generate a 6-digit access PIN.
-              </p>
+              <h2 className="text-lg font-bold text-white tracking-tight">Create New Gallery</h2>
             </div>
           </div>
           <button
@@ -113,7 +110,7 @@ export default function CreateAlbumModal({ isOpen, onClose, onAlbumCreated }) {
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Liam & Emma Wedding Reception"
+              placeholder="Album title"
               required
               className="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/80 transition-all"
             />
@@ -128,7 +125,7 @@ export default function CreateAlbumModal({ isOpen, onClose, onAlbumCreated }) {
               type="text"
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
-              placeholder="e.g., Emma Johnson"
+              placeholder="Client name"
               required
               className="w-full bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/80 transition-all"
             />
@@ -192,7 +189,7 @@ export default function CreateAlbumModal({ isOpen, onClose, onAlbumCreated }) {
               className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-xs transition-all shadow-lg shadow-amber-500/15 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              <span>{loading ? "Creating Gallery..." : "Create Album"}</span>
+              <span>{loading ? "Creating Gallery..." : "Create Gallery"}</span>
             </button>
           </div>
         </form>

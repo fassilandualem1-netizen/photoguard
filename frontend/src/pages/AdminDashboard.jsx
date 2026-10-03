@@ -25,6 +25,7 @@ import {
   X,
   Megaphone,
   CheckCircle,
+  LogOut,
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -429,7 +430,7 @@ export default function AdminDashboard() {
                 </span>
               </div>
               <p className="text-xs text-slate-400 font-sans">
-                Root Infrastructure Command Center
+                System Administration
               </p>
             </div>
           </div>
@@ -452,15 +453,16 @@ export default function AdminDashboard() {
             </button>
             <div className="h-6 w-px bg-slate-800" />
             <div className="flex items-center gap-3 pl-1">
-              <div className="text-right hidden sm:block">
-                <p className="text-xs font-medium text-slate-200">{user?.full_name || "Root Admin"}</p>
-                <p className="text-[11px] text-slate-500 font-mono">{user?.email}</p>
-              </div>
+              <span className="text-xs text-slate-300 font-mono hidden sm:inline">
+                {user?.email}
+              </span>
               <button
                 onClick={logout}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition-colors"
+                title="Sign Out"
+                aria-label="Sign Out"
+                className="p-2 rounded-lg bg-slate-900/80 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-slate-800 hover:border-red-500/30 transition-all cursor-pointer"
               >
-                Sign Out
+                <LogOut className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -495,7 +497,7 @@ export default function AdminDashboard() {
               <span className="text-xs text-indigo-400 font-medium">registered</span>
             </div>
             <p className="mt-1 text-[11px] text-slate-500">
-              Active SaaS photographer tenancies
+              Registered studio accounts
             </p>
           </div>
 
@@ -516,7 +518,7 @@ export default function AdminDashboard() {
               <span className="text-xs text-cyan-400 font-medium">GB</span>
             </div>
             <p className="mt-1 text-[11px] text-slate-500">
-              Cloud storage utilized
+              Total allocated space used
             </p>
           </div>
 
@@ -539,7 +541,7 @@ export default function AdminDashboard() {
               </span>
             </div>
             <p className="mt-1 text-[11px] text-slate-500">
-              PIN-secured selection galleries
+              Active client galleries
             </p>
           </div>
 
@@ -560,7 +562,7 @@ export default function AdminDashboard() {
               </span>
             </div>
             <p className="mt-1 text-[11px] text-slate-500">
-              Cloud Infrastructure & Live Sync Active
+              All systems running normally
             </p>
           </div>
         </section>
@@ -676,7 +678,7 @@ export default function AdminDashboard() {
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>Photographers Directory</span>
+            <span>Directory</span>
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
                 activeTab === "directory"
@@ -729,7 +731,7 @@ export default function AdminDashboard() {
             }`}
           >
             <Shield className="w-4 h-4 text-amber-400" />
-            <span>Security Ledger & Audit Logs</span>
+            <span>Audit Logs</span>
             {auditLogs.length > 0 && (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">
                 {auditLogs.length}
@@ -748,7 +750,7 @@ export default function AdminDashboard() {
             }`}
           >
             <AlertTriangle className="w-4 h-4 text-rose-400" />
-            <span>System Health & Crashes</span>
+            <span>System Health</span>
             {systemErrors.length > 0 && (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse">
                 {systemErrors.length}
@@ -776,8 +778,8 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <form onSubmit={handleRegisterSubmit} className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end">
-            <div className="sm:col-span-3 space-y-1.5">
+          <form onSubmit={handleRegisterSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
+            <div className="col-span-1 sm:col-span-2 lg:col-span-3 space-y-1.5">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
                 Full Name / Studio
               </label>
@@ -790,12 +792,12 @@ export default function AdminDashboard() {
                   onChange={(e) =>
                     setRegisterForm({ ...registerForm, full_name: e.target.value })
                   }
-                  className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                  className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
                 />
               </div>
             </div>
 
-            <div className="sm:col-span-3 space-y-1.5">
+            <div className="col-span-1 sm:col-span-2 lg:col-span-3 space-y-1.5">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
                 Email Address
               </label>
@@ -808,12 +810,12 @@ export default function AdminDashboard() {
                   onChange={(e) =>
                     setRegisterForm({ ...registerForm, email: e.target.value })
                   }
-                  className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                  className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
                 />
               </div>
             </div>
 
-            <div className="sm:col-span-2 space-y-1.5">
+            <div className="col-span-1 sm:col-span-1 lg:col-span-2 space-y-1.5">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
                 Tier Plan
               </label>
@@ -832,14 +834,14 @@ export default function AdminDashboard() {
                     setCustomQuotaGB(5);
                   }
                 }}
-                className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
               >
                 <option value="basic">Basic (Default: 5 GB)</option>
                 <option value="studio">Studio (Default: 25 GB)</option>
               </select>
             </div>
 
-            <div className="sm:col-span-2 space-y-1.5">
+            <div className="col-span-1 sm:col-span-1 lg:col-span-2 space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
                   Storage (GB)
@@ -854,7 +856,7 @@ export default function AdminDashboard() {
                   placeholder="5"
                   value={customQuotaGB}
                   onChange={(e) => setCustomQuotaGB(e.target.value)}
-                  className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors font-mono"
+                  className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all font-mono"
                 />
               </div>
               <p className="text-[10px] text-slate-500 font-mono">
@@ -862,11 +864,11 @@ export default function AdminDashboard() {
               </p>
             </div>
 
-            <div className="sm:col-span-2">
+            <div className="col-span-1 sm:col-span-2 lg:col-span-2">
               <button
                 type="submit"
                 disabled={isRegistering}
-                className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/25 active:scale-[0.98]"
+                className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/25 active:scale-[0.98] cursor-pointer"
               >
                 {isRegistering ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />

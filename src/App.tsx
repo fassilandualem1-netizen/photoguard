@@ -57,7 +57,7 @@ import {
   ExternalLink, Heart, MessageSquare, AlertTriangle, ArrowLeft,
   Terminal, X, Database, Sliders, Film, Scissors, Copy, FileText,
   CheckCheck, Layers, Camera, Palette, Wand2, Eye
-, Printer, Phone, Send, Instagram, Music, Youtube} from 'lucide-react';
+, Printer, Phone, Send, Music} from 'lucide-react';
 
 interface MediaItem {
   id: number;

@@ -834,6 +834,22 @@ export default function AlbumDetail() {
               </button>
             )}
 
+            {/* REVIEW SELECTIONS BUTTON */}
+            <button
+              id="top-review-selections-btn"
+              type="button"
+              onClick={() => setActiveViewTab(activeViewTab === "selections" ? "all" : "selections")}
+              className={`inline-flex items-center gap-2 px-4 py-3 rounded-2xl font-bold text-xs sm:text-sm border transition-all cursor-pointer ${
+                activeViewTab === "selections"
+                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-lg shadow-amber-500/10"
+                  : "bg-slate-800/80 hover:bg-slate-700 text-white border-slate-700"
+              }`}
+              title={activeViewTab === "selections" ? "Show All Proofs" : "Review Client Selections"}
+            >
+              <CheckSquare className="w-4 h-4 text-amber-400" />
+              <span>Review Selections ({selectedItems.length})</span>
+            </button>
+
             {/* DOWNLOAD ALL BUTTON: Active if selections exist or submitted */}
             <button
               id="download-all-btn"
@@ -876,46 +892,14 @@ export default function AlbumDetail() {
         </div>
       )}
 
-      {/* SINGLE SUBMIT LOCKED BANNER */}
+      {/* Client Submitted Alert */}
       {isSubmitted && (
         <div
           id="single-submit-locked-banner"
-          className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-amber-500/5 border border-amber-500/40 text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl shadow-amber-500/5 animate-in fade-in"
+          className="p-4 rounded-2xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 flex items-center gap-3 animate-in fade-in"
         >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-bold shrink-0 shadow-lg shadow-amber-500/20">
-              <Lock className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-400 text-[10px] font-mono font-bold tracking-widest uppercase">
-                  Single Submit Lock Active
-                </span>
-                <h3 className="text-base font-bold tracking-tight text-white uppercase">
-                  CLIENT SELECTION SUBMITTED & LOCKED
-                </h3>
-              </div>
-
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => setActiveViewTab("selections")}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-700 transition-colors cursor-pointer"
-            >
-              <CheckSquare className="w-4 h-4 text-amber-400" />
-              <span>Review Selections ({selectedItems.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleDownloadAll}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shadow-md transition-colors cursor-pointer"
-            >
-              <FolderDown className="w-4 h-4 stroke-[2.4]" />
-              <span>Download All</span>
-            </button>
-          </div>
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span className="text-sm font-medium">Client has submitted their selections</span>
         </div>
       )}
 
@@ -952,25 +936,6 @@ export default function AlbumDetail() {
               </span>
             </button>
 
-            {/* Tab 2: Review Selections */}
-            <button
-              type="button"
-              id="tab-review-selections-btn"
-              onClick={() => setActiveViewTab("selections")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                activeViewTab === "selections"
-                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-lg shadow-amber-500/10"
-                  : "text-slate-400 hover:text-amber-300 hover:bg-slate-900/50"
-              }`}
-            >
-              <CheckSquare className="w-3.5 h-3.5 text-amber-400" />
-              <span>Review Selections</span>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
-                selectedItems.length > 0 ? "bg-amber-400 text-slate-950" : "bg-slate-900 text-slate-400"
-              }`}>
-                {selectedItems.length}
-              </span>
-            </button>
           </div>
 
           <div className="text-xs text-slate-400 flex items-center gap-2">
@@ -978,13 +943,9 @@ export default function AlbumDetail() {
               Showing {displayPhotos.length} of {mediaItems.length} photos
             </span>
             {selectedItems.length > 0 && activeViewTab === "all" && (
-              <button
-                type="button"
-                onClick={() => setActiveViewTab("selections")}
-                className="text-amber-400 font-semibold hover:underline cursor-pointer"
-              >
+              <span className="text-amber-400 font-semibold">
                 ({selectedItems.length} selected by client)
-              </button>
+              </span>
             )}
           </div>
         </div>

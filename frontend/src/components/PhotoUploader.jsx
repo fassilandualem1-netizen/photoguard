@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { UploadCloud, ShieldCheck, FolderPlus, Loader2, CheckCircle2 } from "lucide-react";
+import { UploadCloud, FolderPlus, Loader2, CheckCircle2 } from "lucide-react";
 
 export default function PhotoUploader({
   isSubmitted = false,
@@ -52,15 +52,10 @@ export default function PhotoUploader({
         <div className="space-y-1">
           <h2 className="text-sm font-semibold text-white flex items-center gap-2">
             <UploadCloud className="w-4 h-4 text-amber-400" />
-            <span>Upload Client Proofs</span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono">
-              <ShieldCheck className="w-3 h-3" />
-              <span>End-to-End Encrypted</span>
-            </span>
+            <span>Upload Photos</span>
           </h2>
           <p className="text-xs text-slate-400">
-            End-to-end encrypted proof delivery. Photos are watermarked and protected from unauthorized downloads.
-            {isDragging ? " Release files to start upload!" : " Drag & drop photos anywhere here, or browse files."}
+            {isDragging ? "Release files to start upload" : "Drag and drop photos here, or browse files."}
           </p>
         </div>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/axios";
 import AdminPhotographerTable from "../components/AdminPhotographerTable";
@@ -26,10 +26,32 @@ import {
   Megaphone,
   CheckCircle,
   LogOut,
+  ChevronDown,
+  Images,
 } from "lucide-react";
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
+
+  // Profile menu and modal states
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef(null);
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+
+  // Click-outside listener for profile menu
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    if (isProfileMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isProfileMenuOpen]);
 
   // Platform statistics
   const [stats, setStats] = useState({
@@ -249,7 +271,7 @@ export default function AdminDashboard() {
         custom_quota_gb: parseFloat(customQuotaGB) || (registerForm.subscription_plan === "studio" ? 25 : 5),
       });
 
-      // Show temporary password banner
+      // Show temporary password banner and close modal
       setCreatedCredentials({
         email: res.data.user.email,
         full_name: res.data.user.full_name,
@@ -257,6 +279,7 @@ export default function AdminDashboard() {
         plan: res.data.user.subscription_plan,
       });
       setHasCopiedPassword(false);
+      setIsRegisterModalOpen(false);
 
       // Reset form and update table
       setRegisterForm({
@@ -436,40 +459,80 @@ export default function AdminDashboard() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Link
-              to="/dashboard"
-              id="admin-to-galleries-link"
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 hover:text-amber-200 text-xs font-semibold transition-all shadow-sm"
-            >
-              <span>Photographer Galleries & Proofs</span>
-              <span className="text-amber-400 font-bold">→</span>
-            </Link>
             <button
               onClick={fetchData}
-              className="p-2 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-indigo-300 border border-slate-800 transition-colors"
+              className="p-2 rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-indigo-300 border border-slate-800 transition-colors cursor-pointer"
               title="Refresh Analytics"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-indigo-400" : ""}`} />
             </button>
-            <div className="h-6 w-px bg-slate-800" />
-            <div className="flex items-center gap-3 pl-1">
-              <span className="text-xs text-slate-300 font-mono hidden sm:inline">
-                {user?.email}
-              </span>
+            <div className="h-6 w-px bg-slate-800/80" />
+
+            {/* Sleek Avatar / Profile Dropdown */}
+            <div className="relative" ref={profileMenuRef}>
               <button
-                onClick={logout}
-                title="Sign Out"
-                aria-label="Sign Out"
-                className="p-2 rounded-lg bg-slate-900/80 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-slate-800 hover:border-red-500/30 transition-all cursor-pointer"
+                type="button"
+                id="admin-profile-menu-btn"
+                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                className="flex items-center gap-2 p-1.5 pr-2.5 rounded-full border border-slate-800 bg-slate-900/80 hover:bg-slate-800 hover:border-slate-700 transition-all text-slate-200 hover:text-white cursor-pointer group shadow-sm"
+                aria-label="Admin Profile Menu"
               >
-                <LogOut className="w-4 h-4" />
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-indigo-700 text-white font-bold text-xs flex items-center justify-center shadow-sm shrink-0 border border-indigo-400/30">
+                  {(user?.full_name || user?.email || "A").charAt(0).toUpperCase()}
+                </div>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-transform duration-200 ${isProfileMenuOpen ? "rotate-180" : ""}`} />
               </button>
+
+              {/* Popover */}
+              {isProfileMenuOpen && (
+                <div
+                  id="admin-profile-dropdown"
+                  className="absolute right-0 mt-2 w-64 rounded-2xl border border-indigo-950/80 bg-[#0e121b]/95 backdrop-blur-xl shadow-2xl shadow-black/80 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                >
+                  {/* User Email & Role */}
+                  <div className="px-4 py-3 border-b border-indigo-950/60">
+                    <p className="text-xs font-semibold text-white truncate">
+                      {user?.full_name || "Super Admin"}
+                    </p>
+                    <p className="text-[11px] text-slate-400 font-mono truncate mt-0.5">
+                      {user?.email}
+                    </p>
+                    <span className="inline-block mt-2 px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      Super Administrator
+                    </span>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="p-1 space-y-0.5">
+                    <Link
+                      to="/dashboard"
+                      onClick={() => setIsProfileMenuOpen(false)}
+                      className="flex items-center gap-2.5 w-full px-3 py-2 text-xs text-amber-300 hover:text-white hover:bg-amber-500/10 rounded-xl transition-colors font-medium"
+                    >
+                      <Images className="w-4 h-4 text-amber-400" />
+                      <span>Switch to Photographer View / Galleries</span>
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        logout();
+                      }}
+                      className="flex items-center gap-2.5 w-full px-3 py-2 text-xs text-red-400 hover:text-white hover:bg-red-500/10 rounded-xl transition-colors font-medium cursor-pointer"
+                    >
+                      <LogOut className="w-4 h-4 text-red-400" />
+                      <span>Log Out</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* Error Notification */}
         {errorBanner && (
           <div className="p-4 rounded-xl bg-red-950/40 border border-red-800/60 text-red-300 flex items-center gap-3 text-sm animate-fade-in">
@@ -478,94 +541,213 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Section 1: 4 Stat Cards */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card 1: Photographers */}
-          <div className="p-5 rounded-2xl bg-[#0e121b] border border-indigo-950/70 hover:border-indigo-800/60 transition-all relative overflow-hidden group shadow-lg shadow-black/40">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Total Photographers
-              </span>
-              <div className="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20 group-hover:scale-105 transition-transform">
+        {/* Section 1: Compact Horizontal Metrics Ribbon */}
+        <section className="rounded-2xl bg-[#0e121b] border border-indigo-950/70 p-3 sm:px-6 shadow-xl shadow-black/40 backdrop-blur-md">
+          <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-indigo-950/60 gap-3 lg:gap-0">
+            {/* Photographers */}
+            <div className="flex items-center gap-3 lg:pr-6">
+              <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
                 <Users className="w-4 h-4" />
               </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Photographers</p>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-lg font-bold text-white font-mono">{stats.total_photographers}</span>
+                  <span className="text-[11px] text-slate-500">accounts</span>
+                </div>
+              </div>
             </div>
-            <div className="mt-4 flex items-baseline gap-2">
-              <span className="text-3xl font-bold tracking-tight text-white font-mono">
-                {stats.total_photographers}
-              </span>
-              <span className="text-xs text-indigo-400 font-medium">registered</span>
-            </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Registered studio accounts
-            </p>
-          </div>
 
-          {/* Card 2: Total Storage Used */}
-          <div className="p-5 rounded-2xl bg-[#0e121b] border border-indigo-950/70 hover:border-indigo-800/60 transition-all relative overflow-hidden group shadow-lg shadow-black/40">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Total Storage Used
-              </span>
-              <div className="w-9 h-9 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400 border border-cyan-500/20 group-hover:scale-105 transition-transform">
+            {/* Storage Used */}
+            <div className="flex items-center gap-3 pt-3 lg:pt-0 lg:px-6">
+              <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 shrink-0">
                 <HardDrive className="w-4 h-4" />
               </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Storage Used</p>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-lg font-bold text-white font-mono">{stats.total_storage_used_gb}</span>
+                  <span className="text-[11px] text-slate-500">GB</span>
+                </div>
+              </div>
             </div>
-            <div className="mt-4 flex items-baseline gap-2">
-              <span className="text-3xl font-bold tracking-tight text-white font-mono">
-                {stats.total_storage_used_gb}
-              </span>
-              <span className="text-xs text-cyan-400 font-medium">GB</span>
-            </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Total allocated space used
-            </p>
-          </div>
 
-          {/* Card 3: Active Albums */}
-          <div className="p-5 rounded-2xl bg-[#0e121b] border border-indigo-950/70 hover:border-indigo-800/60 transition-all relative overflow-hidden group shadow-lg shadow-black/40">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Active Albums
-              </span>
-              <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20 group-hover:scale-105 transition-transform">
+            {/* Active Albums */}
+            <div className="flex items-center gap-3 pt-3 lg:pt-0 lg:px-6">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
                 <FolderLock className="w-4 h-4" />
               </div>
-            </div>
-            <div className="mt-4 flex items-baseline gap-2">
-              <span className="text-3xl font-bold tracking-tight text-white font-mono">
-                {stats.total_albums}
-              </span>
-              <span className="text-xs text-emerald-400 font-medium">
-                ({stats.total_photos} photos)
-              </span>
-            </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Active client galleries
-            </p>
-          </div>
-
-          {/* Card 4: System Health */}
-          <div className="p-5 rounded-2xl bg-[#0e121b] border border-indigo-950/70 hover:border-indigo-800/60 transition-all relative overflow-hidden group shadow-lg shadow-black/40">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                System Health
-              </span>
-              <div className="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20 group-hover:scale-105 transition-transform">
-                <Activity className="w-4 h-4" />
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Active Galleries</p>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-lg font-bold text-white font-mono">{stats.total_albums}</span>
+                  <span className="text-[11px] text-slate-500 font-mono">({stats.total_photos} photos)</span>
+                </div>
               </div>
             </div>
-            <div className="mt-4 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-              <span className="text-xl font-bold tracking-tight text-emerald-400 font-mono">
-                Operational
-              </span>
+
+            {/* System Health */}
+            <div className="flex items-center gap-3 pt-3 lg:pt-0 lg:pl-6">
+              <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+                <Activity className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">System Health</p>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-xs font-semibold text-emerald-400 font-mono">Operational</span>
+                </div>
+              </div>
             </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              All systems running normally
-            </p>
           </div>
         </section>
+
+        {/* Register New Photographer Dialog/Modal */}
+        {isRegisterModalOpen && (
+          <div
+            id="register-photographer-modal-overlay"
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+          >
+            <div className="w-full max-w-xl rounded-2xl bg-[#0e121b] border border-indigo-950/80 p-6 sm:p-7 shadow-2xl shadow-black/80 space-y-5 relative animate-in fade-in zoom-in-95 duration-150">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-3 pb-4 border-b border-indigo-950/60">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20 shrink-0">
+                    <UserPlus className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white tracking-tight">
+                      Register New Photographer
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Provision a new photographer studio account with auto-generated secure credentials.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsRegisterModalOpen(false)}
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                  title="Close modal"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Form inside Dialog */}
+              <form onSubmit={handleRegisterSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Full Name */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                      Full Name / Studio
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Dawit Studio"
+                      value={registerForm.full_name}
+                      onChange={(e) =>
+                        setRegisterForm({ ...registerForm, full_name: e.target.value })
+                      }
+                      className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
+                    />
+                  </div>
+
+                  {/* Email */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="photographer@example.com"
+                      value={registerForm.email}
+                      onChange={(e) =>
+                        setRegisterForm({ ...registerForm, email: e.target.value })
+                      }
+                      className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
+                    />
+                  </div>
+
+                  {/* Tier Plan */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                      Tier Plan
+                    </label>
+                    <select
+                      value={registerForm.subscription_plan}
+                      onChange={(e) => {
+                        const selectedPlan = e.target.value;
+                        setRegisterForm({
+                          ...registerForm,
+                          subscription_plan: selectedPlan,
+                        });
+                        if (selectedPlan === "studio") {
+                          setCustomQuotaGB(25);
+                        } else {
+                          setCustomQuotaGB(5);
+                        }
+                      }}
+                      className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
+                    >
+                      <option value="basic">Basic (Default: 5 GB)</option>
+                      <option value="studio">Studio (Default: 25 GB)</option>
+                    </select>
+                  </div>
+
+                  {/* Storage Quota */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                      Storage Quota (GB)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      required
+                      placeholder="5"
+                      value={customQuotaGB}
+                      onChange={(e) => setCustomQuotaGB(e.target.value)}
+                      className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all font-mono"
+                    />
+                    <p className="text-[10px] text-slate-500 font-mono">
+                      (Enter 9999 for Unlimited)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-indigo-950/60">
+                  <button
+                    type="button"
+                    onClick={() => setIsRegisterModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isRegistering}
+                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/25 active:scale-95 cursor-pointer"
+                  >
+                    {isRegistering ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Provisioning...</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-4 h-4" />
+                        <span>Create Photographer</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Temporary Credentials Success Modal Overlay */}
         {createdCredentials && (
@@ -665,16 +847,16 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Navigation Tab Switcher */}
-        <div className="flex items-center gap-3 border-b border-indigo-950/80 pb-4">
+        {/* Unified & Compact Navigation Tabs */}
+        <div className="flex items-center gap-1 sm:gap-2 border-b border-indigo-950/80 overflow-x-auto scrollbar-none">
           <button
             type="button"
             id="admin-directory-tab"
             onClick={() => handleTabChange("directory")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === "directory"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25"
-                : "bg-[#0e121b] text-slate-400 hover:text-white hover:bg-slate-900 border border-indigo-950/60"
+                ? "border-indigo-500 text-indigo-400 font-bold"
+                : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700"
             }`}
           >
             <Users className="w-4 h-4" />
@@ -682,8 +864,8 @@ export default function AdminDashboard() {
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
                 activeTab === "directory"
-                  ? "bg-white/20 text-white"
-                  : "bg-slate-800 text-slate-400"
+                  ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                  : "bg-slate-800/80 text-slate-400"
               }`}
             >
               {filteredPhotographers.length}
@@ -694,13 +876,13 @@ export default function AdminDashboard() {
             type="button"
             id="admin-broadcasts-tab"
             onClick={() => handleTabChange("broadcasts")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === "broadcasts"
-                ? "bg-sky-600 text-white shadow-lg shadow-sky-600/25"
-                : "bg-[#0e121b] text-slate-400 hover:text-white hover:bg-slate-900 border border-indigo-950/60"
+                ? "border-sky-500 text-sky-400 font-bold"
+                : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700"
             }`}
           >
-            <Megaphone className="w-4 h-4 text-sky-400" />
+            <Megaphone className="w-4 h-4" />
             <span>Broadcasts</span>
             {currentBroadcast && currentBroadcast.is_active ? (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
@@ -711,8 +893,8 @@ export default function AdminDashboard() {
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
                   activeTab === "broadcasts"
-                    ? "bg-white/20 text-white"
-                    : "bg-slate-800 text-slate-400"
+                    ? "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+                    : "bg-slate-800/80 text-slate-400"
                 }`}
               >
                 {broadcastList.length > 0 ? broadcastList.length : "0"}
@@ -724,13 +906,13 @@ export default function AdminDashboard() {
             type="button"
             id="admin-audit-logs-tab"
             onClick={() => handleTabChange("audit_logs")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === "audit_logs"
-                ? "bg-amber-600 text-white shadow-lg shadow-amber-600/25"
-                : "bg-[#0e121b] text-slate-400 hover:text-white hover:bg-slate-900 border border-indigo-950/60"
+                ? "border-amber-500 text-amber-400 font-bold"
+                : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700"
             }`}
           >
-            <Shield className="w-4 h-4 text-amber-400" />
+            <Shield className="w-4 h-4" />
             <span>Audit Logs</span>
             {auditLogs.length > 0 && (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">
@@ -743,13 +925,13 @@ export default function AdminDashboard() {
             type="button"
             id="admin-system-health-tab"
             onClick={() => handleTabChange("system_health")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === "system_health"
-                ? "bg-rose-600 text-white shadow-lg shadow-rose-600/25"
-                : "bg-[#0e121b] text-slate-400 hover:text-white hover:bg-slate-900 border border-indigo-950/60"
+                ? "border-rose-500 text-rose-400 font-bold"
+                : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700"
             }`}
           >
-            <AlertTriangle className="w-4 h-4 text-rose-400" />
+            <AlertTriangle className="w-4 h-4" />
             <span>System Health</span>
             {systemErrors.length > 0 && (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse">
@@ -759,145 +941,22 @@ export default function AdminDashboard() {
           </button>
         </div>
 
-        {/* Tab 1: Directory & Provisioning */}
+        {/* Tab 1: Directory */}
         {activeTab === "directory" && (
-          <>
-            {/* Section 2: "Register Photographer" Form */}
-            <section className="p-6 rounded-2xl bg-[#0e121b] border border-indigo-950/70 shadow-xl shadow-black/30">
-          <div className="flex items-center gap-2.5 mb-5 pb-4 border-b border-indigo-950/60">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
-              <UserPlus className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-white tracking-tight">
-                Register New Photographer
-              </h2>
-              <p className="text-xs text-slate-400">
-                Generate an account with automatic secure 8-character password generation
-              </p>
-            </div>
-          </div>
-
-          <form onSubmit={handleRegisterSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
-            <div className="col-span-1 sm:col-span-2 lg:col-span-3 space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                Full Name / Studio
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Dawit Studio"
-                  value={registerForm.full_name}
-                  onChange={(e) =>
-                    setRegisterForm({ ...registerForm, full_name: e.target.value })
-                  }
-                  className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
-                />
-              </div>
-            </div>
-
-            <div className="col-span-1 sm:col-span-2 lg:col-span-3 space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                Email Address
-              </label>
-              <div className="relative">
-                <input
-                  type="email"
-                  required
-                  placeholder="photographer@example.com"
-                  value={registerForm.email}
-                  onChange={(e) =>
-                    setRegisterForm({ ...registerForm, email: e.target.value })
-                  }
-                  className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
-                />
-              </div>
-            </div>
-
-            <div className="col-span-1 sm:col-span-1 lg:col-span-2 space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                Tier Plan
-              </label>
-              <select
-                value={registerForm.subscription_plan}
-                onChange={(e) => {
-                  const selectedPlan = e.target.value;
-                  setRegisterForm({
-                    ...registerForm,
-                    subscription_plan: selectedPlan,
-                  });
-                  // Dynamic auto-fill: 5 for Basic, 25 for Studio
-                  if (selectedPlan === "studio") {
-                    setCustomQuotaGB(25);
-                  } else {
-                    setCustomQuotaGB(5);
-                  }
-                }}
-                className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
-              >
-                <option value="basic">Basic (Default: 5 GB)</option>
-                <option value="studio">Studio (Default: 25 GB)</option>
-              </select>
-            </div>
-
-            <div className="col-span-1 sm:col-span-1 lg:col-span-2 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  Storage (GB)
-                </label>
-              </div>
-              <div className="relative">
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  required
-                  placeholder="5"
-                  value={customQuotaGB}
-                  onChange={(e) => setCustomQuotaGB(e.target.value)}
-                  className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all font-mono"
-                />
-              </div>
-              <p className="text-[10px] text-slate-500 font-mono">
-                (Enter 9999 for Unlimited)
-              </p>
-            </div>
-
-            <div className="col-span-1 sm:col-span-2 lg:col-span-2">
-              <button
-                type="submit"
-                disabled={isRegistering}
-                className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/25 active:scale-[0.98] cursor-pointer"
-              >
-                {isRegistering ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    <UserPlus className="w-4 h-4" />
-                    <span>Create Account</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
-        </section>
-
-        {/* Section 3: "Photographers Directory" Table (Modular Component) */}
-        <AdminPhotographerTable
-          filteredPhotographers={filteredPhotographers}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          loading={loading}
-          actionLoadingId={actionLoadingId}
-          handleToggleSuspend={handleToggleSuspend}
-          handleTogglePlan={handleTogglePlan}
-          handleResetPassword={handleResetPassword}
-          handleEditQuota={handleEditQuota}
-          formatBytes={formatBytes}
-        />
-      </>
-    )}
+          <AdminPhotographerTable
+            filteredPhotographers={filteredPhotographers}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            loading={loading}
+            actionLoadingId={actionLoadingId}
+            handleToggleSuspend={handleToggleSuspend}
+            handleTogglePlan={handleTogglePlan}
+            handleResetPassword={handleResetPassword}
+            handleEditQuota={handleEditQuota}
+            formatBytes={formatBytes}
+            onOpenRegisterModal={() => setIsRegisterModalOpen(true)}
+          />
+        )}
 
     {/* Tab: Global Dashboard Broadcasts */}
     {activeTab === "broadcasts" && (

@@ -9,6 +9,7 @@ import {
   KeyRound,
   Sliders,
   RefreshCw,
+  UserPlus,
 } from "lucide-react";
 
 export default function AdminPhotographerTable({
@@ -22,6 +23,7 @@ export default function AdminPhotographerTable({
   handleResetPassword,
   handleEditQuota,
   formatBytes,
+  onOpenRegisterModal,
 }) {
   return (
     <section className="p-6 rounded-2xl bg-[#0e121b] border border-indigo-950/70 shadow-xl shadow-black/30">
@@ -38,16 +40,30 @@ export default function AdminPhotographerTable({
           </p>
         </div>
 
-        {/* Search Input */}
-        <div className="w-full sm:w-72 relative">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input
-            type="text"
-            placeholder="Search by name, email, or plan..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery?.(e.target.value)}
-            className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl pl-10 pr-3.5 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
-          />
+        {/* Search Input & Action Button */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+          <div className="w-full sm:w-72 relative">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Search by name, email, or plan..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery?.(e.target.value)}
+              className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl pl-10 pr-3.5 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
+            />
+          </div>
+
+          {onOpenRegisterModal && (
+            <button
+              type="button"
+              id="open-register-photographer-btn"
+              onClick={onOpenRegisterModal}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-md shadow-indigo-600/30 shrink-0 cursor-pointer active:scale-95"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>+ Add New Photographer</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -56,15 +72,15 @@ export default function AdminPhotographerTable({
         <table className="w-full text-left text-xs">
           <thead>
             <tr className="border-b border-indigo-950/80 text-slate-400 font-mono uppercase tracking-wider">
-              <th className="pb-3 px-3">Photographer</th>
-              <th className="pb-3 px-3">Plan Tier</th>
-              <th className="pb-3 px-3">Storage Allocation</th>
-              <th className="pb-3 px-3">Albums & Media</th>
-              <th className="pb-3 px-3">Status</th>
-              <th className="pb-3 px-3 text-right">Actions</th>
+              <th className="py-3.5 px-4">Photographer</th>
+              <th className="py-3.5 px-4">Plan Tier</th>
+              <th className="py-3.5 px-4">Storage Allocation</th>
+              <th className="py-3.5 px-4">Albums & Media</th>
+              <th className="py-3.5 px-4">Status</th>
+              <th className="py-3.5 px-4 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-indigo-950/40">
+          <tbody className="divide-y divide-indigo-950/60">
             {filteredPhotographers.length === 0 ? (
               <tr>
                 <td colSpan={6} className="py-12 text-center text-slate-500">
@@ -83,7 +99,7 @@ export default function AdminPhotographerTable({
                 return (
                   <tr key={p.id} className="hover:bg-indigo-950/20 transition-colors">
                     {/* Name & Email */}
-                    <td className="py-3.5 px-3">
+                    <td className="py-5 px-4">
                       <div className="font-semibold text-white">{p.full_name}</div>
                       <div className="text-slate-400 font-mono text-[11px] flex items-center gap-1 mt-0.5">
                         <Mail className="w-3 h-3 text-indigo-400/60" />
@@ -92,7 +108,7 @@ export default function AdminPhotographerTable({
                     </td>
 
                     {/* Plan */}
-                    <td className="py-3.5 px-3">
+                    <td className="py-5 px-4">
                       <span
                         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider font-mono border ${
                           p.subscription_plan === "studio"
@@ -108,7 +124,7 @@ export default function AdminPhotographerTable({
                     </td>
 
                     {/* Storage */}
-                    <td className="py-3.5 px-3 min-w-[170px]">
+                    <td className="py-5 px-4 min-w-[170px]">
                       <div className="flex items-center justify-between text-[11px] text-slate-300 font-mono mb-1">
                         <span>{formatBytes ? formatBytes(p.storage_used) : `${p.storage_used} B`}</span>
                         <span className="text-slate-500">/ {quotaGb} GB</span>
@@ -128,7 +144,7 @@ export default function AdminPhotographerTable({
                     </td>
 
                     {/* Albums & Media */}
-                    <td className="py-3.5 px-3">
+                    <td className="py-5 px-4">
                       <div className="text-slate-200 font-mono text-xs">
                         <strong>{p.total_albums}</strong> <span className="text-slate-400 font-sans">albums</span>
                         <span className="text-slate-600 mx-1">•</span>
@@ -152,7 +168,7 @@ export default function AdminPhotographerTable({
                     </td>
 
                     {/* Status */}
-                    <td className="py-3.5 px-3">
+                    <td className="py-5 px-4">
                       <span
                         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
                           p.is_active
@@ -170,7 +186,7 @@ export default function AdminPhotographerTable({
                     </td>
 
                     {/* Actions */}
-                    <td className="py-3.5 px-3 text-right">
+                    <td className="py-5 px-4 text-right">
                       <div className="inline-flex items-center gap-1.5">
                         {/* Toggle Suspend / Active */}
                         <button

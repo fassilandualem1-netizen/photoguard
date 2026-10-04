@@ -26,6 +26,7 @@ import {
 import ProfileBrandingView from "../components/ProfileBrandingView";
 import StudioAssistantsView from "../components/StudioAssistantsView";
 import ChangePasswordView from "../components/ChangePasswordView";
+import CreateAlbumView from "../components/CreateAlbumView";
 
 // Placeholder for views we haven't migrated yet
 const PlaceholderView = ({ title }) => (
@@ -126,7 +127,7 @@ export default function DashboardHome() {
   if (currentTab === "profile") return <ProfileBrandingView />;
   if (currentTab === "assistants") return <StudioAssistantsView />;
   if (currentTab === "password") return <ChangePasswordView />;
-  if (currentTab === "new-album") return <PlaceholderView title="Create New Album" />;
+  if (currentTab === "new-album") return <CreateAlbumView />;
   if (currentTab === "clients") return <PlaceholderView title="Clients Directory" />;
 
   // Albums View (Default)

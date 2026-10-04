@@ -23,6 +23,7 @@ import {
   LayoutGrid,
   List,
 } from "lucide-react";
+import ProfileBrandingView from "../components/ProfileBrandingView";
 
 // Placeholder for views we haven't migrated yet
 const PlaceholderView = ({ title }) => (
@@ -120,7 +121,7 @@ export default function DashboardHome() {
   }, [albums, searchQuery]);
 
   // Route inline views based on currentTab
-  if (currentTab === "profile") return <PlaceholderView title="Profile Settings" />;
+  if (currentTab === "profile") return <ProfileBrandingView />;
   if (currentTab === "assistants") return <PlaceholderView title="Team Management" />;
   if (currentTab === "password") return <PlaceholderView title="Change Password" />;
   if (currentTab === "new-album") return <PlaceholderView title="Create New Album" />;

@@ -104,7 +104,7 @@ export default function DashboardLayout({ children }) {
             <img src={user.studio_logo_url} alt="Logo" className="h-8 max-w-[140px] object-contain" />
           ) : (
             <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
-              <LayoutGrid, LayoutTemplate, Share2, Send className="w-4 h-4 text-indigo-600" />
+              <LayoutGrid className="w-4 h-4 text-indigo-600" />
             </div>
           )}
           <span className="font-bold text-lg text-slate-900 tracking-tight">PhotoGuard</span>
@@ -175,7 +175,7 @@ export default function DashboardLayout({ children }) {
           <div className="px-4 h-16 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
-                <LayoutGrid, LayoutTemplate, Share2, Send className="w-3.5 h-3.5 text-indigo-600" />
+                <LayoutGrid className="w-3.5 h-3.5 text-indigo-600" />
               </div>
               <span className="font-bold text-base text-slate-900">PhotoGuard</span>
             </div>

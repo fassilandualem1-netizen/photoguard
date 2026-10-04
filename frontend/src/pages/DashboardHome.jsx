@@ -22,7 +22,9 @@ import {
   LayoutGrid,
   List,
 } from "lucide-react";
-import ProfileBrandingView from "../components/ProfileBrandingView";
+import StudioBrandingView from "../components/StudioBrandingView";
+import SocialMediaView from "../components/SocialMediaView";
+import TelegramAlertsView from "../components/TelegramAlertsView";
 import StudioAssistantsView from "../components/StudioAssistantsView";
 import ChangePasswordView from "../components/ChangePasswordView";
 import CreateAlbumView from "../components/CreateAlbumView";
@@ -129,7 +131,9 @@ export default function DashboardHome() {
   }, [albums, searchQuery]);
 
   // Route inline views based on currentTab
-  if (currentTab === "profile") return <ProfileBrandingView />;
+  if (currentTab === "branding") return <StudioBrandingView />;
+  if (currentTab === "socials") return <SocialMediaView />;
+  if (currentTab === "telegram") return <TelegramAlertsView />;
   if (currentTab === "assistants") return <StudioAssistantsView />;
   if (currentTab === "password") return <ChangePasswordView />;
   if (currentTab === "new-album") return <CreateAlbumView />;

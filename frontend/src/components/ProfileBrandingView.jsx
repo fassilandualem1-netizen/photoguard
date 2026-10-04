@@ -15,6 +15,9 @@ import {
   Save,
   ShieldCheck,
   Sparkles,
+  Cpu,
+  Unlink,
+  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
@@ -42,6 +45,12 @@ export default function ProfileBrandingView() {
   const [isDraggingLogo, setIsDraggingLogo] = useState(false);
   const fileInputRef = useRef(null);
 
+  // Telegram Deep-Linking State
+  const [isCheckingConnection, setIsCheckingConnection] = useState(false);
+  const [isDisconnectingTelegram, setIsDisconnectingTelegram] = useState(false);
+  const [telegramStatusMsg, setTelegramStatusMsg] = useState(null);
+  const [telegramErrorMsg, setTelegramErrorMsg] = useState(null);
+
   // Social & Contact State
   const [contactPhone, setContactPhone] = useState("");
   const [telegramUrl, setTelegramUrl] = useState("");
@@ -52,7 +61,6 @@ export default function ProfileBrandingView() {
   const [socialSuccessMsg, setSocialSuccessMsg] = useState(null);
   const [socialErrorMsg, setSocialErrorMsg] = useState(null);
 
-  const isStudio = user?.subscription_plan === "studio" || user?.role === "admin";
   const botUsername = "Photoguard_alert_bot";
   const telegramDeepLink = `https://t.me/${botUsername}?start=${user?.id || ""}`;
 
@@ -80,29 +88,24 @@ export default function ProfileBrandingView() {
       .catch(() => {});
   }, [user]);
 
-  // Handle Logo Upload
+  // --- Logo Upload ---
   const handleLogoUpload = async (file) => {
     if (!file) return;
-
     const validMimes = ["image/png", "image/jpeg", "image/jpg", "image/svg+xml", "image/webp"];
     if (!validMimes.includes(file.type)) {
       setLogoUploadError("Please upload a PNG, SVG, or JPEG image file.");
       return;
     }
-
     if (file.size > 5 * 1024 * 1024) {
       setLogoUploadError("Logo file must be under 5MB.");
       return;
     }
-
     setIsUploadingLogo(true);
     setLogoUploadError(null);
     setBrandingSuccessMsg(null);
     setBrandingErrorMsg(null);
-
     const formData = new FormData();
     formData.append("file", file);
-
     try {
       let response;
       try {
@@ -114,7 +117,6 @@ export default function ProfileBrandingView() {
           headers: { "Content-Type": "multipart/form-data" }
         });
       }
-
       const uploadedUrl = response.data?.url;
       if (uploadedUrl) {
         setStudioLogoUrl(uploadedUrl);
@@ -122,8 +124,7 @@ export default function ProfileBrandingView() {
         setBrandingSuccessMsg("Logo uploaded and saved to permanent storage!");
       }
     } catch (err) {
-      const detail = err?.response?.data?.detail || err?.message || "Failed to upload logo image.";
-      setLogoUploadError(detail);
+      setLogoUploadError(err?.response?.data?.detail || err?.message || "Failed to upload logo image.");
     } finally {
       setIsUploadingLogo(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -146,7 +147,6 @@ export default function ProfileBrandingView() {
     setIsSavingBranding(true);
     setBrandingSuccessMsg(null);
     setBrandingErrorMsg(null);
-
     try {
       await api.put("/api/auth/profile", {
         studio_logo_url: studioLogoUrl.trim() || null,
@@ -161,20 +161,66 @@ export default function ProfileBrandingView() {
     }
   };
 
+  // --- Telegram Deep-Linking ---
+  const handleCheckConnection = async () => {
+    setIsCheckingConnection(true);
+    setTelegramStatusMsg(null);
+    setTelegramErrorMsg(null);
+    try {
+      if (refreshProfile) {
+        const updatedUser = await refreshProfile();
+        if (updatedUser?.telegram_chat_id) {
+          setTelegramStatusMsg("Connected! Your Telegram account is actively linked to PhotoGuard.");
+        } else {
+          setTelegramStatusMsg("Waiting for connection... Click the link above, tap 'Start' in Telegram, then check again.");
+        }
+      }
+    } catch (err) {
+      setTelegramErrorMsg("Failed to check connection. Please try again.");
+    } finally {
+      setIsCheckingConnection(false);
+    }
+  };
+
+  const handleDisconnectTelegram = async () => {
+    if (!window.confirm("Disconnect Telegram alerts? You will no longer receive real-time push alerts on client submissions.")) {
+      return;
+    }
+    setIsDisconnectingTelegram(true);
+    setTelegramStatusMsg(null);
+    setTelegramErrorMsg(null);
+    try {
+      await api.put("/api/auth/profile", { telegram_chat_id: null });
+      if (refreshProfile) await refreshProfile();
+      setTelegramStatusMsg("Telegram account disconnected.");
+    } catch (err) {
+      setTelegramErrorMsg("Failed to disconnect Telegram. Please try again.");
+    } finally {
+      setIsDisconnectingTelegram(false);
+    }
+  };
+
+  // --- Social Links Save ---
   const handleSaveSocial = async (e) => {
     e.preventDefault();
     setIsSavingSocial(true);
     setSocialSuccessMsg(null);
     setSocialErrorMsg(null);
-
+    const payload = {
+      contact_phone: contactPhone.trim() || null,
+      telegram_url: telegramUrl.trim() || null,
+      instagram_url: instagramUrl.trim() || null,
+      tiktok_url: tiktokUrl.trim() || null,
+      youtube_url: youtubeUrl.trim() || null,
+      phone_number: contactPhone.trim() || null,
+      telegram_username: telegramUrl.trim() || null,
+      instagram: instagramUrl.trim() || null,
+      tiktok: tiktokUrl.trim() || null,
+      youtube: youtubeUrl.trim() || null,
+    };
     try {
-      await api.put("/api/v1/photographers/me/social-links", {
-        contact_phone: contactPhone.trim(),
-        telegram_url: telegramUrl.trim(),
-        instagram_url: instagramUrl.trim(),
-        tiktok_url: tiktokUrl.trim(),
-        youtube_url: youtubeUrl.trim(),
-      });
+      await api.put("/api/v1/photographers/me/social-links", payload);
+      await api.put("/api/auth/profile", payload);
       if (refreshProfile) await refreshProfile();
       setSocialSuccessMsg("Client contact and social channels updated!");
     } catch (err) {
@@ -186,7 +232,7 @@ export default function ProfileBrandingView() {
 
   return (
     <div id="profile-branding-view" className="space-y-6 max-w-4xl">
-      {/* Title Section */}
+      {/* Title */}
       <div className="pb-2">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold tracking-tight text-white">
@@ -201,7 +247,7 @@ export default function ProfileBrandingView() {
         </p>
       </div>
 
-      {/* Section 1: Studio Identity & Custom Logo */}
+      {/* Section 1: Custom Studio Logo */}
       <div className="p-6 rounded-2xl bg-[#151a23] border border-slate-800 space-y-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -211,7 +257,6 @@ export default function ProfileBrandingView() {
           <span className="text-[11px] text-slate-400">PNG, SVG or JPEG up to 5MB</span>
         </div>
 
-        {/* Logo Preview & Upload Box */}
         <div className="flex flex-col sm:flex-row items-center gap-5">
           <div className="w-24 h-24 rounded-2xl bg-slate-900 border border-slate-700/80 flex items-center justify-center p-2 overflow-hidden shrink-0 shadow-inner">
             {studioLogoUrl ? (
@@ -245,7 +290,11 @@ export default function ProfileBrandingView() {
               className="hidden"
             />
             <div className="flex flex-col items-center gap-2">
-              <UploadCloud className="w-6 h-6 text-slate-400" />
+              {isUploadingLogo ? (
+                <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
+              ) : (
+                <UploadCloud className="w-6 h-6 text-slate-400" />
+              )}
               <p className="text-xs text-slate-300">
                 Drag and drop your studio logo, or{" "}
                 <button
@@ -281,14 +330,13 @@ export default function ProfileBrandingView() {
         )}
       </div>
 
-      {/* Section 2: Studio Brand Accent Color */}
+      {/* Section 2: Brand Accent Color */}
       <div className="p-6 rounded-2xl bg-[#151a23] border border-slate-800 space-y-5">
         <div className="flex items-center gap-2.5">
-          <Palette className="w-4 h-4 text-orange-400" />
+          <Cpu className="w-4 h-4 text-orange-400" />
           <h2 className="text-sm font-semibold text-white">Brand Accent Color</h2>
         </div>
 
-        {/* Color Presets */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
           {BRAND_COLOR_PRESETS.map((preset) => (
             <button
@@ -312,7 +360,6 @@ export default function ProfileBrandingView() {
           ))}
         </div>
 
-        {/* Custom Hex Input */}
         <div className="flex items-center gap-3 max-w-xs">
           <input
             type="color"
@@ -354,7 +401,124 @@ export default function ProfileBrandingView() {
         </button>
       </div>
 
-      {/* Section 3: Client Contact & Social Channels */}
+      {/* Section 3: Telegram Instant Alerts */}
+      <div className="p-6 rounded-2xl bg-[#151a23] border border-sky-500/20 space-y-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Send className="w-4 h-4 text-sky-400" />
+            <h2 className="text-sm font-semibold text-white">Telegram Instant Submission Alerts</h2>
+          </div>
+          {user?.telegram_chat_id ? (
+            <span className="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Connected & Active
+            </span>
+          ) : (
+            <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 font-medium">
+              Not Connected
+            </span>
+          )}
+        </div>
+
+        <p className="text-xs text-slate-400 leading-relaxed">
+          Never miss a client selection. Connect once via Telegram deep-linking to receive real-time push alerts the moment a client finalizes their album.
+        </p>
+
+        {user?.telegram_chat_id ? (
+          <div className="p-4 rounded-xl bg-slate-900 border border-emerald-500/20 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Linked to Telegram Chat ID</span>
+              </div>
+              <span className="font-mono text-[11px] text-slate-300 px-2 py-0.5 bg-slate-800 rounded-md border border-slate-700">
+                {user.telegram_chat_id}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Real-time alerts are operational. PhotoGuard will notify your Telegram automatically on every client submission.
+            </p>
+            <button
+              type="button"
+              onClick={handleDisconnectTelegram}
+              disabled={isDisconnectingTelegram}
+              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-red-950/60 hover:text-red-300 hover:border-red-500/40 border border-slate-700 text-xs font-medium text-slate-300 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              {isDisconnectingTelegram ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Unlink className="w-3.5 h-3.5" />
+              )}
+              <span>Disconnect Telegram</span>
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="p-3 rounded-xl bg-sky-950/20 border border-sky-500/20 space-y-1.5">
+              <p className="text-xs font-semibold text-sky-300">1-Click Deep Link</p>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Click below to open Telegram, then tap <b>Start</b>. PhotoGuard will automatically detect and link your account in seconds.
+              </p>
+            </div>
+
+            <a
+              href={telegramDeepLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition-all shadow-md flex items-center justify-center gap-2 group"
+            >
+              <Send className="w-3.5 h-3.5 fill-current" />
+              <span>Connect Telegram (@{botUsername})</span>
+              <ExternalLink className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </a>
+
+            <button
+              type="button"
+              onClick={handleCheckConnection}
+              disabled={isCheckingConnection}
+              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white font-semibold text-xs border border-slate-700 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {isCheckingConnection ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-400" />
+                  <span>Checking Connection Status...</span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Check Connection</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {telegramStatusMsg && (
+          <div
+            className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+              user?.telegram_chat_id
+                ? "bg-emerald-950/80 border border-emerald-500/40 text-emerald-300"
+                : "bg-sky-950/80 border border-sky-500/40 text-sky-300"
+            }`}
+          >
+            {user?.telegram_chat_id ? (
+              <Check className="w-3.5 h-3.5 shrink-0" />
+            ) : (
+              <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+            )}
+            <span>{telegramStatusMsg}</span>
+          </div>
+        )}
+
+        {telegramErrorMsg && (
+          <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            <span>{telegramErrorMsg}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Section 4: Client Contact & Social Channels */}
       <div className="p-6 rounded-2xl bg-[#151a23] border border-slate-800 space-y-5">
         <div className="flex items-center gap-2.5">
           <Phone className="w-4 h-4 text-orange-400" />
@@ -422,6 +586,19 @@ export default function ProfileBrandingView() {
                 value={tiktokUrl}
                 onChange={(e) => setTiktokUrl(e.target.value)}
                 placeholder="@studio_photography"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-orange-500/60"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                YouTube Channel
+              </label>
+              <input
+                type="text"
+                value={youtubeUrl}
+                onChange={(e) => setYoutubeUrl(e.target.value)}
+                placeholder="https://youtube.com/@yourstudio"
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-orange-500/60"
               />
             </div>

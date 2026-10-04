@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
 import {
@@ -9,38 +9,32 @@ import {
   KeyRound,
   User,
   LogOut,
-  HardDrive,
-  ExternalLink,
-  Sparkles,
-  LifeBuoy,
+  FolderOpen,
+  PlusCircle,
   Users,
   Info,
   AlertTriangle,
   Megaphone,
-  ChevronDown,
-  Cloud,
-  Shield,
+  LayoutGrid
 } from "lucide-react";
-import ProfileSettingsModal from "../components/ProfileSettingsModal";
-import ChangePasswordModal from "../components/ChangePasswordModal";
-import TeamManagementModal from "../components/TeamManagementModal";
 
-export default function DashboardLayout({
-  children,
-  activeTab = "albums",
-  onTabChange = () => {},
-  onChangePasswordClick = () => {}
-}) {
-  const { user, logout, refreshProfile, isAdmin } = useAuth();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
-  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+export default function DashboardLayout({ children }) {
+  const { user, logout, isAdmin } = useAuth();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeBroadcast, setActiveBroadcast] = useState(null);
   const [isBannerDismissed, setIsBannerDismissed] = useState(false);
-  const menuRef = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
 
-  // Fetch active broadcast announcement on mount
+  const currentTab = searchParams.get("tab") || "albums";
+  
+  // Close mobile menu on route change
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location, searchParams]);
+
+  // Fetch broadcast
   useEffect(() => {
     let isMounted = true;
     const fetchActiveBroadcast = async () => {
@@ -52,14 +46,10 @@ export default function DashboardLayout({
             setActiveBroadcast(response.data);
           }
         }
-      } catch (err) {
-        // Non-critical background feature; suppress error
-      }
+      } catch (err) {}
     };
     fetchActiveBroadcast();
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, []);
 
   const handleDismissBanner = () => {
@@ -68,19 +58,6 @@ export default function DashboardLayout({
     }
     setIsBannerDismissed(true);
   };
-
-  // Close menu when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setIsMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
 
   const formatBytes = (bytes) => {
     if (!bytes || bytes === 0) return "0 GB";
@@ -91,292 +68,193 @@ export default function DashboardLayout({
   const storageUsed = Number(user?.storage_used) || 0;
   const storageQuota = Number(user?.storage_quota_limit) > 0 ? Number(user.storage_quota_limit) : 5368709120;
   const storagePercentage = Math.min(100, Math.max(0, Math.round((storageUsed / storageQuota) * 100)));
-  const userPlan = String(user?.subscription_plan || "").toLowerCase();
   const isAssistant = user?.role === "assistant" || Boolean(user?.parent_id);
-  const isStudio = !isAssistant && (userPlan === "studio" || Boolean(isAdmin));
+
+  const handleNavClick = (tabId) => {
+    navigate(`/dashboard?tab=${tabId}`);
+  };
+
+  // Determine if a tab is active
+  const isActive = (tabId) => {
+    if (location.pathname.startsWith('/dashboard/albums/') && tabId === 'albums') return true;
+    return location.pathname === '/dashboard' && currentTab === tabId;
+  };
+
+  const navItems = [
+    { id: "albums", label: "Albums", icon: FolderOpen },
+    { id: "clients", label: "Clients", icon: Users },
+    { id: "new-album", label: "New Album", icon: PlusCircle },
+  ];
+
+  if (!isAssistant) {
+    navItems.push({ id: "profile", label: "Studio Profile", icon: User });
+    navItems.push({ id: "assistants", label: "Assistants", icon: ShieldCheck });
+  }
+  
+  navItems.push({ id: "password", label: "Password", icon: KeyRound });
 
   return (
-    <div id="dashboard-layout" className="min-h-screen bg-[#0d0f12] text-slate-100 flex flex-col selection:bg-amber-500/20 selection:text-amber-200">
-      {/* Global Broadcast Top Banner */}
-      {activeBroadcast && !isBannerDismissed && (
-        <aside
-          id="global-broadcast-banner"
-          aria-label="Platform Announcement"
-          className={`relative z-50 w-full border-b px-4 py-2.5 sm:px-6 transition-all animate-in slide-in-from-top-2 duration-300 ${
-            activeBroadcast.type === "warning"
-              ? "bg-amber-500/15 border-amber-500/30 text-amber-200"
-              : activeBroadcast.type === "promo"
-              ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-200"
-              : "bg-sky-500/15 border-sky-500/30 text-sky-200"
-          }`}
-        >
-          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2.5 overflow-hidden">
-              <span
-                className={`p-1 rounded-md flex-shrink-0 ${
-                  activeBroadcast.type === "warning"
-                    ? "bg-amber-500/20 text-amber-300"
-                    : activeBroadcast.type === "promo"
-                    ? "bg-emerald-500/20 text-emerald-300"
-                    : "bg-sky-500/20 text-sky-300"
+    <div className="min-h-screen bg-[#F6F7FB] text-slate-900 flex font-sans selection:bg-indigo-100 selection:text-indigo-900">
+      
+      {/* Sidebar (Desktop) */}
+      <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200 h-screen sticky top-0 z-30">
+        <div className="p-6 flex items-center gap-3">
+          {user?.studio_logo_url && !isAssistant ? (
+            <img src={user.studio_logo_url} alt="Logo" className="h-8 max-w-[140px] object-contain" />
+          ) : (
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+              <LayoutGrid className="w-4 h-4 text-indigo-600" />
+            </div>
+          )}
+          <span className="font-bold text-lg text-slate-900 tracking-tight">PhotoGuard</span>
+        </div>
+
+        <nav className="flex-1 px-4 py-4 flex flex-col gap-1 overflow-y-auto">
+          {navItems.map((item) => {
+            const active = isActive(item.id);
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleNavClick(item.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  active 
+                    ? "bg-indigo-50 text-indigo-700" 
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                 }`}
               >
-                {activeBroadcast.type === "warning" ? (
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                ) : activeBroadcast.type === "promo" ? (
-                  <Megaphone className="w-3.5 h-3.5" />
-                ) : (
-                  <Info className="w-3.5 h-3.5" />
-                )}
-              </span>
-              <p className="truncate">
-                <strong className="font-semibold text-white mr-1.5">
-                  {activeBroadcast.title}:
-                </strong>
-                <span className="opacity-95">{activeBroadcast.message}</span>
-              </p>
-            </div>
+                <Icon className={`w-4 h-4 ${active ? "text-indigo-600" : "text-slate-400"}`} />
+                {item.label}
+              </button>
+            );
+          })}
 
-            <button
-              type="button"
-              onClick={handleDismissBanner}
-              title="Dismiss announcement"
-              className="p-1 rounded-md hover:bg-black/20 text-slate-300 hover:text-white transition-colors flex-shrink-0"
-              aria-label="Dismiss banner"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </aside>
-      )}
-
-      {/* Pristine Minimalist Topbar */}
-      <header className="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-[#0d0f12]/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          {/* Logo / Brand */}
-          <div className="flex items-center gap-2.5">
-            {user?.studio_logo_url && isStudio ? (
-              <img
-                src={user.studio_logo_url}
-                alt="Studio Logo"
-                className="h-8 max-w-[120px] object-contain rounded-lg"
-                onError={(e) => {
-                  e.currentTarget.style.display = "none";
-                }}
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center shadow-sm">
-                <Shield className="w-4 h-4 text-amber-400 stroke-[2.2]" />
-              </div>
-            )}
-            <span className="font-bold text-base sm:text-lg tracking-tight text-white">
-              PhotoGuard
-            </span>
-          </div>
-
-          {/* Quick Storage Indicator (Desktop Only, Subdued & Clean) */}
-          <div className="hidden md:flex items-center gap-4 text-xs text-slate-400">
-            <div className="flex items-center gap-1.5">
-              <Cloud className="w-4 h-4 text-slate-400 shrink-0" />
-              <span>{formatBytes(storageUsed)} / {formatBytes(storageQuota)}</span>
-            </div>
-            <div className="w-24 h-1.5 rounded-full bg-slate-800 overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-300"
-                style={{
-                  width: `${storagePercentage}%`,
-                  backgroundColor: user?.brand_color || "#F59E0B"
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Admin Back-to-Command Switcher */}
-          {isAdmin && (
+          {isAdmin && !isAssistant && (
             <Link
               to="/admin"
-              id="back-to-admin-btn"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 hover:text-white text-xs font-semibold transition-all shadow-sm"
+              className="mt-4 w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors"
             >
-              <span>← Back to Admin Center</span>
+              <ShieldCheck className="w-4 h-4" />
+              Admin Center
             </Link>
           )}
+        </nav>
 
-          {/* Modern SaaS Profile Menu Trigger */}
-          <div className="relative" ref={menuRef}>
-            <button
-              id="profile-menu-btn"
-              type="button"
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="flex items-center gap-1.5 p-1 rounded-full border border-slate-800 bg-slate-900/80 hover:bg-slate-800 hover:border-slate-700 transition-all text-slate-200 hover:text-white cursor-pointer group shadow-sm"
-              aria-label="Open User Profile Menu"
-            >
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 font-bold text-xs flex items-center justify-center shadow-sm shrink-0">
-                {(user?.full_name || "F").charAt(0).toUpperCase()}
-              </div>
-              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-transform duration-200 mr-1.5 ${isMenuOpen ? "rotate-180" : ""}`} />
-            </button>
-
-            {/* Pristine Dropdown */}
-            {isMenuOpen && (
-              <div
-                id="hamburger-dropdown-menu"
-                className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-800 bg-slate-900/95 backdrop-blur-xl shadow-2xl shadow-black/80 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
-              >
-                {/* User Header Section */}
-                <div className="px-4 py-3 border-b border-slate-800/80">
-                  <p className="text-xs font-medium text-white truncate">{user?.full_name}</p>
-                  <p className="text-[11px] text-slate-400 truncate">{user?.email}</p>
-                  <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
-                    <span className="capitalize">{isAssistant ? "Studio Assistant" : (user?.role || "Photographer")}</span>
-                    {!isAssistant && (
-                      <span className="text-amber-400/90 font-medium capitalize">{user?.subscription_plan} Tier</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Storage Quick View on Mobile */}
-                <div className="md:hidden px-4 py-2.5 border-b border-slate-800/80 text-xs">
-                  <div className="flex justify-between text-slate-400 mb-1">
-                    <span>Cloud Storage</span>
-                    <span>{formatBytes(storageUsed)} / {formatBytes(storageQuota)}</span>
-                  </div>
-                  <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                    <div
-                      className="h-full bg-amber-400 rounded-full"
-                      style={{ width: `${storagePercentage}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Menu Items */}
-                <div className="py-1">
-                  {isAdmin && !isAssistant && (
-                    <Link
-                      to="/admin"
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-indigo-300 hover:text-white hover:bg-indigo-950/40 transition-colors text-left"
-                    >
-                      <ShieldCheck className="w-4 h-4 text-indigo-400" />
-                      <span>Switch to Admin Center</span>
-                    </Link>
-                  )}
-
-                  {!isAssistant && (
-                    <button
-                      id="menu-profile-btn"
-                      type="button"
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        setIsProfileModalOpen(true);
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
-                    >
-                      <User className="w-4 h-4 text-slate-400" />
-                      <span>Studio Profile & Branding</span>
-                    </button>
-                  )}
-
-                  {!isAssistant && (
-                    <button
-                      id="menu-team-btn"
-                      type="button"
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        setIsTeamModalOpen(true);
-                      }}
-                      className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Users className="w-4 h-4 text-amber-400" />
-                        <span>Studio Assistants & Staff</span>
-                      </div>
-                      {isStudio && (
-                        <span className="text-[10px] font-semibold text-amber-400/90 bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/20">
-                          Studio
-                        </span>
-                      )}
-                    </button>
-                  )}
-
-                  <button
-                    id="menu-change-password-btn"
-                    type="button"
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      setIsChangePasswordModalOpen(true);
-                      if (typeof onChangePasswordClick === "function") {
-                        onChangePasswordClick();
-                      }
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors text-left"
-                  >
-                    <KeyRound className="w-4 h-4 text-slate-400" />
-                    <span>Change Password</span>
-                  </button>
-
-                  <a
-                    id="menu-support-link"
-                    href="https://t.me/fassilandualem"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => setIsMenuOpen(false)}
-                    className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-slate-300 hover:text-sky-300 hover:bg-slate-800/60 transition-colors text-left group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <LifeBuoy className="w-4 h-4 text-sky-400" />
-                      <span>Support / Help</span>
-                    </div>
-                    <ExternalLink className="w-3.5 h-3.5 text-slate-500 group-hover:text-sky-400 transition-colors" />
-                  </a>
-                </div>
-
-                {/* Logout Action */}
-                <div className="pt-1 border-t border-slate-800/80">
-                  <button
-                    id="menu-logout-btn"
-                    type="button"
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      logout();
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors text-left font-medium"
-                  >
-                    <LogOut className="w-4 h-4 text-red-400" />
-                    <span>Sign Out</span>
-                  </button>
-                </div>
-              </div>
-            )}
+        <div className="p-4 border-t border-slate-100">
+          <div className="mb-4 px-3">
+            <div className="flex justify-between text-xs text-slate-500 mb-1.5">
+              <span>Storage</span>
+              <span>{storagePercentage}%</span>
+            </div>
+            <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
+              <div 
+                className="h-full bg-indigo-500 rounded-full" 
+                style={{ width: `${storagePercentage}%` }}
+              />
+            </div>
+            <div className="text-[10px] text-slate-400 mt-1">
+              {formatBytes(storageUsed)} of {formatBytes(storageQuota)}
+            </div>
           </div>
+          <button
+            onClick={logout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign Out
+          </button>
         </div>
-      </header>
+      </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {children}
-      </main>
+      {/* Main Column */}
+      <div className="flex-1 flex flex-col min-w-0">
+        
+        {/* Mobile Header */}
+        <header className="md:hidden bg-white border-b border-slate-200 sticky top-0 z-30">
+          <div className="px-4 h-16 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                <LayoutGrid className="w-3.5 h-3.5 text-indigo-600" />
+              </div>
+              <span className="font-bold text-base text-slate-900">PhotoGuard</span>
+            </div>
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-2 text-slate-500 hover:text-slate-900"
+            >
+              {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          </div>
+        </header>
 
-      {/* Studio Profile & Telegram Settings Modal */}
-      {!isAssistant && (
-        <ProfileSettingsModal
-          isOpen={isProfileModalOpen}
-          onClose={() => setIsProfileModalOpen(false)}
-        />
-      )}
+        {/* Mobile Menu Overlay */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)}>
+            <div 
+              className="absolute right-0 top-0 bottom-0 w-64 bg-white shadow-2xl flex flex-col"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-slate-100 flex justify-end">
+                <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-slate-500 hover:text-slate-900">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <nav className="flex-1 overflow-y-auto p-4 flex flex-col gap-1">
+                {navItems.map((item) => {
+                  const active = isActive(item.id);
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleNavClick(item.id)}
+                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors ${
+                        active 
+                          ? "bg-indigo-50 text-indigo-700" 
+                          : "text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      <Icon className={`w-4 h-4 ${active ? "text-indigo-600" : "text-slate-400"}`} />
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </nav>
+              <div className="p-4 border-t border-slate-100">
+                <button
+                  onClick={logout}
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
-      {/* Change Password Modal */}
-      <ChangePasswordModal
-        isOpen={isChangePasswordModalOpen}
-        onClose={() => setIsChangePasswordModalOpen(false)}
-      />
+        {/* Global Broadcast */}
+        {activeBroadcast && !isBannerDismissed && (
+          <div className={`px-4 py-2 text-xs flex items-center justify-between gap-3 ${
+            activeBroadcast.type === 'warning' ? 'bg-amber-50 text-amber-800 border-b border-amber-200' :
+            activeBroadcast.type === 'promo' ? 'bg-emerald-50 text-emerald-800 border-b border-emerald-200' :
+            'bg-blue-50 text-blue-800 border-b border-blue-200'
+          }`}>
+            <div className="flex items-center gap-2 truncate">
+              {activeBroadcast.type === 'warning' ? <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> : <Info className="w-3.5 h-3.5 shrink-0" />}
+              <span className="truncate"><strong>{activeBroadcast.title}:</strong> {activeBroadcast.message}</span>
+            </div>
+            <button onClick={handleDismissBanner} className="shrink-0 p-1 hover:bg-black/5 rounded">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
-      {/* Studio Assistants Team Management Modal */}
-      {!isAssistant && (
-        <TeamManagementModal
-          isOpen={isTeamModalOpen}
-          onClose={() => setIsTeamModalOpen(false)}
-        />
-      )}
+        {/* Page Content */}
+        <main className="flex-1 p-4 sm:p-8 max-w-6xl w-full mx-auto">
+          {children}
+        </main>
+        
+      </div>
     </div>
   );
 }

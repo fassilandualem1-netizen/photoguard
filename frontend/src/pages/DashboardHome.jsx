@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import AdminDashboard from "./AdminDashboard";
 import CreateAlbumModal from "../components/CreateAlbumModal";
@@ -24,18 +24,33 @@ import {
   List,
 } from "lucide-react";
 
+// Placeholder for views we haven't migrated yet
+const PlaceholderView = ({ title }) => (
+  <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+    <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center mb-4">
+      <Clock className="w-6 h-6 text-slate-400" />
+    </div>
+    <h2 className="text-lg font-semibold text-slate-900 mb-2">{title} View</h2>
+    <p className="text-sm">This view is currently being migrated to inline.</p>
+  </div>
+);
+
 export default function DashboardHome() {
   const { isAdmin } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const currentTab = searchParams.get("tab") || "albums";
+
   const [albums, setAlbums] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [deletingId, setDeletingId] = useState(null);
   const [viewMode, setViewMode] = useState("list"); // 'list' | 'grid'
+  
+  // We keep modal state for now if needed, but we try to move away
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  // If user is Admin and NOT explicitly toggled to view galleries, render AdminDashboard
   const [viewAsPhotographer, setViewAsPhotographer] = useState(false);
 
   const fetchAlbums = async () => {
@@ -45,18 +60,7 @@ export default function DashboardHome() {
       const response = await api.get("/api/v1/albums");
       setAlbums(response.data || []);
     } catch (err) {
-      const rawDetail = err.response?.data?.detail;
-      let msg = "Failed to load client albums. Please try again.";
-      if (typeof rawDetail === "string" && rawDetail.trim()) {
-        msg = rawDetail;
-      } else if (Array.isArray(rawDetail) && rawDetail.length > 0) {
-        msg = rawDetail.map((d) => (typeof d === "object" ? d.msg || JSON.stringify(d) : String(d))).join("; ");
-      } else if (err.response?.status) {
-        msg = `Server Error (${err.response.status}): ${err.response.statusText || "Failed to fetch albums"}`;
-      } else if (err.message) {
-        msg = err.message;
-      }
-      setError(msg);
+      setError(err.response?.data?.detail || "Failed to load client albums. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -64,21 +68,15 @@ export default function DashboardHome() {
 
   useEffect(() => {
     if (!isAdmin || viewAsPhotographer) {
-      fetchAlbums();
+      if (currentTab === "albums") {
+        fetchAlbums();
+      }
     }
-  }, [isAdmin, viewAsPhotographer]);
+  }, [isAdmin, viewAsPhotographer, currentTab]);
 
   if (isAdmin && !viewAsPhotographer) {
     return <AdminDashboard onSwitchToGalleries={() => setViewAsPhotographer(true)} />;
   }
-
-  const handleCreateAlbum = () => {
-    setIsCreateModalOpen(true);
-  };
-
-  const handleAlbumCreated = () => {
-    fetchAlbums();
-  };
 
   const calculateDaysLeft = (expiresAt) => {
     if (!expiresAt) return null;
@@ -94,29 +92,20 @@ export default function DashboardHome() {
       e.preventDefault();
       e.stopPropagation();
     }
-
-    if (
-      !window.confirm(
-        `Are you sure you want to delete "${albumTitle || "Untitled Album"}"? All photos in this gallery will be permanently deleted.`
-      )
-    ) {
+    if (!window.confirm(`Are you sure you want to delete "${albumTitle || "Untitled Album"}"?`)) {
       return;
     }
-
     try {
       setDeletingId(albumId);
       await api.delete(`/api/v1/albums/${albumId}`);
-      // Remove instantly from UI
       setAlbums((prev) => (Array.isArray(prev) ? prev.filter((a) => a?.id !== albumId) : []));
     } catch (err) {
-      const msg = err.response?.data?.detail || "Failed to delete album. Please try again.";
-      alert(msg);
+      alert("Failed to delete album.");
     } finally {
       setDeletingId(null);
     }
   };
 
-  // Filter albums by search query (title, client name, or PIN)
   const filteredAlbums = useMemo(() => {
     const safeAlbums = Array.isArray(albums) ? albums : [];
     if (!searchQuery.trim()) return safeAlbums;
@@ -130,194 +119,131 @@ export default function DashboardHome() {
     });
   }, [albums, searchQuery]);
 
+  // Route inline views based on currentTab
+  if (currentTab === "profile") return <PlaceholderView title="Profile Settings" />;
+  if (currentTab === "assistants") return <PlaceholderView title="Team Management" />;
+  if (currentTab === "password") return <PlaceholderView title="Change Password" />;
+  if (currentTab === "new-album") return <PlaceholderView title="Create New Album" />;
+  if (currentTab === "clients") return <PlaceholderView title="Clients Directory" />;
+
+  // Albums View (Default)
   if (loading) {
     return (
-      <div
-        id="photographer-dashboard-loading"
-        className="flex flex-col items-center justify-center py-20 text-slate-400"
-      >
-        <div className="w-8 h-8 rounded-full border-2 border-amber-400 border-t-transparent animate-spin mb-3" />
-        <p className="text-xs font-mono uppercase tracking-wider text-slate-500">
-          Loading client galleries...
-        </p>
+      <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+        <div className="w-8 h-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin mb-3" />
+        <p className="text-xs font-medium tracking-wide">Loading albums...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div
-        id="photographer-dashboard-error"
-        className="p-6 rounded-2xl border border-red-500/20 bg-red-950/40 text-red-300 flex flex-col items-start gap-4"
-      >
+      <div className="p-4 rounded-xl border border-red-200 bg-red-50 text-red-700 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+          <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
           <span className="text-sm font-medium">{error}</span>
         </div>
         <button
-          type="button"
           onClick={fetchAlbums}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-900/60 hover:bg-red-800/60 border border-red-700/60 text-xs font-semibold text-white transition-colors"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-red-200 text-sm font-medium hover:bg-red-50 transition-colors"
         >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Retry</span>
+          <RefreshCw className="w-4 h-4" />
+          Retry
         </button>
       </div>
     );
   }
 
   return (
-    <div id="photographer-dashboard-container" className="space-y-6">
-      {/* Top Action Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-800/80">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-              Client Proof Galleries
-            </h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-xs font-mono">
-              {albums.length} Total
-            </span>
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => setViewAsPhotographer(false)}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 hover:text-white text-xs font-semibold transition-all"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Return to Admin Center</span>
-              </button>
-            )}
-          </div>
-          <p className="text-xs text-slate-400 mt-1">
-            Manage high-resolution collections, track live client selections, and generate secure 6-digit access PINs.
-          </p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Client Albums</h1>
+          <p className="text-sm text-slate-500 mt-1">Manage and deliver high-resolution galleries.</p>
         </div>
-
         <div className="flex items-center gap-3">
           <button
-            type="button"
             onClick={fetchAlbums}
-            className="p-2.5 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-800/80 text-slate-400 hover:text-white transition-colors"
-            aria-label="Refresh albums"
-            title="Refresh galleries"
+            className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-500 transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
-
           <button
-            id="create-new-album-btn"
-            type="button"
-            onClick={handleCreateAlbum}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-xs transition-all shadow-lg shadow-amber-500/10"
+            onClick={() => navigate('/dashboard?tab=new-album')}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm transition-colors shadow-sm shadow-indigo-600/20"
           >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>Create New Album</span>
+            <Plus className="w-4 h-4" />
+            New Album
           </button>
         </div>
       </div>
 
-      {/* Fast Filter Bar (Scalable for 20+ albums) */}
+      {/* Filter Bar */}
       {albums.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search by title, client name, or 6-digit PIN..."
+              placeholder="Search albums..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-amber-400/60 transition-colors"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
             />
           </div>
-
-          <div className="flex items-center gap-3 self-end sm:self-auto">
-            {searchQuery && (
-              <span className="text-xs text-slate-400 font-mono hidden md:inline">
-                Found {filteredAlbums.length} of {albums.length}
-              </span>
-            )}
-
-            {/* View Mode Toggle: List vs Grid */}
-            <div className="flex items-center p-1 rounded-xl bg-slate-900/80 border border-slate-800">
-              <button
-                type="button"
-                id="view-mode-list-btn"
-                onClick={() => setViewMode("list")}
-                title="List View"
-                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                  viewMode === "list"
-                    ? "bg-amber-400 text-slate-950 font-semibold shadow-sm"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                <List className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                id="view-mode-grid-btn"
-                onClick={() => setViewMode("grid")}
-                title="Grid View"
-                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                  viewMode === "grid"
-                    ? "bg-amber-400 text-slate-950 font-semibold shadow-sm"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-            </div>
+          <div className="flex items-center p-1 rounded-xl bg-slate-100 border border-slate-200">
+            <button
+              onClick={() => setViewMode("list")}
+              className={`p-1.5 rounded-lg transition-all ${viewMode === "list" ? "bg-white text-indigo-600 shadow-sm font-medium" : "text-slate-500 hover:text-slate-900"}`}
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`p-1.5 rounded-lg transition-all ${viewMode === "grid" ? "bg-white text-indigo-600 shadow-sm font-medium" : "text-slate-500 hover:text-slate-900"}`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}
 
-      {/* Empty State */}
+      {/* Albums List */}
       {albums.length === 0 ? (
-        <div
-          id="empty-albums-state"
-          className="rounded-3xl border border-slate-800/80 bg-slate-900/30 backdrop-blur-md p-12 sm:p-16 flex flex-col items-center justify-center text-center max-w-xl mx-auto my-12"
-        >
-          <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-amber-500/20 to-amber-400/5 border border-amber-500/30 flex items-center justify-center mb-6 shadow-xl shadow-amber-500/5">
-            <FolderPlus className="w-8 h-8 text-amber-400 stroke-[1.8]" />
+        <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center max-w-xl mx-auto mt-12 shadow-sm">
+          <div className="w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mx-auto mb-6">
+            <FolderPlus className="w-8 h-8 text-indigo-600" />
           </div>
-          <h3 className="text-lg font-bold text-white mb-2">No Galleries Created Yet</h3>
-          <p className="text-xs sm:text-sm text-slate-400 max-w-md mb-8 leading-relaxed">
-            Upload your first photo collection to generate a 6-digit access PIN for your clients, complete with live collaborative selection.
-          </p>
+          <h3 className="text-lg font-bold text-slate-900 mb-2">No Albums Yet</h3>
+          <p className="text-sm text-slate-500 mb-8">Create your first album to start delivering photos.</p>
           <button
-            id="empty-create-album-btn"
-            type="button"
-            onClick={handleCreateAlbum}
-            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-xs transition-all shadow-lg shadow-amber-500/15"
+            onClick={() => navigate('/dashboard?tab=new-album')}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm transition-colors mx-auto"
           >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>Create Your First Album</span>
+            <Plus className="w-4 h-4" />
+            Create Album
           </button>
         </div>
       ) : filteredAlbums.length === 0 ? (
-        <div className="p-12 text-center rounded-2xl border border-slate-800 bg-slate-900/30 text-slate-400 text-xs">
-          No albums match "{searchQuery}". Try a different keyword or PIN.
+        <div className="p-12 text-center rounded-2xl border border-slate-200 bg-white text-slate-500 text-sm">
+          No albums match "{searchQuery}".
         </div>
       ) : viewMode === "grid" ? (
-        /* Responsive CSS Grid View */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="grid-album-list">
-          {filteredAlbums.map((album) => {
-            if (!album || !album.id) return null;
-            return (
-              <AlbumCard
-                key={album.id}
-                album={album}
-                onDelete={handleDeleteAlbum}
-                isDeleting={deletingId === album.id}
-              />
-            );
-          })}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Note: AlbumCard needs its own Light Theme update later */}
+          {filteredAlbums.map((album) => (
+            <AlbumCard
+              key={album.id}
+              album={album}
+              onDelete={handleDeleteAlbum}
+              isDeleting={deletingId === album.id}
+            />
+          ))}
         </div>
       ) : (
-        /* Sleek, Dense Horizontal List View (Scalable for 20+ Albums) */
-        <div className="space-y-2.5" id="compact-album-list">
+        <div className="flex flex-col gap-3">
           {filteredAlbums.map((album) => {
-            if (!album || !album.id) return null;
             const daysLeft = calculateDaysLeft(album.expires_at);
             const isSubmitted = album.status === "submitted" || album.is_locked;
             const isExpired = album.is_expired || daysLeft === 0;
@@ -329,120 +255,67 @@ export default function DashboardHome() {
             return (
               <div
                 key={album.id}
-                id={`album-row-${album.id}`}
                 onClick={() => navigate(`/dashboard/albums/${album.id}`)}
-                className="group px-4 py-3.5 rounded-xl border border-slate-800/90 bg-slate-900/40 hover:bg-slate-900/90 hover:border-slate-700 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer shadow-sm relative overflow-hidden"
+                className="group p-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-200 hover:shadow-md transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer"
               >
-                {/* Left Section: PIN + Title + Client Name */}
-                <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                  {/* 6-Digit PIN Badge */}
+                <div className="flex items-center gap-4">
                   {pinCode ? (
-                    <div
-                      title="Client 6-Digit Access PIN"
-                      className="px-2.5 py-1 rounded-lg bg-amber-950/60 border border-amber-500/40 text-amber-400 font-mono text-xs font-bold tracking-wider shrink-0 flex items-center gap-1 shadow-sm"
-                    >
-                      <span className="text-[10px] text-amber-500/70 font-sans font-medium uppercase">PIN</span>
-                      <span>{pinCode}</span>
+                    <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 font-mono text-sm font-bold tracking-widest shrink-0">
+                      {pinCode}
                     </div>
                   ) : (
-                    <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
-                      <ImageIcon className="w-4 h-4 text-slate-500" />
+                    <div className="w-10 h-10 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0">
+                      <ImageIcon className="w-5 h-5 text-slate-400" />
                     </div>
                   )}
-
-                  {/* Title & Client Name */}
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-sm font-semibold text-white group-hover:text-amber-400 transition-colors truncate">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">
                         {album.title}
                       </h3>
-
-                      {/* Creator Tracking Badge */}
-                      {String(album.creator_role || "photographer").toLowerCase().trim() === "assistant" ? (
-                        <span
-                          title={`Created by Studio Assistant: ${album.creator_name || "Assistant"}`}
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 bg-cyan-950/80 text-cyan-300 border border-cyan-400/50 shadow-sm shadow-cyan-500/20"
-                        >
-                          <User className="w-3 h-3" /> Ast: {album.creator_name || "Assistant"}
-                        </span>
-                      ) : (
-                        <span
-                          title="Created by Studio Root Owner"
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 bg-slate-800/90 text-amber-300/90 border border-amber-500/20"
-                        >
-                          <Crown className="w-3 h-3" /> Owner
-                        </span>
-                      )}
-
                       {selectedCount > 0 && (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.2 rounded-full shrink-0">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full shrink-0">
                           <CheckCircle2 className="w-3 h-3" />
                           {selectedCount} Selected
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5 truncate">
-                      <span className="flex items-center gap-1 truncate text-slate-400">
-                        <User className="w-3 h-3 text-slate-500 shrink-0" />
-                        <span className="truncate">{album.client_name || "Unassigned Client"}</span>
-                      </span>
+                    <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5" />
+                      {album.client_name || "Unassigned"}
                     </div>
                   </div>
                 </div>
 
-                {/* Right Section: Status Badge, Photo Count, Expiry, Delete Button */}
-                <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/60">
-                  {/* Photo Count */}
-                  <span className="text-xs font-mono text-slate-300 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700/60 shrink-0">
+                <div className="flex items-center gap-4 shrink-0">
+                  <span className="text-xs font-medium text-slate-500 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200">
                     {photoCount} {photoCount === 1 ? "Photo" : "Photos"}
                   </span>
+                  
+                  {isSubmitted ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Submitted
+                    </span>
+                  ) : isExpired ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 px-2 py-1 rounded-md">
+                      <Clock className="w-3.5 h-3.5" /> Expired
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">
+                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                      Selecting
+                    </span>
+                  )}
 
-                  {/* Status Badge */}
-                  <div className="shrink-0">
-                    {isSubmitted ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-[10px] font-medium text-emerald-300">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                        <span>Submitted</span>
-                      </span>
-                    ) : isExpired ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-950/80 border border-red-500/40 text-[10px] font-medium text-red-300">
-                        <Clock className="w-3 h-3 text-red-400" />
-                        <span>Expired</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/80 border border-amber-500/40 text-[10px] font-medium text-amber-300">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                        <span>Selecting</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Lifespan Indicator */}
-                  <span className="hidden md:flex items-center gap-1 text-[11px] text-slate-400 font-mono shrink-0">
-                    <Clock className="w-3 h-3 text-slate-500" />
-                    {daysLeft !== null ? (isExpired ? "0d" : `${daysLeft}d left`) : "Permanent"}
-                  </span>
-
-                  {/* Action Buttons: Delete & Open */}
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-1">
                     <button
-                      type="button"
-                      id={`delete-album-btn-${album.id}`}
                       onClick={(e) => handleDeleteAlbum(e, album.id, album.title)}
                       disabled={isDeleting}
-                      title="Delete Album"
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-950/50 border border-transparent hover:border-red-800/60 transition-colors"
+                      className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                     >
-                      {isDeleting ? (
-                        <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <Trash2 className="w-4 h-4" />
-                      )}
+                      {isDeleting ? <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" /> : <Trash2 className="w-4 h-4" />}
                     </button>
-
-                    <span className="text-slate-600 group-hover:text-amber-400 transition-colors p-1">
-                      <ChevronRight className="w-4 h-4" />
-                    </span>
+                    <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-indigo-600 transition-colors" />
                   </div>
                 </div>
               </div>
@@ -450,13 +323,6 @@ export default function DashboardHome() {
           })}
         </div>
       )}
-
-      {/* Create Album Modal */}
-      <CreateAlbumModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onAlbumCreated={handleAlbumCreated}
-      />
     </div>
   );
 }

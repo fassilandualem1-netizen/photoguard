@@ -83,7 +83,6 @@ export default function DashboardLayout({ children }) {
   const navItems = [
     { id: "albums", label: "Albums", icon: FolderOpen },
     { id: "clients", label: "Clients", icon: Users },
-    { id: "new-album", label: "New Album", icon: PlusCircle },
   ];
 
   if (!isAssistant) {

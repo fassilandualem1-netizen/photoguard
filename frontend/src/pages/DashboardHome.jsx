@@ -26,6 +26,7 @@ import ProfileBrandingView from "../components/ProfileBrandingView";
 import StudioAssistantsView from "../components/StudioAssistantsView";
 import ChangePasswordView from "../components/ChangePasswordView";
 import CreateAlbumView from "../components/CreateAlbumView";
+import ClientsDirectoryView from "../components/ClientsDirectoryView";
 
 // Placeholder for views we haven't migrated yet
 const PlaceholderView = ({ title }) => (
@@ -43,11 +44,12 @@ export default function DashboardHome() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const currentTab = searchParams.get("tab") || "albums";
+  const initialSearch = searchParams.get("search") || "";
 
   const [albums, setAlbums] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [deletingId, setDeletingId] = useState(null);
   const [viewMode, setViewMode] = useState("list"); // 'list' | 'grid'
   
@@ -73,6 +75,13 @@ export default function DashboardHome() {
       }
     }
   }, [isAdmin, viewAsPhotographer, currentTab]);
+
+  useEffect(() => {
+    const urlSearch = searchParams.get("search");
+    if (urlSearch !== null) {
+      setSearchQuery(urlSearch);
+    }
+  }, [searchParams]);
 
   if (isAdmin && !viewAsPhotographer) {
     return <AdminDashboard onSwitchToGalleries={() => setViewAsPhotographer(true)} />;
@@ -124,7 +133,7 @@ export default function DashboardHome() {
   if (currentTab === "assistants") return <StudioAssistantsView />;
   if (currentTab === "password") return <ChangePasswordView />;
   if (currentTab === "new-album") return <CreateAlbumView />;
-  if (currentTab === "clients") return <PlaceholderView title="Clients Directory" />;
+  if (currentTab === "clients") return <ClientsDirectoryView />;
 
   // Albums View (Default)
   if (loading) {

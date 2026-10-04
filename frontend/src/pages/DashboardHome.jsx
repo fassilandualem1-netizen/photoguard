@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import AdminDashboard from "./AdminDashboard";
-import CreateAlbumModal from "../components/CreateAlbumModal";
 import AlbumCard from "../components/AlbumCard";
 import api from "../api/axios";
 import {

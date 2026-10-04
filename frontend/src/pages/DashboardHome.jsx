@@ -51,9 +51,6 @@ export default function DashboardHome() {
   const [deletingId, setDeletingId] = useState(null);
   const [viewMode, setViewMode] = useState("list"); // 'list' | 'grid'
   
-  // We keep modal state for now if needed, but we try to move away
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-
   const [viewAsPhotographer, setViewAsPhotographer] = useState(false);
 
   const fetchAlbums = async () => {

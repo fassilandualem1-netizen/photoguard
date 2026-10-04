@@ -1,21 +1,30 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import api from "../api/axios";
-import { FolderPlus, AlertCircle, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import api from "../api/axios";
+import {
+  FolderPlus,
+  AlertCircle,
+  Loader2,
+  Check,
+  Download,
+  Clock,
+  KeyRound
+} from "lucide-react";
 
 export default function CreateAlbumView() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  
+
   const [title, setTitle] = useState("");
   const [clientName, setClientName] = useState("");
   const [allowDownload, setAllowDownload] = useState(false);
   const [expiresInDays, setExpiresInDays] = useState(15);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
 
-  const isStudio = user?.subscription_plan === "studio";
+  const isStudio = user?.subscription_plan === "studio" || user?.role === "admin";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -42,11 +51,17 @@ export default function CreateAlbumView() {
     try {
       setLoading(true);
       setError(null);
-      await api.post("/api/v1/albums", payload);
+      setSuccess(null);
 
-      // On successful creation, navigate back to the main albums tab
-      navigate("/dashboard?tab=albums");
-      
+      const response = await api.post("/api/v1/albums", payload);
+
+      setSuccess(`Album "${response.data?.title || title}" created successfully.`);
+
+      // Brief pause, then navigate to albums tab to show the new entry
+      setTimeout(() => {
+        navigate("/dashboard?tab=albums");
+      }, 1200);
+
     } catch (err) {
       const msg =
         err.response?.data?.detail ||
@@ -57,22 +72,29 @@ export default function CreateAlbumView() {
     }
   };
 
-  const handleCancel = () => {
-    navigate("/dashboard?tab=albums");
+  const handleClear = () => {
+    setTitle("");
+    setClientName("");
+    setAllowDownload(false);
+    setExpiresInDays(15);
+    setError(null);
+    setSuccess(null);
   };
 
   return (
-    <div className="max-w-2xl w-full mx-auto space-y-6">
+    <div className="max-w-xl w-full mx-auto space-y-6">
       {/* Header */}
       <div className="pb-5 border-b border-slate-200">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 shrink-0">
+          <div className="p-2 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600">
             <FolderPlus className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Create New Gallery</h2>
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+              Create New Album
+            </h2>
             <p className="text-sm text-slate-500 mt-1">
-              Set up a new client gallery, define lifespans, and generate secure access PINs.
+              Set up a new client delivery gallery.
             </p>
           </div>
         </div>
@@ -81,120 +103,151 @@ export default function CreateAlbumView() {
       <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
         {/* Error Alert */}
         {error && (
-          <div className="mb-5 p-4 rounded-xl border border-red-200 bg-red-50 text-red-700 flex items-start gap-2.5 text-sm shadow-sm">
+          <div className="mb-5 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-start gap-2.5 shadow-sm">
             <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
 
-        {/* Form */}
+        {/* Success Alert */}
+        {success && (
+          <div className="mb-5 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm flex items-center gap-2.5 shadow-sm">
+            <Check className="w-5 h-5 text-emerald-500 shrink-0" />
+            <span className="font-medium">{success} Redirecting to albums...</span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-slate-700">
+          {/* Album Title */}
+          <div>
+            <label className="text-sm font-semibold text-slate-700 block mb-1.5">
               Album Title <span className="text-red-500">*</span>
             </label>
             <input
+              id="album-title-input"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Sara & John Wedding"
+              placeholder="e.g. Sarah & James Wedding"
               required
               disabled={loading}
               className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm disabled:opacity-50"
             />
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-slate-700">
+          {/* Client Name */}
+          <div>
+            <label className="text-sm font-semibold text-slate-700 block mb-1.5">
               Client Name <span className="text-red-500">*</span>
             </label>
             <input
+              id="client-name-input"
               type="text"
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
-              placeholder="e.g. Sara Jenkins"
+              placeholder="e.g. Sarah Johnson"
               required
               disabled={loading}
               className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm disabled:opacity-50"
             />
           </div>
 
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-semibold text-slate-700">
+          {/* Access PIN — Read Only */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                <KeyRound className="w-4 h-4 text-slate-400" />
                 Access PIN
               </label>
-              <span className="text-[11px] font-mono font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+              <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
                 Auto-Generated
               </span>
             </div>
             <input
               type="text"
-              value="Will be generated upon creation"
+              value="Will be generated on creation"
               readOnly
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-500 cursor-not-allowed select-none focus:outline-none shadow-inner"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-400 cursor-not-allowed select-none focus:outline-none shadow-sm"
             />
           </div>
 
-          {/* Conditional Expiration for Studio Tier */}
+          {/* Gallery Lifespan — Studio Tier Only */}
           {isStudio && (
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-semibold text-slate-700">
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-slate-400" />
                   Gallery Lifespan (Days)
                 </label>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">
+                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
                   Studio Tier
                 </span>
               </div>
               <input
+                id="expires-in-days-input"
                 type="number"
                 min="1"
                 max="15"
                 value={expiresInDays}
                 onChange={(e) => setExpiresInDays(e.target.value)}
                 disabled={loading}
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm disabled:opacity-50"
+                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm disabled:opacity-50"
               />
-              <p className="text-xs text-slate-500 mt-1">
-                Number of days before client selection expires (max 15 days).
+              <p className="text-xs text-slate-500 mt-2">
+                Days before client selection expires. Between 1 and 15 days (default: 15).
               </p>
             </div>
           )}
 
-          {/* Download Permission Checkbox */}
-          <div className="pt-2">
-            <label className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors shadow-sm">
+          {/* Download Permission */}
+          <div>
+            <label className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors group">
               <input
+                id="allow-download-checkbox"
                 type="checkbox"
                 checked={allowDownload}
                 onChange={(e) => setAllowDownload(e.target.checked)}
                 disabled={loading}
-                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 transition-colors cursor-pointer"
+                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-0 transition-colors"
               />
-              <span className="text-sm font-semibold text-slate-800 select-none">
-                Allow Photo Download
-              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <Download className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition-colors" />
+                  <span className="text-sm font-semibold text-slate-700 select-none">
+                    Allow Photo Download
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5 select-none">
+                  Clients can download their selected photos directly.
+                </p>
+              </div>
             </label>
           </div>
 
-          {/* Actions */}
-          <div className="pt-5 flex items-center justify-end gap-3 border-t border-slate-100 mt-6">
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
             <button
               type="button"
-              onClick={handleCancel}
+              onClick={handleClear}
               disabled={loading}
-              className="px-6 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-700 transition-colors disabled:opacity-50"
+              className="px-5 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-sm font-semibold text-slate-700 transition-colors disabled:opacity-50"
             >
-              Cancel
+              Clear
             </button>
             <button
+              id="submit-create-album-btn"
               type="submit"
               disabled={loading}
-              className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              <span>{loading ? "Creating Gallery..." : "Create Gallery"}</span>
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Creating Album...</span>
+                </>
+              ) : (
+                <span>Create Album</span>
+              )}
             </button>
           </div>
         </form>

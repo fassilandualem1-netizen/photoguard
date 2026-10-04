@@ -24,6 +24,7 @@ import {
   List,
 } from "lucide-react";
 import ProfileBrandingView from "../components/ProfileBrandingView";
+import StudioAssistantsView from "../components/StudioAssistantsView";
 
 // Placeholder for views we haven't migrated yet
 const PlaceholderView = ({ title }) => (
@@ -122,7 +123,7 @@ export default function DashboardHome() {
 
   // Route inline views based on currentTab
   if (currentTab === "profile") return <ProfileBrandingView />;
-  if (currentTab === "assistants") return <PlaceholderView title="Team Management" />;
+  if (currentTab === "assistants") return <StudioAssistantsView />;
   if (currentTab === "password") return <PlaceholderView title="Change Password" />;
   if (currentTab === "new-album") return <PlaceholderView title="Create New Album" />;
   if (currentTab === "clients") return <PlaceholderView title="Clients Directory" />;

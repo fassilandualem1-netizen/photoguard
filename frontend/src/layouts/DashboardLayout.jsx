@@ -6,7 +6,6 @@ import {
   Menu,
   X,
   ShieldCheck,
-  KeyRound,
   User,
   LogOut,
   HardDrive,
@@ -128,7 +127,7 @@ export default function DashboardLayout({
           MAIN
         </div>
 
-        {/* Dashboard */}
+        {/* 1. Dashboard */}
         <button
           type="button"
           onClick={() => handleNavClick("dashboard")}
@@ -142,7 +141,7 @@ export default function DashboardLayout({
           <span>Dashboard</span>
         </button>
 
-        {/* Albums */}
+        {/* 2. Albums */}
         <button
           type="button"
           onClick={() => handleNavClick("albums")}
@@ -158,7 +157,7 @@ export default function DashboardLayout({
           </div>
         </button>
 
-        {/* Clients */}
+        {/* 3. Clients */}
         <button
           type="button"
           onClick={() => handleNavClick("clients")}
@@ -172,39 +171,30 @@ export default function DashboardLayout({
           <span>Clients</span>
         </button>
 
-        {/* Storage with integrated inline progress bar */}
-        <div className="pt-1">
-          <button
-            type="button"
-            onClick={() => handleNavClick("storage")}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-medium cursor-pointer transition-all duration-200 ${
-              currentTab === "storage"
-                ? "bg-white/5 text-white font-medium border-l-2 border-orange-500 rounded-r-xl rounded-l-none pl-3 shadow-sm"
-                : "text-slate-400 hover:text-white hover:bg-white/[0.04] rounded-xl border-l-2 border-transparent"
-            }`}
-          >
-            <HardDrive className={`w-4 h-4 transition-colors duration-200 ${currentTab === "storage" ? "text-orange-400" : "text-slate-400"} shrink-0`} />
-            <span>Storage</span>
-          </button>
-
-          {/* Integrated Inline Storage Progress Bar */}
-          <div className="mt-2 mx-1 p-3 rounded-xl bg-slate-900/40 border border-slate-800/60">
-            <div className="flex items-center justify-between text-[11px] mb-1.5">
-              <span className="text-slate-400 font-medium">Used Space</span>
-              <span className="font-mono text-orange-400/90 font-medium">
-                {formatBytes(storageUsed)} / {formatBytes(storageQuota)}
-              </span>
-            </div>
-            <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-400 transition-all duration-300"
-                style={{ width: `${storagePercentage}%` }}
-              />
-            </div>
-            <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1.5">
-              <span>{storagePercentage}% full</span>
-              <span>{Math.max(0, 100 - storagePercentage)}% free</span>
-            </div>
+        {/* Quiet Storage Quota Telemetry Subpanel (Informative Widget) */}
+        <div
+          onClick={() => handleNavClick("settings")}
+          className="mt-3 mx-1 p-3 rounded-xl bg-slate-900/40 border border-slate-800/60 hover:border-slate-700/80 transition-colors cursor-pointer group"
+          title="Click to manage storage quota in Account Settings"
+        >
+          <div className="flex items-center justify-between text-[11px] mb-1.5">
+            <span className="text-slate-400 font-medium flex items-center gap-1.5">
+              <HardDrive className="w-3.5 h-3.5 text-slate-400 group-hover:text-orange-400 transition-colors" />
+              <span>Storage Used</span>
+            </span>
+            <span className="font-mono text-orange-400/90 font-medium text-[10px]">
+              {formatBytes(storageUsed)} / {formatBytes(storageQuota)}
+            </span>
+          </div>
+          <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-400 transition-all duration-300"
+              style={{ width: `${storagePercentage}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1.5">
+            <span>{storagePercentage}% full</span>
+            <span className="text-orange-400/80 group-hover:text-orange-300 text-[10px] font-medium">Manage →</span>
           </div>
         </div>
 
@@ -213,7 +203,7 @@ export default function DashboardLayout({
           STUDIO & BRANDING
         </div>
 
-        {/* Profile & Branding */}
+        {/* 4. Profile & Branding */}
         <button
           type="button"
           onClick={() => handleNavClick("profile")}
@@ -227,7 +217,7 @@ export default function DashboardLayout({
           <span>Profile & Branding</span>
         </button>
 
-        {/* Studio Assistants */}
+        {/* 5. Studio Assistants */}
         <button
           type="button"
           onClick={() => handleNavClick("assistants")}
@@ -253,7 +243,7 @@ export default function DashboardLayout({
           ACCOUNT & RESOURCES
         </div>
 
-        {/* Account Settings */}
+        {/* 6. Account Settings */}
         <button
           type="button"
           onClick={() => handleNavClick("settings")}
@@ -265,20 +255,6 @@ export default function DashboardLayout({
         >
           <Sliders className={`w-4 h-4 transition-colors duration-200 ${currentTab === "settings" ? "text-orange-400" : "text-slate-400"}`} />
           <span>Account Settings</span>
-        </button>
-
-        {/* Change Password */}
-        <button
-          type="button"
-          onClick={() => handleNavClick("password")}
-          className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-medium cursor-pointer transition-all duration-200 ${
-            currentTab === "password"
-              ? "bg-white/5 text-white font-medium border-l-2 border-orange-500 rounded-r-xl rounded-l-none pl-3 shadow-sm"
-              : "text-slate-400 hover:text-white hover:bg-white/[0.04] rounded-xl border-l-2 border-transparent"
-          }`}
-        >
-          <KeyRound className={`w-4 h-4 transition-colors duration-200 ${currentTab === "password" ? "text-orange-400" : "text-slate-400"}`} />
-          <span>Change Password</span>
         </button>
 
         {/* Support / Help */}

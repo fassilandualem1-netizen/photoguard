@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, createContext, useContext } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useState, useEffect, createContext, useContext } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
 import {
@@ -16,15 +16,11 @@ import {
   AlertTriangle,
   Megaphone,
   Info,
-  ChevronDown,
   Search,
   LayoutDashboard,
   FolderLock,
   Sliders,
 } from "lucide-react";
-import ProfileSettingsModal from "../components/ProfileSettingsModal";
-import ChangePasswordModal from "../components/ChangePasswordModal";
-import TeamManagementModal from "../components/TeamManagementModal";
 
 export const DashboardSearchContext = createContext({
   searchQuery: "",
@@ -39,24 +35,17 @@ export default function DashboardLayout({
   children,
   activeTab = "dashboard",
   onTabChange = () => {},
-  onChangePasswordClick = () => {}
 }) {
   const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
-  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [activeBroadcast, setActiveBroadcast] = useState(null);
   const [isBannerDismissed, setIsBannerDismissed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [currentTab, setCurrentTab] = useState(activeTab || "dashboard");
 
-  useEffect(() => {
-    if (activeTab) {
-      setCurrentTab(activeTab);
-    }
-  }, [activeTab]);
+  const tabParam = searchParams.get("tab");
+  const currentTab = tabParam || activeTab || "dashboard";
 
   // Fetch active broadcast announcement on mount
   useEffect(() => {
@@ -88,11 +77,12 @@ export default function DashboardLayout({
   };
 
   const handleNavClick = (tab) => {
-    setCurrentTab(tab);
-    onTabChange(tab);
     setIsMobileSidebarOpen(false);
-    if (tab === "dashboard" || tab === "albums") {
+    onTabChange(tab);
+    if (tab === "dashboard") {
       navigate("/dashboard");
+    } else {
+      navigate(`/dashboard?tab=${tab}`);
     }
   };
 
@@ -197,7 +187,7 @@ export default function DashboardLayout({
             <span>Storage</span>
           </button>
 
-          {/* Integrated Inline Storage Progress Bar (Quiet Sub-panel) */}
+          {/* Integrated Inline Storage Progress Bar */}
           <div className="mt-2 mx-1 p-3 rounded-xl bg-slate-900/40 border border-slate-800/60">
             <div className="flex items-center justify-between text-[11px] mb-1.5">
               <span className="text-slate-400 font-medium">Used Space</span>
@@ -226,27 +216,29 @@ export default function DashboardLayout({
         {/* Profile & Branding */}
         <button
           type="button"
-          onClick={() => {
-            setIsMobileSidebarOpen(false);
-            setIsProfileModalOpen(true);
-          }}
-          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.04] transition-all duration-200 cursor-pointer border-l-2 border-transparent"
+          onClick={() => handleNavClick("profile")}
+          className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-medium cursor-pointer transition-all duration-200 ${
+            currentTab === "profile"
+              ? "bg-white/5 text-white font-medium border-l-2 border-orange-500 rounded-r-xl rounded-l-none pl-3 shadow-sm"
+              : "text-slate-400 hover:text-white hover:bg-white/[0.04] rounded-xl border-l-2 border-transparent"
+          }`}
         >
-          <User className="w-4 h-4 text-slate-400" />
+          <User className={`w-4 h-4 transition-colors duration-200 ${currentTab === "profile" ? "text-orange-400" : "text-slate-400"}`} />
           <span>Profile & Branding</span>
         </button>
 
         {/* Studio Assistants */}
         <button
           type="button"
-          onClick={() => {
-            setIsMobileSidebarOpen(false);
-            setIsTeamModalOpen(true);
-          }}
-          className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.04] transition-all duration-200 cursor-pointer border-l-2 border-transparent"
+          onClick={() => handleNavClick("assistants")}
+          className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-medium cursor-pointer transition-all duration-200 ${
+            currentTab === "assistants"
+              ? "bg-white/5 text-white font-medium border-l-2 border-orange-500 rounded-r-xl rounded-l-none pl-3 shadow-sm"
+              : "text-slate-400 hover:text-white hover:bg-white/[0.04] rounded-xl border-l-2 border-transparent"
+          }`}
         >
           <div className="flex items-center gap-3">
-            <Users className="w-4 h-4 text-slate-400" />
+            <Users className={`w-4 h-4 transition-colors duration-200 ${currentTab === "assistants" ? "text-orange-400" : "text-slate-400"}`} />
             <span>Studio Assistants</span>
           </div>
           {isStudio && (
@@ -264,29 +256,28 @@ export default function DashboardLayout({
         {/* Account Settings */}
         <button
           type="button"
-          onClick={() => {
-            setIsMobileSidebarOpen(false);
-            setIsProfileModalOpen(true);
-          }}
-          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.04] transition-all duration-200 cursor-pointer border-l-2 border-transparent"
+          onClick={() => handleNavClick("settings")}
+          className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-medium cursor-pointer transition-all duration-200 ${
+            currentTab === "settings"
+              ? "bg-white/5 text-white font-medium border-l-2 border-orange-500 rounded-r-xl rounded-l-none pl-3 shadow-sm"
+              : "text-slate-400 hover:text-white hover:bg-white/[0.04] rounded-xl border-l-2 border-transparent"
+          }`}
         >
-          <Sliders className="w-4 h-4 text-slate-400" />
+          <Sliders className={`w-4 h-4 transition-colors duration-200 ${currentTab === "settings" ? "text-orange-400" : "text-slate-400"}`} />
           <span>Account Settings</span>
         </button>
 
         {/* Change Password */}
         <button
           type="button"
-          onClick={() => {
-            setIsMobileSidebarOpen(false);
-            setIsChangePasswordModalOpen(true);
-            if (typeof onChangePasswordClick === "function") {
-              onChangePasswordClick();
-            }
-          }}
-          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.04] transition-all duration-200 cursor-pointer border-l-2 border-transparent"
+          onClick={() => handleNavClick("password")}
+          className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-medium cursor-pointer transition-all duration-200 ${
+            currentTab === "password"
+              ? "bg-white/5 text-white font-medium border-l-2 border-orange-500 rounded-r-xl rounded-l-none pl-3 shadow-sm"
+              : "text-slate-400 hover:text-white hover:bg-white/[0.04] rounded-xl border-l-2 border-transparent"
+          }`}
         >
-          <KeyRound className="w-4 h-4 text-slate-400" />
+          <KeyRound className={`w-4 h-4 transition-colors duration-200 ${currentTab === "password" ? "text-orange-400" : "text-slate-400"}`} />
           <span>Change Password</span>
         </button>
 
@@ -397,9 +388,9 @@ export default function DashboardLayout({
 
               {/* Highly Detailed Profile Widget: Avatar ('F'), Name, Email, Studio Tier badge */}
               <div
-                onClick={() => setIsProfileModalOpen(true)}
+                onClick={() => handleNavClick("settings")}
                 className="flex items-center gap-3 pl-2 sm:pl-3 py-1 cursor-pointer hover:opacity-90 transition-opacity"
-                title="Open Studio Profile Settings"
+                title="Open Account Settings"
               >
                 {/* Avatar (Circle with 'F') */}
                 <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-amber-500 to-orange-500 text-slate-950 font-bold text-sm flex items-center justify-center shadow-md shadow-orange-500/20 shrink-0">
@@ -484,20 +475,6 @@ export default function DashboardLayout({
             </div>
           </main>
         </div>
-
-        {/* Modals */}
-        <ProfileSettingsModal
-          isOpen={isProfileModalOpen}
-          onClose={() => setIsProfileModalOpen(false)}
-        />
-        <ChangePasswordModal
-          isOpen={isChangePasswordModalOpen}
-          onClose={() => setIsChangePasswordModalOpen(false)}
-        />
-        <TeamManagementModal
-          isOpen={isTeamModalOpen}
-          onClose={() => setIsTeamModalOpen(false)}
-        />
       </div>
     </DashboardSearchContext.Provider>
   );

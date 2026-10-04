@@ -1,10 +1,15 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useDashboardSearch } from "../layouts/DashboardLayout";
 import AdminDashboard from "./AdminDashboard";
 import CreateAlbumModal from "../components/CreateAlbumModal";
 import AlbumCard from "../components/AlbumCard";
+import AlbumsManagerView from "../components/AlbumsManagerView";
+import ClientsDirectoryView from "../components/ClientsDirectoryView";
+import ProfileBrandingView from "../components/ProfileBrandingView";
+import StudioAssistantsView from "../components/StudioAssistantsView";
+import AccountSettingsView from "../components/AccountSettingsView";
 import api from "../api/axios";
 import {
   Plus,
@@ -27,7 +32,11 @@ import {
 export default function DashboardHome() {
   const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { searchQuery, setSearchQuery } = useDashboardSearch();
+
+  const currentTab = searchParams.get("tab") || "dashboard";
+
   const [albums, setAlbums] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -73,6 +82,58 @@ export default function DashboardHome() {
     return <AdminDashboard onSwitchToGalleries={() => setViewAsPhotographer(true)} />;
   }
 
+  // --- Inline Pages Rendering Based on Current Navigation Tab ---
+
+  // 1. Profile & Branding
+  if (currentTab === "profile") {
+    return <ProfileBrandingView />;
+  }
+
+  // 2. Studio Assistants
+  if (currentTab === "assistants") {
+    return <StudioAssistantsView />;
+  }
+
+  // 3. Account Settings & Storage
+  if (currentTab === "settings" || currentTab === "storage") {
+    return <AccountSettingsView defaultFocusPassword={false} />;
+  }
+
+  // 4. Change Password (inline)
+  if (currentTab === "password") {
+    return <AccountSettingsView defaultFocusPassword={true} />;
+  }
+
+  // 5. Albums Manager (Distinct View)
+  if (currentTab === "albums") {
+    return (
+      <AlbumsManagerView
+        albums={albums}
+        loading={loading}
+        onRefresh={fetchAlbums}
+        onDeleteAlbum={handleDeleteAlbum}
+        deletingId={deletingId}
+      />
+    );
+  }
+
+  // 6. Clients Directory (Distinct View)
+  if (currentTab === "clients") {
+    if (loading) {
+      return (
+        <div className="flex flex-col items-center justify-center py-24 text-slate-400">
+          <div className="w-8 h-8 rounded-full border-2 border-orange-500 border-t-transparent animate-spin mb-3" />
+          <p className="text-xs font-mono uppercase tracking-wider text-slate-400">
+            Loading client directory...
+          </p>
+        </div>
+      );
+    }
+    return <ClientsDirectoryView albums={albums} />;
+  }
+
+  // --- Definitive View for "Dashboard": Client Proof Galleries ---
+
   const handleCreateAlbum = () => {
     setIsCreateModalOpen(true);
   };
@@ -90,7 +151,7 @@ export default function DashboardHome() {
     return days > 0 ? days : 0;
   };
 
-  const handleDeleteAlbum = async (e, albumId, albumTitle) => {
+  async function handleDeleteAlbum(e, albumId, albumTitle) {
     if (e && typeof e.preventDefault === "function") {
       e.preventDefault();
       e.stopPropagation();
@@ -107,7 +168,6 @@ export default function DashboardHome() {
     try {
       setDeletingId(albumId);
       await api.delete(`/api/v1/albums/${albumId}`);
-      // Remove instantly from UI
       setAlbums((prev) => (Array.isArray(prev) ? prev.filter((a) => a?.id !== albumId) : []));
     } catch (err) {
       const msg = err.response?.data?.detail || "Failed to delete album. Please try again.";
@@ -115,7 +175,7 @@ export default function DashboardHome() {
     } finally {
       setDeletingId(null);
     }
-  };
+  }
 
   const handleCopyPin = (e, albumId, pinCode) => {
     e.stopPropagation();
@@ -178,14 +238,13 @@ export default function DashboardHome() {
 
   return (
     <div id="photographer-dashboard-container" className="space-y-6">
-      {/* 1 & 3. Title Section & Refined Primary Action */}
+      {/* 1. Title Section & Refined Primary Action */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight text-white">
               Client Proof Galleries
             </h1>
-            {/* Soft bg-slate-800 text-slate-300 rounded badge */}
             <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 text-xs font-semibold uppercase tracking-wider">
               {albums.length} TOTAL
             </span>
@@ -206,7 +265,7 @@ export default function DashboardHome() {
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
-          {/* Action Icon: Refresh button with visible gray and distinct hover */}
+          {/* Action Icon: Refresh button */}
           <button
             type="button"
             onClick={fetchAlbums}
@@ -217,7 +276,7 @@ export default function DashboardHome() {
             <RefreshCw className="w-4 h-4" />
           </button>
 
-          {/* 1. "+ Create New Album" Button: Fixed typo, refined orange gradient, better padding, subtle glow */}
+          {/* "+ Create New Album" Button */}
           <button
             id="create-new-album-btn"
             type="button"
@@ -325,7 +384,7 @@ export default function DashboardHome() {
           })}
         </div>
       ) : (
-        /* 5. Redesign Table to Cards: Stacked list of distinct, rounded cards with perfect vertical alignment & breathing space */
+        /* Stacked Cards List */
         <div className="space-y-3" id="compact-album-list">
           {filteredAlbums.map((album) => {
             if (!album || !album.id) return null;
@@ -346,7 +405,6 @@ export default function DashboardHome() {
               >
                 {/* Column 1 (Left): Avatar + Copy-to-Clipboard PIN + Title & Owner */}
                 <div className="flex items-center gap-4 min-w-0 flex-1">
-                  {/* Avatar image */}
                   <div className="w-10 h-10 rounded-xl bg-slate-800/80 border border-slate-700/60 flex items-center justify-center font-bold text-xs text-orange-400 shrink-0 overflow-hidden shadow-inner">
                     {album.cover_photo_url ? (
                       <img
@@ -364,7 +422,6 @@ export default function DashboardHome() {
                     )}
                   </div>
 
-                  {/* 6. PIN Display: Styled as a sleek "copy-to-clipboard" pill with subtle copy icon */}
                   {pinCode ? (
                     <div
                       onClick={(e) => handleCopyPin(e, album.id, pinCode)}
@@ -385,7 +442,6 @@ export default function DashboardHome() {
                     </div>
                   )}
 
-                  {/* Gallery Title & Owner Name */}
                   <div className="min-w-0">
                     <h3 className="text-sm font-semibold text-white group-hover:text-orange-400 transition-colors duration-200 truncate">
                       {album.title || "Untitled Album"}
@@ -396,14 +452,12 @@ export default function DashboardHome() {
                   </div>
                 </div>
 
-                {/* Column 2 (Middle): Photo count pill (bg-slate-800) + 3. Soft Status Badges */}
+                {/* Column 2 (Middle): Photo count pill + Soft Status Badges */}
                 <div className="flex items-center gap-3 shrink-0">
-                  {/* Photo count pill */}
                   <span className="bg-slate-800 text-slate-300 text-xs font-mono px-2.5 py-1 rounded-lg border border-slate-700/60 shrink-0">
                     {photoCount} {photoCount === 1 ? "Photo" : "Photos"}
                   </span>
 
-                  {/* 3. Soft Status Badges: low-opacity background for high contrast & readability */}
                   <div className="shrink-0">
                     {isSubmitted ? (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20 text-xs font-medium">
@@ -424,9 +478,8 @@ export default function DashboardHome() {
                   </div>
                 </div>
 
-                {/* Column 3 (Right): 4 & 5. Time remaining + Visible Trash icon + Right Arrow icon with hover */}
+                {/* Column 3 (Right): Time remaining + Trash icon + Right Arrow icon */}
                 <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-                  {/* Time remaining */}
                   <div className="flex items-center gap-1.5 text-xs text-gray-400 font-mono">
                     <Clock className="w-3.5 h-3.5 text-gray-400" />
                     <span>
@@ -434,7 +487,6 @@ export default function DashboardHome() {
                     </span>
                   </div>
 
-                  {/* 4. Action Icon: Subtle Trash icon with text-gray-400 and distinct hover effect */}
                   <button
                     type="button"
                     id={`delete-album-btn-${album.id}`}
@@ -450,7 +502,6 @@ export default function DashboardHome() {
                     )}
                   </button>
 
-                  {/* 4. Action Icon: Right Arrow with visible gray, hover:text-orange-400 and hover:bg-slate-800 */}
                   <div className="p-2 rounded-lg text-gray-400 group-hover:text-orange-400 group-hover:bg-slate-800/80 transition-all duration-200 flex items-center justify-center">
                     <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-200" />
                   </div>

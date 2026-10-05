@@ -334,7 +334,7 @@ export default function StudioAssistantsView() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {assistants.map((asst) => (
+                    {(Array.isArray(assistants) ? assistants : []).map((asst) => (
                       <div
                         key={asst.id}
                         className="flex items-center justify-between p-3.5 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-indigo-200 hover:shadow-md transition-all group"

@@ -410,7 +410,7 @@ export default function AlbumDetail() {
 
     const rawTargetPhotos = (isSubmitted || selectedItems.length > 0) ? selectedItems : mediaItems;
 
-    const preparedDownloads = rawTargetPhotos.map((item, idx) => {
+    const preparedDownloads = (Array.isArray(rawTargetPhotos) ? rawTargetPhotos : []).map((item, idx) => {
       const pad = String(idx + 1).padStart(2, "0");
       const rawName = item.filename || `Photo_${idx + 1}.jpg`;
       return {
@@ -984,7 +984,7 @@ export default function AlbumDetail() {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-3.5 sm:gap-4">
-            {displayPhotos.map((item) => {
+            {(Array.isArray(displayPhotos) ? displayPhotos : []).map((item) => {
               return (
                 <div
                   key={item.id}

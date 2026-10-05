@@ -240,7 +240,7 @@ export default function DashboardHome() {
       ) : viewMode === "grid" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Note: AlbumCard needs its own Light Theme update later */}
-          {filteredAlbums.map((album) => (
+          {(Array.isArray(filteredAlbums) ? filteredAlbums : []).map((album) => (
             <AlbumCard
               key={album.id}
               album={album}
@@ -251,7 +251,7 @@ export default function DashboardHome() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {filteredAlbums.map((album) => {
+          {(Array.isArray(filteredAlbums) ? filteredAlbums : []).map((album) => {
             const daysLeft = calculateDaysLeft(album.expires_at);
             const isSubmitted = album.status === "submitted" || album.is_locked;
             const isExpired = album.is_expired || daysLeft === 0;

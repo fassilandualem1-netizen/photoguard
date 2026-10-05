@@ -138,12 +138,22 @@ def save_direct_upload_url(
             detail="Album is locked. Client has finalized selection."
         )
 
-    original_size = payload.original_size or 0
     effective_owner_id = current_user.effective_owner_id
     owner = db.query(User).filter(User.id == effective_owner_id).first() or current_user
 
-    # Generate retina AVIF thumbnail delivery URL if Cloudinary URL
     high_res_url = payload.url
+
+    # PG-16: URL Trust - strictly verify the domain belongs to our configured providers
+    valid_domains = ["res.cloudinary.com", "s3.amazonaws.com", "r2.cloudflarestorage.com", "idrivee2-e2dest.com"]
+    is_valid_url = any(domain in high_res_url for domain in valid_domains)
+    if not is_valid_url:
+        raise HTTPException(status_code=400, detail="Invalid storage URL provider.")
+
+    original_size = payload.original_size or 0
+    # PG-15: Quota Integrity - strictly validate maximum spoofable size for direct uploads
+    MAX_DIRECT_UPLOAD_SIZE = 100 * 1024 * 1024 # 100MB
+    if original_size > MAX_DIRECT_UPLOAD_SIZE or original_size < 0:
+        raise HTTPException(status_code=400, detail="Invalid original_size reported.")
     thumbnail_url = payload.thumbnail_url or high_res_url
     if high_res_url and "/upload/" in high_res_url and not payload.thumbnail_url:
         thumbnail_url = high_res_url.replace(
@@ -224,26 +234,43 @@ def upload_album_photo(
         )
 
     # Read uploaded file content via streaming chunking to neutralize OOM vulnerability
+    MAX_UPLOAD_SIZE = 100 * 1024 * 1024  # 100 MB strict limit
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".tmp")
+    temp_file_path = temp_file.name
+    
+    # Schedule airtight cleanup for chunked file immediately after response cycle (or on error)
+    def safe_remove_temp():
+        if os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
+            except Exception as e:
+                logger.warning(f"Could not remove temp file {temp_file_path}: {e}")
+                
+    background_tasks.add_task(safe_remove_temp)
+    
     try:
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".tmp")
-        shutil.copyfileobj(file.file, temp_file)
-        temp_file.close()
-        temp_file_path = temp_file.name
-        
-        # Schedule airtight cleanup for chunked file immediately after response cycle
-        def safe_remove_temp():
-            if os.path.exists(temp_file_path):
-                try:
-                    os.remove(temp_file_path)
-                except Exception as e:
-                    logger.warning(f"Could not remove temp file {temp_file_path}: {e}")
-                    
-        background_tasks.add_task(safe_remove_temp)
+        total_size = 0
+        with open(temp_file_path, "wb") as output:
+            while True:
+                chunk = file.file.read(1024 * 1024)  # 1MB chunks
+                if not chunk:
+                    break
+                total_size += len(chunk)
+                if total_size > MAX_UPLOAD_SIZE:
+                    file.file.close()
+                    raise HTTPException(status_code=413, detail="File exceeds the 100 MB upload limit.")
+                output.write(chunk)
+    except HTTPException:
+        safe_remove_temp()
+        raise
     except Exception as exc:
+        safe_remove_temp()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to read uploaded image stream: {str(exc)}"
         )
+    finally:
+        file.file.close()
 
     original_size = os.path.getsize(temp_file_path)
     if original_size == 0:

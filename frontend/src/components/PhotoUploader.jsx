@@ -46,16 +46,16 @@ export default function PhotoUploader({
       className={`p-6 rounded-3xl border transition-all duration-200 ${
         isDragging
           ? "border-indigo-400 bg-indigo-50 scale-[1.005]"
-          : "border-dashed border-slate-300 bg-slate-50"
+          : "border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#111620] dark:bg-slate-800/50"
       } backdrop-blur-sm`}
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
             <UploadCloud className="w-4 h-4 text-indigo-600" />
             <span>Upload Photos</span>
           </h2>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             {isDragging ? "Release files to start upload" : "Drag and drop photos here, or browse files."}
           </p>
         </div>
@@ -101,7 +101,7 @@ export default function PhotoUploader({
       {/* High-Speed Upload Progress Bar */}
       {uploading && (
         <div className="mt-4 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-mono">
             <span className="flex items-center gap-2">
               <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
               <span>
@@ -133,8 +133,8 @@ export default function PhotoUploader({
 
       {/* Upload Summary Feedback */}
       {lastUploadSummary && (
-        <div className="mt-4 p-4 rounded-xl border border-slate-200 bg-white shadow-sm text-xs space-y-1.5">
-          <div className="flex items-center gap-2 font-semibold text-slate-900">
+        <div className="mt-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0b0e14] shadow-sm text-xs space-y-1.5">
+          <div className="flex items-center gap-2 font-semibold text-slate-900 dark:text-white">
             {lastUploadSummary.failed > 0 ? (
               <AlertCircle className="w-4 h-4 text-amber-500" />
             ) : (

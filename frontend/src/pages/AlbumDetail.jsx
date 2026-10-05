@@ -571,9 +571,9 @@ export default function AlbumDetail() {
 
   if (loading) {
     return (
-      <div id="album-detail-loading" className="flex flex-col items-center justify-center py-28 text-slate-500">
+      <div id="album-detail-loading" className="flex flex-col items-center justify-center py-28 text-slate-500 dark:text-slate-400">
         <div className="w-9 h-9 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin mb-4" />
-        <p className="text-xs font-mono uppercase tracking-wider text-slate-500">
+        <p className="text-xs font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Loading gallery proofs...
         </p>
       </div>
@@ -585,14 +585,14 @@ export default function AlbumDetail() {
       <div id="album-detail-error" className="p-8 rounded-2xl border border-red-200 bg-red-50 text-red-700 max-w-xl mx-auto my-12 flex flex-col items-start gap-4">
         <div className="flex items-center gap-3">
           <AlertCircle className="w-6 h-6 text-red-400 shrink-0" />
-          <h2 className="text-base font-bold text-slate-900">Gallery Access Issue</h2>
+          <h2 className="text-base font-bold text-slate-900 dark:text-white">Gallery Access Issue</h2>
         </div>
         <p className="text-xs text-red-200 leading-relaxed">
           {error || "Album not found or access denied."}
         </p>
         <Link
           to="/dashboard"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-700 text-slate-900 font-semibold text-xs transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-900 dark:text-white font-semibold text-xs transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Return to Dashboard</span>
@@ -617,7 +617,7 @@ export default function AlbumDetail() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <Link
           to="/dashboard"
-          className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-indigo-600 transition-colors group"
+          className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 dark:text-slate-400 hover:text-indigo-600 transition-colors group"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform text-indigo-600" />
           <span>Back to All Galleries</span>
@@ -633,12 +633,12 @@ export default function AlbumDetail() {
       </div>
 
       {/* Main Album Header Card (NO overflow-hidden to prevent clipping dropdowns) */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-md relative z-30">
+      <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 shadow-md relative z-30">
         
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
                 {album.title}
               </h1>
 
@@ -669,11 +669,11 @@ export default function AlbumDetail() {
             </div>
 
             {/* Gallery Meta Info */}
-            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
+            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
               
 
               <div className="flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                <Calendar className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                 <span>
                   {daysLeft !== null ? `${daysLeft} days remaining` : "Permanent storage"}
                 </span>
@@ -705,7 +705,7 @@ export default function AlbumDetail() {
               className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
                 album.allow_download
                   ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25 shadow-lg shadow-emerald-500/10"
-                  : "bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                  : "bg-slate-50 dark:bg-[#111620] dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 dark:text-slate-400 hover:text-slate-900 dark:text-white hover:bg-slate-100 dark:bg-slate-800"
               }`}
               title={
                 isStudio
@@ -720,7 +720,7 @@ export default function AlbumDetail() {
               ) : album.allow_download ? (
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               ) : (
-                <Lock className="w-4 h-4 text-slate-500" />
+                <Lock className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               )}
               <span>
                 {album.allow_download ? "Allow to Download (On)" : "Allow to Download"}
@@ -739,7 +739,7 @@ export default function AlbumDetail() {
                   type="button"
                   id="share-pin-dropdown-btn"
                   onClick={() => setIsShareOpen(!isShareOpen)}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-slate-900 font-semibold text-xs transition-all shadow-sm cursor-pointer"
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-slate-900 dark:text-white font-semibold text-xs transition-all shadow-sm cursor-pointer"
                   title="Share PIN directly with client via WhatsApp, Telegram, or message"
                 >
                   <Share2 className="w-4 h-4 text-slate-950 stroke-[2.5]" />
@@ -748,13 +748,13 @@ export default function AlbumDetail() {
                 </button>
 
                 {isShareOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-80 sm:w-88 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-2xl shadow-black/95 z-50 space-y-2.5 animate-in fade-in zoom-in-95 duration-150">
-                    <div className="px-2 py-1 border-b border-slate-200">
-                      <p className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+                  <div className="absolute right-0 top-full mt-2 w-80 sm:w-88 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0b0e14] p-3.5 shadow-2xl shadow-black/95 z-50 space-y-2.5 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-2 py-1 border-b border-slate-200 dark:border-slate-800">
+                      <p className="text-xs font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
                         <Share2 className="w-3.5 h-3.5 text-emerald-600" />
                         <span>Share PIN with Client</span>
                       </p>
-                      <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
                         Private PIN: <span className="font-mono font-bold text-indigo-600 text-xs">{albumPin}</span>
                       </p>
                     </div>
@@ -766,16 +766,16 @@ export default function AlbumDetail() {
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={() => setIsShareOpen(false)}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-emerald-200 hover:text-slate-900 bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-500/30 hover:border-emerald-500/60 transition-all text-left group cursor-pointer"
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-emerald-200 hover:text-slate-900 dark:text-white bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-500/30 hover:border-emerald-500/60 transition-all text-left group cursor-pointer"
                     >
                       <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-600 shrink-0 group-hover:scale-105 transition-transform">
                         <MessageCircle className="w-4 h-4" />
                       </div>
                       <div className="flex-1">
-                        <div className="font-bold text-slate-900">Share via WhatsApp</div>
+                        <div className="font-bold text-slate-900 dark:text-white">Share via WhatsApp</div>
                         <div className="text-[10px] text-emerald-600/80">Direct pre-filled chat invite</div>
                       </div>
-                      <ExternalLink className="w-3.5 h-3.5 text-slate-500 group-hover:text-emerald-300 transition-colors" />
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 group-hover:text-emerald-300 transition-colors" />
                     </a>
 
                     {/* Telegram Direct Link */}
@@ -785,24 +785,24 @@ export default function AlbumDetail() {
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={() => setIsShareOpen(false)}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-sky-200 hover:text-slate-900 bg-sky-950/50 hover:bg-sky-900/60 border border-sky-500/30 hover:border-sky-500/60 transition-all text-left group cursor-pointer"
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-sky-200 hover:text-slate-900 dark:text-white bg-sky-950/50 hover:bg-sky-900/60 border border-sky-500/30 hover:border-sky-500/60 transition-all text-left group cursor-pointer"
                     >
                       <div className="w-7 h-7 rounded-lg bg-sky-500/20 flex items-center justify-center text-sky-400 shrink-0 group-hover:scale-105 transition-transform">
                         <Send className="w-4 h-4" />
                       </div>
                       <div className="flex-1">
-                        <div className="font-bold text-slate-900">Share via Telegram</div>
+                        <div className="font-bold text-slate-900 dark:text-white">Share via Telegram</div>
                         <div className="text-[10px] text-sky-400/80">Instant messenger broadcast</div>
                       </div>
-                      <ExternalLink className="w-3.5 h-3.5 text-slate-500 group-hover:text-sky-300 transition-colors" />
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 group-hover:text-sky-300 transition-colors" />
                     </a>
 
-                    <div className="border-t border-slate-200 pt-2 space-y-2">
+                    <div className="border-t border-slate-200 dark:border-slate-800 pt-2 space-y-2">
                       <button
                         type="button"
                         id="copy-invite-text-btn"
                         onClick={handleCopyInviteMessage}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-indigo-500 hover:text-slate-900 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/30 transition-colors text-left cursor-pointer"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-indigo-500 hover:text-slate-900 dark:text-white hover:bg-amber-500/10 border border-transparent hover:border-amber-500/30 transition-colors text-left cursor-pointer"
                       >
                         <Copy className="w-4 h-4 text-indigo-600 shrink-0" />
                         <span>{copiedInvite ? "Copied to Clipboard!" : "Copy PIN"}</span>
@@ -842,7 +842,7 @@ export default function AlbumDetail() {
               className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs sm:text-sm border transition-all cursor-pointer ${
                 activeViewTab === "selections"
                   ? "bg-amber-500/20 text-indigo-500 border-amber-500/40 shadow-lg shadow-amber-500/10"
-                  : "bg-slate-100 hover:bg-slate-700 text-slate-900 border-slate-200"
+                  : "bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-900 dark:text-white border-slate-200 dark:border-slate-800"
               }`}
               title={activeViewTab === "selections" ? "Show All Proofs" : "Review Client Selections"}
             >
@@ -859,7 +859,7 @@ export default function AlbumDetail() {
               className={`inline-flex items-center gap-2.5 px-5 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-xl ${
                 canDownloadAll
                   ? "bg-gradient-to-r from-amber-500 via-amber-400 to-amber-200 text-slate-950 hover:brightness-110 active:scale-[0.98] shadow-amber-500/20 cursor-pointer"
-                  : "bg-slate-100 border border-slate-200 text-slate-500 cursor-not-allowed opacity-60 shadow-none"
+                  : "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-60 shadow-none"
               }`}
               title={
                 canDownloadAll
@@ -874,7 +874,7 @@ export default function AlbumDetail() {
                 </>
               ) : (
                 <>
-                  <FolderDown className={`w-4 h-4 stroke-[2.4] ${canDownloadAll ? "text-slate-950" : "text-slate-500"}`} />
+                  <FolderDown className={`w-4 h-4 stroke-[2.4] ${canDownloadAll ? "text-slate-950" : "text-slate-500 dark:text-slate-400"}`} />
                   <span>Download All {selectedItems.length > 0 ? `(${selectedItems.length})` : mediaItems.length > 0 ? `(${mediaItems.length})` : ""}</span>
                 </>
               )}
@@ -916,7 +916,7 @@ export default function AlbumDetail() {
       <div id="gallery-workflow-section" className="space-y-4">
         
         {/* Navigation Tabs */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
           
           <div className="flex items-center gap-2">
             {/* Tab 1: All Proofs (Default active tab) */}
@@ -926,19 +926,19 @@ export default function AlbumDetail() {
               onClick={() => setActiveViewTab("all")}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
                 activeViewTab === "all"
-                  ? "bg-slate-100 text-slate-900 border border-slate-200 shadow-sm"
-                  : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"
+                  ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-[#111620] dark:bg-[#111620] dark:bg-slate-800/50"
               }`}
             >
               <span>All Proofs</span>
-              <span className="px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 text-[10px] font-mono">
+              <span className="px-2 py-0.5 rounded-full bg-slate-50 dark:bg-[#111620] dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 dark:text-slate-400 text-[10px] font-mono">
                 {mediaItems.length}
               </span>
             </button>
 
           </div>
 
-          <div className="text-xs text-slate-500 flex items-center gap-2">
+          <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
             <span>
               Showing {displayPhotos.length} of {mediaItems.length} photos
             </span>
@@ -952,31 +952,31 @@ export default function AlbumDetail() {
 
         {/* Gallery Grid */}
         {displayPhotos.length === 0 ? (
-          <div className="py-16 text-center rounded-3xl border border-slate-200 bg-slate-50 max-w-xl mx-auto p-8 space-y-3">
+          <div className="py-16 text-center rounded-3xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#111620] dark:bg-slate-800/50 max-w-xl mx-auto p-8 space-y-3">
             {activeViewTab === "selections" ? (
               <>
                 <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-indigo-600 flex items-center justify-center mx-auto">
                   <CheckSquare className="w-6 h-6" />
                 </div>
-                <h3 className="text-base font-bold text-slate-900">No Client Selections Yet</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">No Client Selections Yet</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                   Once your client enters PIN <span className="font-mono text-indigo-500 font-bold">{albumPin}</span> in the mobile app and submits their selected photos , they will appear right here.
                 </p>
                 <button
                   type="button"
                   onClick={() => setActiveViewTab("all")}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-700 text-slate-900 text-xs font-semibold transition-colors mt-2 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-700 text-slate-900 dark:text-white text-xs font-semibold transition-colors mt-2 cursor-pointer"
                 >
                   View All Uploaded Proofs
                 </button>
               </>
             ) : (
               <>
-                <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center mx-auto">
+                <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center mx-auto">
                   <UploadCloud className="w-6 h-6" />
                 </div>
-                <h3 className="text-base font-bold text-slate-900">No Proofs Uploaded Yet</h3>
-                <p className="text-xs text-slate-500">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">No Proofs Uploaded Yet</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   Select and upload photos above to create this gallery's proof collection.
                 </p>
               </>
@@ -989,7 +989,7 @@ export default function AlbumDetail() {
                 <div
                   key={item.id}
                   id={`media-item-${item.id}`}
-                  className="group relative aspect-[4/3] rounded-2xl sm:rounded-3xl overflow-hidden bg-black/60 border border-slate-200 hover:border-amber-400/50 transition-all duration-300 shadow-lg cursor-pointer"
+                  className="group relative aspect-[4/3] rounded-2xl sm:rounded-3xl overflow-hidden bg-black/60 border border-slate-200 dark:border-slate-800 hover:border-amber-400/50 transition-all duration-300 shadow-lg cursor-pointer"
                   onClick={() => setPreviewPhoto(item)}
                 >
                   {/* Pure Photo */}
@@ -1008,7 +1008,7 @@ export default function AlbumDetail() {
                         e.stopPropagation();
                         setPreviewPhoto(item);
                       }}
-                      className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 hover:text-indigo-600 hover:bg-slate-100 transition-colors shadow-xl cursor-pointer"
+                      className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#111620] dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white hover:text-indigo-600 hover:bg-slate-100 dark:bg-slate-800 transition-colors shadow-xl cursor-pointer"
                       title="Fullscreen Preview"
                     >
                       <ZoomIn className="w-4 h-4" />
@@ -1040,7 +1040,7 @@ export default function AlbumDetail() {
           ========================================================================= */}
       {downloadModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="max-w-md w-full rounded-3xl bg-white border border-slate-200 p-6 sm:p-8 space-y-6 shadow-2xl relative text-center">
+          <div className="max-w-md w-full rounded-3xl bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 p-6 sm:p-8 space-y-6 shadow-2xl relative text-center">
             
             <div className={`w-14 h-14 rounded-2xl mx-auto flex items-center justify-center shadow-lg ${
               downloadProgress.completed
@@ -1055,17 +1055,17 @@ export default function AlbumDetail() {
             </div>
 
             <div>
-              <h3 className="text-lg font-bold text-slate-900">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                 {downloadProgress.completed ? "Client Selections Saved to Folder!" : "Saving to Local Folder"}
               </h3>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                 Folder: <span className="font-mono text-indigo-500 font-bold">{downloadProgress.folderName || "Selected Folder"}</span>
               </p>
             </div>
 
             {!downloadProgress.completed ? (
               <div className="space-y-3">
-                <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                <div className="w-full h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-amber-500 to-amber-300 transition-all duration-200"
                     style={{
@@ -1073,7 +1073,7 @@ export default function AlbumDetail() {
                     }}
                   />
                 </div>
-                <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
+                <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-mono">
                   <span className="truncate max-w-[200px]">{downloadProgress.currentFilename}</span>
                   <span>{downloadProgress.current} / {downloadProgress.total}</span>
                 </div>

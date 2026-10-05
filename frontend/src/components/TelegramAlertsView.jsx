@@ -57,13 +57,13 @@ export default function TelegramAlertsView() {
   return (
     <div className="max-w-4xl w-full mx-auto space-y-6 animate-in fade-in duration-300">
       {/* Header section */}
-      <div className="pb-5 border-b border-slate-200">
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Telegram Alerts</h2>
-        <p className="text-sm text-slate-500 mt-1">Receive real-time push alerts the moment a client finalizes their album selection.</p>
+      <div className="pb-5 border-b border-slate-200 dark:border-slate-800">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Telegram Alerts</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Receive real-time push alerts the moment a client finalizes their album selection.</p>
       </div>
 
-      <div className="max-w-md p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-6">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div className="max-w-md p-6 rounded-2xl bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2 text-sky-500 font-semibold text-sm">
             <BellRing className="w-4 h-4" />
             <span>Alerts Configuration</span>
@@ -77,20 +77,20 @@ export default function TelegramAlertsView() {
 
         <div>
           {user?.telegram_chat_id ? (
-            <div className="p-5 rounded-xl bg-slate-50 border border-slate-200 space-y-4">
+            <div className="p-5 rounded-xl bg-slate-50 dark:bg-[#111620] dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 space-y-4">
               <div className="flex flex-col items-center justify-center py-4">
                 <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-3">
                   <ShieldCheck className="w-6 h-6" />
                 </div>
-                <p className="text-sm font-bold text-slate-900">Actively Linked</p>
-                <p className="text-xs text-slate-500 mt-1">Chat ID: <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200">{user.telegram_chat_id}</span></p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white">Actively Linked</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Chat ID: <span className="font-mono bg-white dark:bg-[#0b0e14] px-2 py-0.5 rounded border border-slate-200 dark:border-slate-800">{user.telegram_chat_id}</span></p>
               </div>
               
               <button
                 type="button"
                 onClick={handleDisconnectTelegram}
                 disabled={isDisconnectingTelegram}
-                className="w-full py-2.5 rounded-xl bg-white hover:bg-red-50 hover:text-red-600 hover:border-red-200 border border-slate-200 text-sm font-semibold text-slate-700 transition-all flex items-center justify-center gap-2 shadow-sm"
+                className="w-full py-2.5 rounded-xl bg-white dark:bg-[#0b0e14] hover:bg-red-50 hover:text-red-600 hover:border-red-200 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 transition-all flex items-center justify-center gap-2 shadow-sm"
               >
                 {isDisconnectingTelegram ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
                 <span>Disconnect Telegram</span>
@@ -122,7 +122,7 @@ export default function TelegramAlertsView() {
                 type="button"
                 onClick={handleCheckConnection}
                 disabled={isCheckingConnection}
-                className="w-full py-3 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-sm transition-all shadow-sm flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-white dark:bg-[#0b0e14] hover:bg-slate-50 dark:hover:bg-[#111620] dark:bg-[#111620] dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 dark:text-slate-300 font-semibold text-sm transition-all shadow-sm flex items-center justify-center gap-2"
               >
                 {isCheckingConnection ? (
                   <><Loader2 className="w-4 h-4 animate-spin text-sky-500" /><span>Checking Connection...</span></>

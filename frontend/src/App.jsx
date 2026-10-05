@@ -2,6 +2,7 @@ import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
 import Login from "./pages/Login";
 import ForceChangePassword from "./pages/ForceChangePassword";
 import DashboardLayout from "./layouts/DashboardLayout";
@@ -151,6 +152,7 @@ export function RootRoute() {
 export default function App() {
   return (
     <GlobalErrorBoundary>
+      <ThemeProvider>
       <BrowserRouter>
       <Routes>
         {/* Public Login Route */}
@@ -200,6 +202,7 @@ export default function App() {
         <Route path="*" element={<RootRoute />} />
       </Routes>
     </BrowserRouter>
+      </ThemeProvider>
     </GlobalErrorBoundary>
   );
 }

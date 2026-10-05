@@ -145,13 +145,13 @@ export default function StudioBrandingView() {
   return (
     <div className="max-w-4xl w-full mx-auto space-y-6 animate-in fade-in duration-300">
       {/* Header section */}
-      <div className="pb-5 border-b border-slate-200">
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Studio Branding</h2>
-        <p className="text-sm text-slate-500 mt-1">Customize the client mobile application with your studio logo and brand color.</p>
+      <div className="pb-5 border-b border-slate-200 dark:border-slate-800">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Studio Branding</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Customize the client mobile application with your studio logo and brand color.</p>
       </div>
 
-      <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-6">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div className="p-6 rounded-2xl bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2 text-indigo-600 font-semibold text-sm">
             <ImageIcon className="w-4 h-4" />
             <span>Studio Identity</span>
@@ -165,7 +165,7 @@ export default function StudioBrandingView() {
 
         {/* Logo Section */}
         <div className="space-y-3">
-          <label className="text-xs font-semibold text-slate-700">Studio Logo</label>
+          <label className="text-xs font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300">Studio Logo</label>
           
           {logoUploadError && (
             <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
@@ -174,13 +174,13 @@ export default function StudioBrandingView() {
           )}
 
           {studioLogoUrl ? (
-            <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-[#111620] dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-lg bg-white border border-slate-200 flex items-center justify-center p-1 shadow-sm">
+                <div className="w-12 h-12 rounded-lg bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 flex items-center justify-center p-1 shadow-sm">
                   <img src={studioLogoUrl} alt="Studio Logo" className="w-full h-full object-contain rounded" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">Studio Logo</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Studio Logo</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -188,7 +188,7 @@ export default function StudioBrandingView() {
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploadingLogo}
-                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+                  className="px-3 py-1.5 rounded-lg bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-[#111620] dark:bg-[#111620] dark:bg-slate-800/50 transition-colors shadow-sm"
                 >
                   Replace
                 </button>
@@ -196,7 +196,7 @@ export default function StudioBrandingView() {
                   type="button"
                   onClick={handleRemoveLogo}
                   disabled={isUploadingLogo}
-                  className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors shadow-sm"
+                  className="p-1.5 rounded-lg bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors shadow-sm"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -211,12 +211,12 @@ export default function StudioBrandingView() {
               className={`w-full p-8 rounded-xl border-2 border-dashed flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
                 isDraggingLogo
                   ? "border-indigo-400 bg-indigo-50"
-                  : "border-slate-300 bg-slate-50 hover:bg-slate-100 hover:border-slate-400"
+                  : "border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-[#111620] dark:bg-slate-800/50 hover:bg-slate-100 dark:bg-slate-800 hover:border-slate-400"
               }`}
             >
               <UploadCloud className={`w-8 h-8 mb-2 ${isDraggingLogo ? "text-indigo-500" : "text-slate-400"}`} />
-              <p className="text-sm font-medium text-slate-900">Click to upload or drag and drop</p>
-              <p className="text-xs text-slate-500 mt-1">PNG, SVG, or JPEG (Max 5MB)</p>
+              <p className="text-sm font-medium text-slate-900 dark:text-white">Click to upload or drag and drop</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">PNG, SVG, or JPEG (Max 5MB)</p>
             </div>
           )}
           
@@ -230,18 +230,18 @@ export default function StudioBrandingView() {
         </div>
 
         {/* Brand Accent Color */}
-        <div className="space-y-4 pt-4 border-t border-slate-100">
-          <label className="text-xs font-semibold text-slate-700 block">Brand Accent Color</label>
+        <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+          <label className="text-xs font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 block">Brand Accent Color</label>
           <div className="flex items-center gap-3">
             <div
-              className="w-8 h-8 rounded-lg border border-slate-200 shadow-sm"
+              className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm"
               style={{ backgroundColor: brandColor }}
             />
             <input
               type="text"
               value={brandColor}
               onChange={(e) => setBrandColor(e.target.value.toUpperCase())}
-              className="flex-1 max-w-[150px] bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-mono text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
+              className="flex-1 max-w-[150px] bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-sm font-mono text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
             />
           </div>
 
@@ -254,7 +254,7 @@ export default function StudioBrandingView() {
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs transition-all ${
                   brandColor === preset.hex
                     ? "border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm font-semibold"
-                    : "border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-medium"
+                    : "border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0b0e14] hover:bg-slate-50 dark:hover:bg-[#111620] dark:bg-[#111620] dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 dark:text-slate-400 font-medium"
                 }`}
               >
                 <span className="w-3 h-3 rounded-full shadow-inner" style={{ backgroundColor: preset.hex }} />
@@ -266,7 +266,7 @@ export default function StudioBrandingView() {
       </div>
 
       {/* Save Action Footer */}
-      <div className="pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="pt-6 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="w-full sm:w-auto flex-1">
           {saveSuccessMsg && (
             <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm flex items-center gap-2 max-w-md shadow-sm">

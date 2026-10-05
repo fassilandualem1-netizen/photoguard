@@ -115,28 +115,28 @@ export default function ChangePasswordView() {
   return (
     <div className="max-w-xl w-full mx-auto space-y-6">
       {/* Header */}
-      <div className="pb-5 border-b border-slate-200">
+      <div className="pb-5 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600">
             <Lock className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
               Change Password
             </h2>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               Update your account password to keep your studio secure.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
+      <div className="p-6 rounded-2xl bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 shadow-sm">
         <form onSubmit={handleSubmit} className="space-y-5">
           
           {/* Current Password Field */}
           <div>
-            <label className="text-sm font-semibold text-slate-700 block mb-1.5 flex items-center gap-1.5">
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 block mb-1.5 flex items-center gap-1.5">
               <KeyRound className="w-4 h-4 text-slate-400" />
               Current Password
             </label>
@@ -148,12 +148,12 @@ export default function ChangePasswordView() {
                 placeholder="Enter current password"
                 disabled={isLoading}
                 autoComplete="current-password"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
+                className="w-full bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 pr-10 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
               />
               <button
                 type="button"
                 onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-300 dark:text-slate-400 focus:outline-none"
                 tabIndex={-1}
               >
                 {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -161,11 +161,11 @@ export default function ChangePasswordView() {
             </div>
           </div>
 
-          <hr className="border-slate-100" />
+          <hr className="border-slate-100 dark:border-slate-800" />
 
           {/* New Password Field */}
           <div>
-            <label className="text-sm font-semibold text-slate-700 block mb-1.5">
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 block mb-1.5">
               New Password
             </label>
             <div className="relative">
@@ -176,25 +176,25 @@ export default function ChangePasswordView() {
                 placeholder="Enter new password"
                 disabled={isLoading}
                 autoComplete="new-password"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
+                className="w-full bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 pr-10 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
               />
               <button
                 type="button"
                 onClick={() => setShowNewPassword(!showNewPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-300 dark:text-slate-400 focus:outline-none"
                 tabIndex={-1}
               >
                 {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            <p className="text-xs text-slate-500 mt-2">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
               Must be at least 6 characters long.
             </p>
           </div>
 
           {/* Confirm Password Field */}
           <div>
-            <label className="text-sm font-semibold text-slate-700 block mb-1.5">
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 block mb-1.5">
               Confirm New Password
             </label>
             <div className="relative">
@@ -205,12 +205,12 @@ export default function ChangePasswordView() {
                 placeholder="Confirm new password"
                 disabled={isLoading}
                 autoComplete="new-password"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 pr-10 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
+                className="w-full bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 pr-10 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
               />
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-300 dark:text-slate-400 focus:outline-none"
                 tabIndex={-1}
               >
                 {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -239,7 +239,7 @@ export default function ChangePasswordView() {
               type="button"
               onClick={resetForm}
               disabled={isLoading}
-              className="px-6 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-sm font-semibold text-slate-700 transition-colors"
+              className="px-6 py-2.5 rounded-xl bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-[#111620] dark:bg-[#111620] dark:bg-slate-800/50 text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 transition-colors"
             >
               Clear
             </button>

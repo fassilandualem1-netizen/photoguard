@@ -33,16 +33,16 @@ export default function AlbumCard({ album, onDelete, isDeleting = false }) {
   return (
     <div
       id={`album-card-${album.id}`}
-      className="group rounded-2xl border border-slate-200 bg-white overflow-hidden hover:border-indigo-200 hover:shadow-md transition-all flex flex-col justify-between shadow-sm relative"
+      className="group rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0b0e14] overflow-hidden hover:border-indigo-200 hover:shadow-md transition-all flex flex-col justify-between shadow-sm relative"
     >
       <Link to={`/dashboard/albums/${album.id}`} className="flex-1 flex flex-col justify-between">
         {/* Cover Preview */}
-        <div className="h-40 bg-gradient-to-br from-slate-50 via-indigo-50/40 to-slate-100 flex items-center justify-center relative border-b border-slate-100">
+        <div className="h-40 bg-gradient-to-br from-slate-50 via-indigo-50/40 to-slate-100 flex items-center justify-center relative border-b border-slate-100 dark:border-slate-800">
           <ImageIcon className="w-10 h-10 text-slate-300 group-hover:text-indigo-400 transition-colors" />
 
           {/* PIN Pill */}
           {pinCode && (
-            <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-mono font-semibold text-slate-700 tracking-wider shadow-sm">
+            <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 text-xs font-mono font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 tracking-wider shadow-sm">
               {pinCode}
             </div>
           )}
@@ -70,7 +70,7 @@ export default function AlbumCard({ album, onDelete, isDeleting = false }) {
         <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
           <div>
             <div className="flex items-start justify-between gap-2 mb-1.5">
-              <h3 className="text-sm font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white group-hover:text-indigo-600 transition-colors truncate">
                 {album.title || "Untitled Album"}
               </h3>
               {isAssistant ? (
@@ -85,8 +85,8 @@ export default function AlbumCard({ album, onDelete, isDeleting = false }) {
               )}
             </div>
 
-            <p className="text-xs text-slate-500 truncate">
-              Client: <span className="text-slate-700 font-medium">{album.client_name || "Unassigned"}</span>
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+              Client: <span className="text-slate-700 dark:text-slate-200 dark:text-slate-300 font-medium">{album.client_name || "Unassigned"}</span>
               {selectedCount > 0 && (
                 <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
                   <CheckCircle2 className="w-3 h-3" />{selectedCount} Selected
@@ -95,12 +95,12 @@ export default function AlbumCard({ album, onDelete, isDeleting = false }) {
             </p>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" />
               {daysLeft !== null ? (isExpired ? "Expired" : `${daysLeft}d left`) : "Permanent"}
             </span>
-            <span className="font-mono text-slate-500">
+            <span className="font-mono text-slate-500 dark:text-slate-400">
               {photoCount} {photoCount === 1 ? "Photo" : "Photos"}
             </span>
           </div>

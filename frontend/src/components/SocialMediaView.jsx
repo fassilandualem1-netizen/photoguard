@@ -65,20 +65,20 @@ export default function SocialMediaView() {
   return (
     <div className="max-w-4xl w-full mx-auto space-y-6 animate-in fade-in duration-300">
       {/* Header section */}
-      <div className="pb-5 border-b border-slate-200">
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Contact & Social Media</h2>
-        <p className="text-sm text-slate-500 mt-1">Connect your direct studio channels so clients can easily call, message, and view your portfolio.</p>
+      <div className="pb-5 border-b border-slate-200 dark:border-slate-800">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Contact & Social Media</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Connect your direct studio channels so clients can easily call, message, and view your portfolio.</p>
       </div>
 
-      <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-5">
-        <div className="flex items-center gap-2 text-indigo-600 font-semibold text-sm border-b border-slate-100 pb-3">
+      <div className="p-6 rounded-2xl bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
+        <div className="flex items-center gap-2 text-indigo-600 font-semibold text-sm border-b border-slate-100 dark:border-slate-800 pb-3">
           <Share2 className="w-4 h-4" />
           <span>Public Links</span>
         </div>
         
         <div className="space-y-4 pt-1">
           <div>
-            <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5 mb-1.5">
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 flex items-center gap-1.5 mb-1.5">
               <Phone className="w-4 h-4 text-slate-400" />Phone Number
             </label>
             <input
@@ -86,12 +86,12 @@ export default function SocialMediaView() {
               placeholder="+251 91 123 4567"
               value={contactPhone}
               onChange={(e) => setContactPhone(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
+              className="w-full bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
             />
           </div>
 
           <div>
-            <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5 mb-1.5">
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 flex items-center gap-1.5 mb-1.5">
               <Send className="w-4 h-4 text-sky-500" />Telegram Username/URL
             </label>
             <input
@@ -99,12 +99,12 @@ export default function SocialMediaView() {
               placeholder="@yourstudio or https://t.me/yourstudio"
               value={telegramUrl}
               onChange={(e) => setTelegramUrl(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
+              className="w-full bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
             />
           </div>
 
           <div>
-            <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5 mb-1.5">
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 flex items-center gap-1.5 mb-1.5">
               <Instagram className="w-4 h-4 text-pink-500" />Instagram URL
             </label>
             <input
@@ -112,25 +112,25 @@ export default function SocialMediaView() {
               placeholder="https://instagram.com/..."
               value={instagramUrl}
               onChange={(e) => setInstagramUrl(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
+              className="w-full bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
             />
           </div>
 
           <div>
-            <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5 mb-1.5">
-              <Video className="w-4 h-4 text-slate-800" />TikTok URL
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 flex items-center gap-1.5 mb-1.5">
+              <Video className="w-4 h-4 text-slate-800 dark:text-slate-200" />TikTok URL
             </label>
             <input
               type="url"
               placeholder="https://tiktok.com/..."
               value={tiktokUrl}
               onChange={(e) => setTiktokUrl(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
+              className="w-full bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
             />
           </div>
 
           <div>
-            <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5 mb-1.5">
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 flex items-center gap-1.5 mb-1.5">
               <Youtube className="w-4 h-4 text-red-500" />YouTube URL
             </label>
             <input
@@ -138,14 +138,14 @@ export default function SocialMediaView() {
               placeholder="https://youtube.com/..."
               value={youtubeUrl}
               onChange={(e) => setYoutubeUrl(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
+              className="w-full bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
             />
           </div>
         </div>
       </div>
 
       {/* Save Action Footer */}
-      <div className="pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="pt-6 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="w-full sm:w-auto flex-1">
           {saveSuccessMsg && (
             <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm flex items-center gap-2 max-w-md shadow-sm">

@@ -68,7 +68,7 @@ export default function AdminPhotographerTable({
         {/* Search Input & Action Button */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
           <div className="w-full sm:w-80 relative">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400" />
             <input
               type="text"
               placeholder="Search by name, email, or plan..."
@@ -108,7 +108,7 @@ export default function AdminPhotographerTable({
           <tbody className="divide-y divide-slate-800/60">
             {filteredPhotographers.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-12 text-center text-slate-500">
+                <td colSpan={6} className="py-12 text-center text-slate-500 dark:text-slate-400">
                   {loading ? "Loading directory..." : "No photographers match the search query."}
                 </td>
               </tr>
@@ -131,7 +131,7 @@ export default function AdminPhotographerTable({
                     <td className="py-5 px-4">
                       <div className="font-semibold text-white">{p.full_name}</div>
                       <div className="text-slate-400 font-mono text-[11px] flex items-center gap-1.5 mt-0.5">
-                        <Mail className="w-3.5 h-3.5 text-slate-500" />
+                        <Mail className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                         <span>{p.email}</span>
                       </div>
                     </td>
@@ -158,7 +158,7 @@ export default function AdminPhotographerTable({
                     <td className="py-5 px-4 min-w-[170px]">
                       <div className="flex items-center justify-between text-[11px] text-slate-300 font-mono mb-1.5">
                         <span className="font-semibold text-white">{formatBytes ? formatBytes(p.storage_used) : `${p.storage_used} B`}</span>
-                        <span className="text-slate-500">/ {quotaGb} GB</span>
+                        <span className="text-slate-500 dark:text-slate-400">/ {quotaGb} GB</span>
                       </div>
                       <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
                         <div
@@ -178,7 +178,7 @@ export default function AdminPhotographerTable({
                     <td className="py-5 px-4">
                       <div className="text-white font-mono text-xs">
                         <span>{p.total_albums} albums</span>
-                        <span className="text-slate-600 mx-1.5">•</span>
+                        <span className="text-slate-600 dark:text-slate-300 dark:text-slate-400 mx-1.5">•</span>
                         <span>{p.total_media} media</span>
                       </div>
                       <div className="mt-1">
@@ -191,7 +191,7 @@ export default function AdminPhotographerTable({
                             <span>Root + {p.assistants_count} Assistant{p.assistants_count > 1 ? "s" : ""}</span>
                           </span>
                         ) : (
-                          <span className="text-[10px] text-slate-500 font-mono">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                             Root Solo Account
                           </span>
                         )}

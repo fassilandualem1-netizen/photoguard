@@ -1,1 +1,11 @@
-@import "tailwindcss";
+﻿@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    @apply bg-[#F6F7FB] text-slate-900 transition-colors duration-200;
+  }
+  body.dark {
+    @apply bg-[#06080d] text-white;
+  }
+}

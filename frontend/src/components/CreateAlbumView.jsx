@@ -84,23 +84,23 @@ export default function CreateAlbumView() {
   return (
     <div className="max-w-xl w-full mx-auto space-y-6">
       {/* Header */}
-      <div className="pb-5 border-b border-slate-200">
+      <div className="pb-5 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600">
             <FolderPlus className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
               Create New Album
             </h2>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               Set up a new client delivery gallery.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm">
+      <div className="p-6 rounded-2xl bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 shadow-sm">
         {/* Error Alert */}
         {error && (
           <div className="mb-5 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-start gap-2.5 shadow-sm">
@@ -120,7 +120,7 @@ export default function CreateAlbumView() {
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Album Title */}
           <div>
-            <label className="text-sm font-semibold text-slate-700 block mb-1.5">
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 block mb-1.5">
               Album Title <span className="text-red-500">*</span>
             </label>
             <input
@@ -131,13 +131,13 @@ export default function CreateAlbumView() {
               placeholder="e.g. Abeba & Zeleke Wedding"
               required
               disabled={loading}
-              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm disabled:opacity-50"
+              className="w-full bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm disabled:opacity-50"
             />
           </div>
 
           {/* Client Name */}
           <div>
-            <label className="text-sm font-semibold text-slate-700 block mb-1.5">
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 block mb-1.5">
               Client Name <span className="text-red-500">*</span>
             </label>
             <input
@@ -148,18 +148,18 @@ export default function CreateAlbumView() {
               placeholder="e.g. Abeba"
               required
               disabled={loading}
-              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm disabled:opacity-50"
+              className="w-full bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm disabled:opacity-50"
             />
           </div>
 
           {/* Access PIN â€” Read Only */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 flex items-center gap-1.5">
                 <KeyRound className="w-4 h-4 text-slate-400" />
                 Access PIN
               </label>
-              <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+              <span className="text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-800">
                 Auto-Generated
               </span>
             </div>
@@ -167,7 +167,7 @@ export default function CreateAlbumView() {
               type="text"
               placeholder="Auto-generated" value=""
               readOnly
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-400 cursor-not-allowed select-none focus:outline-none shadow-sm"
+              className="w-full bg-slate-50 dark:bg-[#111620] dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-400 cursor-not-allowed select-none focus:outline-none shadow-sm"
             />
           </div>
 
@@ -175,7 +175,7 @@ export default function CreateAlbumView() {
           {isStudio && (
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 flex items-center gap-1.5">
                   <Clock className="w-4 h-4 text-slate-400" />
                   Gallery Lifespan (Days)
                 </label>
@@ -191,9 +191,9 @@ export default function CreateAlbumView() {
                 value={expiresInDays}
                 onChange={(e) => setExpiresInDays(e.target.value)}
                 disabled={loading}
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm disabled:opacity-50"
+                className="w-full bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm disabled:opacity-50"
               />
-              <p className="text-xs text-slate-500 mt-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
                 Days before client selection expires. Between 1 and 15 days (default: 15).
               </p>
             </div>
@@ -201,23 +201,23 @@ export default function CreateAlbumView() {
 
           {/* Download Permission */}
           <div>
-            <label className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors group">
+            <label className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#111620] dark:bg-slate-800/50 hover:bg-slate-100 dark:bg-slate-800 cursor-pointer transition-colors group">
               <input
                 id="allow-download-checkbox"
                 type="checkbox"
                 checked={allowDownload}
                 onChange={(e) => setAllowDownload(e.target.checked)}
                 disabled={loading}
-                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-0 transition-colors"
+                className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-0 transition-colors"
               />
               <div>
                 <div className="flex items-center gap-2">
                   <Download className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition-colors" />
-                  <span className="text-sm font-semibold text-slate-700 select-none">
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 select-none">
                     Allow Photo Download
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5 select-none">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 select-none">
                   Clients can download their selected photos directly.
                 </p>
               </div>
@@ -225,12 +225,12 @@ export default function CreateAlbumView() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
+          <div className="flex items-center gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
             <button
               type="button"
               onClick={handleClear}
               disabled={loading}
-              className="px-5 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-sm font-semibold text-slate-700 transition-colors disabled:opacity-50"
+              className="px-5 py-2.5 rounded-xl bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-[#111620] dark:bg-[#111620] dark:bg-slate-800/50 text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 transition-colors disabled:opacity-50"
             >
               Clear
             </button>

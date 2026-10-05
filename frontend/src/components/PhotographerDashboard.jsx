@@ -70,7 +70,7 @@ export default function PhotographerDashboard() {
         className="flex flex-col items-center justify-center py-20 text-slate-400"
       >
         <div className="w-8 h-8 rounded-full border-2 border-amber-400 border-t-transparent animate-spin mb-3" />
-        <p className="text-xs font-mono uppercase tracking-wider text-slate-500">
+        <p className="text-xs font-mono uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Loading client galleries...
         </p>
       </div>
@@ -174,7 +174,7 @@ export default function PhotographerDashboard() {
             </div>
             <div className="text-center">
               <p className="text-sm font-medium text-white">Create New Album</p>
-              <p className="text-xs text-slate-500 mt-0.5">Bulk upload proofs & generate PIN</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Bulk upload proofs & generate PIN</p>
             </div>
           </button>
         </div>

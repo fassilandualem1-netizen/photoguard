@@ -25,8 +25,8 @@ export class GlobalErrorBoundary extends Component {
     if (this.state.hasError) {
       const { isNetworkError, errorMessage } = this.state;
       return (
-        <div className="min-h-screen bg-[#F6F7FB] flex items-center justify-center p-6">
-          <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-lg">
+        <div className="min-h-screen bg-[#F6F7FB] dark:bg-[#06080c] flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 rounded-2xl p-8 text-center shadow-lg">
             <div
               className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 border ${
                 isNetworkError
@@ -41,18 +41,18 @@ export class GlobalErrorBoundary extends Component {
               )}
             </div>
 
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight mb-2">
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight mb-2">
               {isNetworkError ? "Connection Problem" : "Something went wrong"}
             </h1>
 
-            <p className="text-sm text-slate-500 mb-2">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
               {isNetworkError
                 ? "Please check your internet connection and try again."
                 : "An unexpected error occurred. Refreshing usually fixes this."}
             </p>
 
             {!isNetworkError && (
-              <p className="text-xs text-slate-400 mb-6 font-mono break-words bg-slate-50 p-3 rounded-lg border border-slate-200">
+              <p className="text-xs text-slate-400 mb-6 font-mono break-words bg-slate-50 dark:bg-[#111620] dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200 dark:border-slate-800">
                 {errorMessage}
               </p>
             )}

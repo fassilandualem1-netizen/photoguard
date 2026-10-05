@@ -22,13 +22,9 @@ import {
   LayoutGrid,
   List,
 } from "lucide-react";
-import StudioBrandingView from "../components/StudioBrandingView";
-import SocialMediaView from "../components/SocialMediaView";
-import TelegramAlertsView from "../components/TelegramAlertsView";
-import StudioAssistantsView from "../components/StudioAssistantsView";
+import StudioBrandingView from "../components/StudioBrandingView";import SocialMediaView from "../components/SocialMediaView";import TelegramAlertsView from "../components/TelegramAlertsView";import StudioAssistantsView from "../components/StudioAssistantsView";
 import ChangePasswordView from "../components/ChangePasswordView";
 import CreateAlbumView from "../components/CreateAlbumView";
-import ClientsDirectoryView from "../components/ClientsDirectoryView";
 
 // Placeholder for views we haven't migrated yet
 const PlaceholderView = ({ title }) => (
@@ -137,7 +133,6 @@ export default function DashboardHome() {
   if (currentTab === "assistants") return <StudioAssistantsView />;
   if (currentTab === "password") return <ChangePasswordView />;
   if (currentTab === "new-album") return <CreateAlbumView />;
-  if (currentTab === "clients") return <ClientsDirectoryView />;
 
   // Albums View (Default)
   if (loading) {
@@ -339,3 +334,6 @@ export default function DashboardHome() {
     </div>
   );
 }
+
+
+

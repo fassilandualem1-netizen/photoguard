@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
@@ -10,8 +10,6 @@ import {
   User,
   LogOut,
   FolderOpen,
-  PlusCircle,
-  Users,
   Info,
   AlertTriangle,
   Megaphone,
@@ -82,8 +80,7 @@ export default function DashboardLayout({ children }) {
 
   const navItems = [
     { id: "albums", label: "Albums", icon: FolderOpen },
-    { id: "clients", label: "Clients", icon: Users },
-  ];
+    ];
 
   if (!isAssistant) {
     navItems.push({ id: "branding", label: "Studio Branding", icon: LayoutTemplate });
@@ -259,3 +256,6 @@ export default function DashboardLayout({ children }) {
     </div>
   );
 }
+
+
+

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, Component } from "react";
+﻿import React, { useState, useEffect, useRef, Component } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -27,7 +27,7 @@ class LightboxErrorBoundary extends Component {
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4 select-none">
           <div className="p-6 rounded-2xl bg-slate-900 border border-red-500/30 text-center max-w-md space-y-4">
-            <AlertTriangle className="w-8 h-8 text-amber-400 mx-auto" />
+            <AlertTriangle className="w-8 h-8 text-indigo-400 mx-auto" />
             <h3 className="text-white text-sm font-bold">Lightbox Display Error</h3>
             <p className="text-xs text-slate-400">
               An error occurred while displaying this photo preview.
@@ -135,7 +135,7 @@ function AlbumLightboxContent({
               e.stopPropagation();
               onPrev?.();
             }}
-            className="fixed left-3 sm:left-6 top-1/2 -translate-y-1/2 z-50 p-3 sm:p-3.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-white hover:text-amber-400 transition-all shadow-2xl backdrop-blur-md group cursor-pointer"
+            className="fixed left-3 sm:left-6 top-1/2 -translate-y-1/2 z-50 p-3 sm:p-3.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-white hover:text-indigo-400 transition-all shadow-2xl backdrop-blur-md group cursor-pointer"
             title="Previous Photo (Left Arrow)"
           >
             <ChevronLeft className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" />
@@ -147,7 +147,7 @@ function AlbumLightboxContent({
               e.stopPropagation();
               onNext?.();
             }}
-            className="fixed right-3 sm:right-6 top-1/2 -translate-y-1/2 z-50 p-3 sm:p-3.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-white hover:text-amber-400 transition-all shadow-2xl backdrop-blur-md group cursor-pointer"
+            className="fixed right-3 sm:right-6 top-1/2 -translate-y-1/2 z-50 p-3 sm:p-3.5 rounded-full bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-white hover:text-indigo-400 transition-all shadow-2xl backdrop-blur-md group cursor-pointer"
             title="Next Photo (Right Arrow)"
           >
             <ChevronRight className="w-6 h-6 group-hover:translate-x-0.5 transition-transform" />
@@ -194,7 +194,7 @@ function AlbumLightboxContent({
         >
           {imageError ? (
             <div className="flex flex-col items-center justify-center p-8 text-center text-slate-400">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-indigo-400 mb-3">
                 <AlertTriangle className="w-6 h-6" />
               </div>
               <p className="text-sm font-semibold text-white">
@@ -225,3 +225,4 @@ export default function AlbumLightbox(props) {
     </LightboxErrorBoundary>
   );
 }
+

@@ -51,17 +51,19 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     if not plain_password or not hashed_password:
         return False
 
-    safe_password = plain_password[:72]
+    if len(plain_password) > 128:
+        return False
 
     # 1. Check for PBKDF2 hash scheme (standard in PhotoGuard 7.0)
     if hashed_password.startswith("pbkdf2_sha256$"):
-        return _verify_pbkdf2(safe_password, hashed_password)
+        return _verify_pbkdf2(plain_password, hashed_password)
 
     # 3. Direct native bcrypt check (bypasses passlib's bcrypt 4.0 __about__ bug)
     if any(hashed_password.startswith(prefix) for prefix in ["$2a$", "$2b$", "$2y$"]):
         try:
             import bcrypt
-            return bcrypt.checkpw(safe_password.encode("utf-8"), hashed_password.encode("utf-8"))
+            # bcrypt truncates to 72 bytes internally, but we supply the full password to the library
+            return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
         except Exception:
             pass
 
@@ -69,7 +71,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
         from passlib.context import CryptContext
         pwd_context = CryptContext(schemes=["bcrypt", "pbkdf2_sha256"], deprecated="auto")
-        safe_bcrypt_pw = safe_password.encode("utf-8")[:71].decode("utf-8", errors="ignore")
+        safe_bcrypt_pw = plain_password
         return pwd_context.verify(safe_bcrypt_pw, hashed_password)
     except Exception as e:
         logger.warning(f"[Security] Legacy password verification notice: {e}")
@@ -78,10 +80,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     """
     Generates an enterprise-grade PBKDF2-HMAC-SHA256 hash using Python's standard library.
-    Consistently applies safe 72-char truncation to eliminate all bcrypt overflow bugs and wrap-bug crashes.
     """
-    safe_password = password[:72] if password else ""
-    return _hash_pbkdf2(safe_password)
+    if not password:
+        raise ValueError("Password cannot be empty.")
+    if len(password) > 128:
+        raise ValueError("Password must not exceed 128 characters.")
+    return _hash_pbkdf2(password)
 
 def create_access_token(data: dict[str, Any], expires_delta: Union[timedelta, None] = None) -> str:
     """

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { UploadCloud, FolderPlus, Loader2, CheckCircle2 } from "lucide-react";
 
 export default function PhotoUploader({
@@ -44,17 +44,17 @@ export default function PhotoUploader({
       onDrop={handleDrop}
       className={`p-6 rounded-3xl border transition-all duration-200 ${
         isDragging
-          ? "border-amber-400 bg-amber-500/10 scale-[1.005]"
-          : "border-dashed border-slate-800 bg-slate-900/30"
+          ? "border-indigo-400 bg-indigo-50 scale-[1.005]"
+          : "border-dashed border-slate-300 bg-slate-50"
       } backdrop-blur-sm`}
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-            <UploadCloud className="w-4 h-4 text-amber-400" />
+          <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+            <UploadCloud className="w-4 h-4 text-indigo-600" />
             <span>Upload Photos</span>
           </h2>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-500">
             {isDragging ? "Release files to start upload" : "Drag and drop photos here, or browse files."}
           </p>
         </div>
@@ -72,11 +72,11 @@ export default function PhotoUploader({
           />
           <label
             htmlFor="photo-upload-input"
-            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700/90 border border-slate-700 text-white font-semibold text-xs transition-colors cursor-pointer ${
+            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 border border-indigo-700 text-white shadow-sm font-semibold text-xs transition-colors cursor-pointer ${
               uploading ? "opacity-50 cursor-not-allowed" : ""
             }`}
           >
-            <FolderPlus className="w-4 h-4 text-amber-400" />
+            <FolderPlus className="w-4 h-4 text-white" />
             <span>
               {uploading
                 ? `Uploading (${uploadProgress.current}/${uploadProgress.total})...`
@@ -89,9 +89,9 @@ export default function PhotoUploader({
       {/* High-Speed Upload Progress Bar */}
       {uploading && (
         <div className="mt-4 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
+          <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
             <span className="flex items-center gap-2">
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" />
               <span>
                 Uploading {uploadProgress.current} of {uploadProgress.total} photos...
               </span>
@@ -104,9 +104,9 @@ export default function PhotoUploader({
               %)
             </span>
           </div>
-          <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+          <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-amber-500 to-amber-300 transition-all duration-200"
+              className="h-full bg-gradient-to-r from-indigo-500 to-indigo-400 transition-all duration-200"
               style={{
                 width: `${
                   uploadProgress.total > 0
@@ -121,8 +121,8 @@ export default function PhotoUploader({
 
       {/* Upload Summary Feedback */}
       {lastUploadSummary && (
-        <div className="mt-4 p-4 rounded-xl border border-slate-800 bg-slate-900/60 text-xs space-y-1.5">
-          <div className="flex items-center gap-2 font-semibold text-white">
+        <div className="mt-4 p-4 rounded-xl border border-slate-200 bg-white shadow-sm text-xs space-y-1.5">
+          <div className="flex items-center gap-2 font-semibold text-slate-900">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             <span>
               Batch Complete: {lastUploadSummary.success} uploaded successfully
@@ -132,7 +132,7 @@ export default function PhotoUploader({
           {lastUploadSummary.reasons?.length > 0 && (
             <div className="text-red-400 space-y-0.5 pt-1">
               {lastUploadSummary.reasons.map((r, i) => (
-                <div key={i}>• {r}</div>
+                <div key={i}>â€¢ {r}</div>
               ))}
             </div>
           )}
@@ -141,3 +141,6 @@ export default function PhotoUploader({
     </div>
   );
 }
+
+
+

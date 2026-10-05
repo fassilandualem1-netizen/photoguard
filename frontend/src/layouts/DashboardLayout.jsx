@@ -27,6 +27,12 @@ export default function DashboardLayout({ children }) {
 
   const currentTab = searchParams.get("tab") || "albums";
   
+  // Determine branding display
+  const isStudio = user?.subscription_plan === "studio" || user?.role === "admin";
+  const displayLogo = (isStudio && user?.studio_logo_url) ? user.studio_logo_url : null;
+  const displayName = isStudio ? (user?.studio_name || user?.full_name || "Studio") : "PhotoGuard";
+
+  // Desktop sidebar elements
   // Close mobile menu on route change
   useEffect(() => {
     setIsMobileMenuOpen(false);
@@ -97,14 +103,14 @@ export default function DashboardLayout({ children }) {
       {/* Sidebar (Desktop) */}
       <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200 h-screen sticky top-0 z-30">
         <div className="p-6 flex items-center gap-3">
-          {user?.studio_logo_url && !isAssistant ? (
-            <img src={user.studio_logo_url} alt="Logo" className="h-8 max-w-[140px] object-contain" />
+          {displayLogo && !isAssistant ? (
+            <img src={displayLogo} alt="Logo" className="h-8 max-w-[140px] object-contain" />
           ) : (
             <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
               <LayoutGrid className="w-4 h-4 text-indigo-600" />
             </div>
           )}
-          <span className="font-bold text-lg text-slate-900 tracking-tight">PhotoGuard</span>
+          <span className="font-bold text-lg text-slate-900 tracking-tight truncate max-w-[150px]">{displayName}</span>
         </div>
 
         <nav className="flex-1 px-4 py-4 flex flex-col gap-1 overflow-y-auto">
@@ -171,10 +177,14 @@ export default function DashboardLayout({ children }) {
         <header className="md:hidden bg-white border-b border-slate-200 sticky top-0 z-30">
           <div className="px-4 h-16 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
-                <LayoutGrid className="w-3.5 h-3.5 text-indigo-600" />
-              </div>
-              <span className="font-bold text-base text-slate-900">PhotoGuard</span>
+                {displayLogo && !isAssistant ? (
+                  <img src={displayLogo} alt="Logo" className="h-7 w-7 object-contain rounded-md" />
+                ) : (
+                  <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                    <LayoutGrid className="w-3.5 h-3.5 text-indigo-600" />
+                  </div>
+                )}
+              <span className="font-bold text-base text-slate-900 truncate max-w-[150px]">{displayName}</span>
             </div>
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -256,6 +266,8 @@ export default function DashboardLayout({ children }) {
     </div>
   );
 }
+
+
 
 
 

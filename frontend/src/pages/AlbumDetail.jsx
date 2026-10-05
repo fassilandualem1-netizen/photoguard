@@ -648,9 +648,8 @@ export default function AlbumDetail() {
                   <span>{selectedItems.length} Selections In Review</span>
                 </span>
               ) : (
-                <span className="px-3 py-1 rounded-full bg-amber-500/15 text-indigo-500 text-xs font-semibold border border-amber-500/30 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                  <span>Client Selecting</span>
+                <span className="w-7 h-7 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center" title="Client Selecting">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
                 </span>
               )}
 
@@ -665,12 +664,7 @@ export default function AlbumDetail() {
 
             {/* Gallery Meta Info */}
             <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
-              <div className="flex items-center gap-1.5">
-                <span className="text-slate-500 font-medium">Access PIN:</span>
-                <span className="font-mono font-bold text-indigo-700 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 tracking-wider text-sm">
-                  {albumPin}
-                </span>
-              </div>
+              
 
               <div className="flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-slate-500" />
@@ -808,9 +802,7 @@ export default function AlbumDetail() {
                         <span>{copiedInvite ? "Copied to Clipboard!" : "Copy PIN"}</span>
                       </button>
 
-                      <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-200 text-[10px] text-slate-500 font-mono leading-relaxed select-all">
-                        "{shareText}"
-                      </div>
+                      
                     </div>
                   </div>
                 )}

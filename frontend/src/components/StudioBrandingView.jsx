@@ -180,8 +180,7 @@ export default function StudioBrandingView() {
                   <img src={studioLogoUrl} alt="Studio Logo" className="w-full h-full object-contain rounded" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">Active Studio Logo</p>
-                  <p className="text-xs text-slate-500 truncate max-w-[200px] sm:max-w-xs">{studioLogoUrl}</p>
+                  <p className="text-sm font-semibold text-slate-900">Studio Logo</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">

@@ -19,12 +19,22 @@ android {
         resourceConfigurations += setOf("en", "am")
     }
 
+
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getenv("RELEASE_KEYSTORE_PATH") ?: "dummy.keystore")
+            storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD") ?: "dummy"
+            keyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: "dummy"
+            keyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: "dummy"
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
         debug {
             isMinifyEnabled = false

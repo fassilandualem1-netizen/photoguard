@@ -1,5 +1,5 @@
-﻿import React, { useState } from "react";
-import { UploadCloud, FolderPlus, Loader2, CheckCircle2 } from "lucide-react";
+import React, { useState } from "react";
+import { UploadCloud, FolderPlus, Loader2, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
 
 export default function PhotoUploader({
   isSubmitted = false,
@@ -8,6 +8,7 @@ export default function PhotoUploader({
   lastUploadSummary = null,
   fileInputRef,
   onFileUpload,
+  uploadError = null,
 }) {
   const [isDragging, setIsDragging] = useState(false);
 
@@ -86,6 +87,17 @@ export default function PhotoUploader({
         </div>
       </div>
 
+      {/* Network / Upload Error Banner */}
+      {uploadError && !uploading && (
+        <div className="mt-4 p-3.5 rounded-xl border border-red-200 bg-red-50 flex items-start gap-3 text-xs text-red-700">
+          <XCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
+          <div>
+            <p className="font-semibold mb-0.5">Upload failed</p>
+            <p>{uploadError}</p>
+          </div>
+        </div>
+      )}
+
       {/* High-Speed Upload Progress Bar */}
       {uploading && (
         <div className="mt-4 space-y-2">
@@ -123,16 +135,20 @@ export default function PhotoUploader({
       {lastUploadSummary && (
         <div className="mt-4 p-4 rounded-xl border border-slate-200 bg-white shadow-sm text-xs space-y-1.5">
           <div className="flex items-center gap-2 font-semibold text-slate-900">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            {lastUploadSummary.failed > 0 ? (
+              <AlertCircle className="w-4 h-4 text-amber-500" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            )}
             <span>
               Batch Complete: {lastUploadSummary.success} uploaded successfully
               {lastUploadSummary.failed > 0 && `, ${lastUploadSummary.failed} failed`}
             </span>
           </div>
           {lastUploadSummary.reasons?.length > 0 && (
-            <div className="text-red-400 space-y-0.5 pt-1">
+            <div className="text-red-500 space-y-0.5 pt-1">
               {lastUploadSummary.reasons.map((r, i) => (
-                <div key={i}>â€¢ {r}</div>
+                <div key={i}>• {r}</div>
               ))}
             </div>
           )}
@@ -141,6 +157,3 @@ export default function PhotoUploader({
     </div>
   );
 }
-
-
-

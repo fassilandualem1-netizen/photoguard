@@ -64,6 +64,13 @@ api.interceptors.response.use(
         }
       }
     }
+    // Provide human-readable messages for common network failures
+    if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) {
+      error.userMessage = "Request timed out. Please check your connection and try again.";
+    } else if (!error.response && error.message?.includes("Network Error")) {
+      error.userMessage = "Network error. Please check your internet connection.";
+    }
+
     return Promise.reject(error);
   }
 );

@@ -99,6 +99,7 @@ export default function AlbumDetail() {
 
   // Uploaded batch summary feedback banner
   const [lastUploadSummary, setLastUploadSummary] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
 
   // Lightbox Preview Modal state
   const [previewPhoto, setPreviewPhoto] = useState(null);
@@ -172,6 +173,11 @@ export default function AlbumDetail() {
       sigConfig = sigRes.data;
     } catch (err) {
       console.warn("Direct-to-cloud signature unavailable, fallback to backend proxy.", err);
+        if (!navigator.onLine) {
+          setUploadError("You appear to be offline. Please check your internet connection.");
+          setUploading(false);
+          return;
+        }
     }
 
     // Direct-to-Cloud Upload Worker (High-Speed Edge Upload)

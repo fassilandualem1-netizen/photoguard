@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
@@ -128,7 +128,7 @@ export default function CreateAlbumView() {
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Sarah & James Wedding"
+              placeholder="e.g. Abeba & Zeleke Wedding"
               required
               disabled={loading}
               className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm disabled:opacity-50"
@@ -145,14 +145,14 @@ export default function CreateAlbumView() {
               type="text"
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
-              placeholder="e.g. Sarah Johnson"
+              placeholder="e.g. Abeba"
               required
               disabled={loading}
               className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm disabled:opacity-50"
             />
           </div>
 
-          {/* Access PIN — Read Only */}
+          {/* Access PIN â€” Read Only */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
@@ -165,13 +165,13 @@ export default function CreateAlbumView() {
             </div>
             <input
               type="text"
-              value="Will be generated on creation"
+              placeholder="Auto-generated" value=""
               readOnly
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-400 cursor-not-allowed select-none focus:outline-none shadow-sm"
             />
           </div>
 
-          {/* Gallery Lifespan — Studio Tier Only */}
+          {/* Gallery Lifespan â€” Studio Tier Only */}
           {isStudio && (
             <div>
               <div className="flex items-center justify-between mb-1.5">
@@ -255,3 +255,5 @@ export default function CreateAlbumView() {
     </div>
   );
 }
+
+

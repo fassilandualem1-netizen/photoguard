@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import {
   Users,
   UserPlus,
@@ -262,7 +262,7 @@ export default function StudioAssistantsView() {
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. Sara Jenkins"
+                      placeholder="e.g. Abeba Zeleke"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       disabled={isSubmitting || assistants.length >= 3}
@@ -276,7 +276,7 @@ export default function StudioAssistantsView() {
                     </label>
                     <input
                       type="email"
-                      placeholder="sara@example.com"
+                      placeholder="abeba@gmail.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       disabled={isSubmitting || assistants.length >= 3}
@@ -382,3 +382,4 @@ export default function StudioAssistantsView() {
     </div>
   );
 }
+

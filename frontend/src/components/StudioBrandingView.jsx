@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+﻿import React, { useState, useRef } from "react";
 import {
   Image as ImageIcon,
   Check,
@@ -293,3 +293,4 @@ export default function StudioBrandingView() {
     </div>
   );
 }
+

@@ -355,7 +355,7 @@ export default function AlbumDetail() {
 
   const handleCopyInviteMessage = async () => {
     try {
-      await navigator.clipboard.writeText(shareText);
+      await navigator.clipboard.writeText(albumPin);
       setCopiedInvite(true);
       setTimeout(() => setCopiedInvite(false), 2500);
     } catch {
@@ -805,7 +805,7 @@ export default function AlbumDetail() {
                         className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-indigo-500 hover:text-slate-900 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/30 transition-colors text-left cursor-pointer"
                       >
                         <Copy className="w-4 h-4 text-indigo-600 shrink-0" />
-                        <span>{copiedInvite ? "Copied to Clipboard!" : "Copy Invitation Message"}</span>
+                        <span>{copiedInvite ? "Copied to Clipboard!" : "Copy PIN"}</span>
                       </button>
 
                       <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-200 text-[10px] text-slate-500 font-mono leading-relaxed select-all">
@@ -1123,6 +1123,8 @@ export default function AlbumDetail() {
     </div>
   );
 }
+
+
 
 
 

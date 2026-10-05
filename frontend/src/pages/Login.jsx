@@ -243,7 +243,7 @@ function LoginContent({ onLoginSuccess }) {
               Sign in to your studio
             </h1>
             <p className="text-xs sm:text-sm text-slate-500">
-              Enter your credentials to access your console
+              Manage your clients, albums, and proofs.
             </p>
           </div>
 

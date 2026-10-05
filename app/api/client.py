@@ -306,6 +306,15 @@ def get_client_album_by_pin(
     clean_pin = pin.strip()
     client_ip = get_client_ip(request)
 
+    is_limited, retry_after = check_pin_rate_limit(client_ip=client_ip, pin=clean_pin, max_attempts=5, window_seconds=900)
+    if is_limited:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Invalid 6-digit PIN. Album not found.")
+    
+    is_limited, retry_after = check_pin_rate_limit(client_ip=client_ip, pin=clean_pin, max_attempts=5, window_seconds=900)
+    if is_limited:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Invalid 6-digit PIN. Album not found.")
+    client_ip = get_client_ip(request)
+
     # 1. Rate Limiting Check (Upstash Redis)
     is_limited, retry_after = check_pin_rate_limit(client_ip=client_ip, pin=clean_pin, max_attempts=5, window_seconds=900)
     if is_limited:
@@ -427,6 +436,7 @@ def sync_album_state(
 def update_client_media_selection(
     media_id: int,
     payload: ClientMediaUpdateRequest,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -437,9 +447,14 @@ def update_client_media_selection(
     Bumps Redis version counter for instant collaborative sync among family members.
     """
     pin = payload.pin.strip()
+    client_ip = get_client_ip(request)
     
-    # Verify PIN access to the target album
-    album = db.query(Album).filter(Album.pin == pin).first()
+    is_limited, retry_after = check_pin_rate_limit(client_ip=client_ip, pin=pin, max_attempts=5, window_seconds=900)
+    if is_limited:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Invalid 6-digit PIN. Album not found.")
+
+    # Use with_for_update to prevent race condition during selection update (PG-12)
+    album = db.query(Album).filter(Album.pin == pin).with_for_update().first()
     if not album:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -528,6 +543,7 @@ def update_client_media_selection(
 @router.post("/submit/{pin}", response_model=ClientSubmitResponse, status_code=status.HTTP_200_OK)
 def submit_album_selection(
     pin: str,
+    request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
@@ -630,6 +646,7 @@ def submit_album_selection(
 @router.post("/download", response_model=ClientDownloadResponse, status_code=status.HTTP_200_OK)
 def request_client_download(
     payload: ClientDownloadRequest,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -640,6 +657,12 @@ def request_client_download(
     Sets client_downloaded_at = func.now() to trigger the 1-day Delivery Album auto-purge countdown.
     """
     pin = payload.pin.strip()
+    client_ip = get_client_ip(request)
+    
+    is_limited, retry_after = check_pin_rate_limit(client_ip=client_ip, pin=pin, max_attempts=5, window_seconds=900)
+    if is_limited:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Invalid 6-digit PIN. Album not found.")
+
     album = db.query(Album).filter(Album.pin == pin).first()
     if not album:
         raise HTTPException(
@@ -698,6 +721,7 @@ def request_client_download(
 @router.get("/{pin}/download/", response_model=ClientDownloadResponse, status_code=status.HTTP_200_OK)
 def get_client_gallery_download(
     pin: str,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -705,6 +729,12 @@ def get_client_gallery_download(
     Sets client_downloaded_at = func.now() to trigger the 1-day Delivery Album auto-purge countdown.
     """
     clean_pin = pin.strip()
+    client_ip = get_client_ip(request)
+
+    is_limited, retry_after = check_pin_rate_limit(client_ip=client_ip, pin=clean_pin, max_attempts=5, window_seconds=900)
+    if is_limited:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Invalid 6-digit PIN. Album not found.")
+
     album = db.query(Album).filter(Album.pin == clean_pin).first()
     if not album:
         raise HTTPException(

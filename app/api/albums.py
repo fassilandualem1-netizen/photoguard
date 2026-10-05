@@ -611,6 +611,16 @@ def update_album(
         if payload.is_locked is not None:
             album.is_locked = bool(payload.is_locked)
         if payload.allow_download is not None:
+            owner = db.query(User).filter(User.id == current_user.effective_owner_id).first() or current_user
+            user_plan = getattr(owner, "subscription_plan", "basic") or getattr(owner, "plan_tier", "basic") or "basic"
+            plan_cfg = get_or_create_plan_config(db, user_plan)
+            is_admin = (current_user.role == UserRole.ADMIN.value or current_user.role == UserRole.ADMIN)
+
+            if payload.allow_download and not is_admin and not getattr(plan_cfg, "can_enable_downloads", False):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Direct Client Gallery Download is an exclusive Studio Plan feature."
+                )
             album.allow_download = bool(payload.allow_download)
 
         db.commit()

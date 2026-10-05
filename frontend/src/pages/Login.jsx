@@ -151,7 +151,7 @@ class LoginErrorBoundary extends React.Component {
       return (
         <div className="min-h-screen w-full flex items-center justify-center bg-[#07090c] text-white p-6">
           <div className="max-w-md w-full p-8 rounded-2xl bg-slate-900 border border-slate-800 text-center space-y-4 shadow-2xl">
-            <div className="w-12 h-12 mx-auto rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center font-bold text-xl">
+            <div className="w-12 h-12 mx-auto rounded-xl bg-red-500/20 text-red-600 flex items-center justify-center font-bold text-xl">
               !
             </div>
             <h2 className="text-xl font-bold">Authentication Console Alert</h2>
@@ -211,27 +211,27 @@ function LoginContent({ onLoginSuccess }) {
   return (
     <div
       id="login-container"
-      className="min-h-screen w-full flex flex-col items-center justify-between p-4 sm:p-6 bg-[#06080c] text-slate-100 selection:bg-[#FF1A4B]/30 selection:text-amber-200 relative overflow-hidden"
+      className="min-h-screen w-full flex flex-col items-center justify-between p-4 sm:p-6 bg-[#F6F7FB] text-slate-900 selection:bg-indigo-100 selection:text-indigo-900 relative overflow-hidden"
     >
       {/* Premium Ambient Background Accents */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[540px] h-[540px] bg-gradient-to-tr from-[#FF1A4B]/10 via-[#F59E0B]/10 to-transparent rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-[#06080c]/60 to-[#06080c] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[540px] h-[540px] bg-gradient-to-tr from-indigo-500/10 via-sky-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-[#F6F7FB]/60 to-[#F6F7FB] pointer-events-none" />
 
       {/* Spacer for optical vertical balance */}
       <div className="w-full h-4 hidden sm:block" />
 
       {/* Centered Login Card */}
       <div className="w-full max-w-[440px] relative z-10 my-auto">
-        <div className="p-8 sm:p-10 rounded-3xl bg-[#0b0e14]/90 border border-slate-800/80 shadow-[0_24px_70px_-12px_rgba(0,0,0,0.85),0_0_40px_rgba(245,158,11,0.06)] backdrop-blur-2xl">
+        <div className="p-8 sm:p-10 rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-200/50 ">
           {/* Studio Brand Header */}
           <div className="flex flex-col items-center text-center mb-8">
             <div className="relative mb-4 group">
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#FF1A4B] to-[#F59E0B] blur-lg opacity-40 group-hover:opacity-60 transition-opacity" />
+              <div className="absolute inset-0 rounded-2xl bg-indigo-500 blur-lg opacity-20 group-hover:opacity-40 transition-opacity" />
               <PhotoGuardLuxuryLogo className="w-16 h-16 relative" />
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-extrabold text-2xl tracking-tight text-white">PhotoGuard</span>
-              <span className="text-[10px] uppercase tracking-widest px-2.5 py-0.5 rounded-full border border-amber-500/30 bg-gradient-to-r from-[#FF1A4B]/15 to-[#F59E0B]/15 text-amber-300 font-bold font-mono">
+              <span className="font-extrabold text-2xl tracking-tight text-slate-900">PhotoGuard</span>
+              <span className="text-[10px] uppercase tracking-widest px-2.5 py-0.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 font-bold font-mono">
                 Studio
               </span>
             </div>
@@ -239,10 +239,10 @@ function LoginContent({ onLoginSuccess }) {
 
           {/* Welcome Text */}
           <div className="mb-6 text-center">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-1.5">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 mb-1.5">
               Sign in to your studio
             </h1>
-            <p className="text-xs sm:text-sm text-slate-400">
+            <p className="text-xs sm:text-sm text-slate-500">
               Enter your credentials to access your console
             </p>
           </div>
@@ -251,9 +251,9 @@ function LoginContent({ onLoginSuccess }) {
           {error && (
             <div
               id="login-error-alert"
-              className="mb-6 p-3.5 rounded-xl border border-red-500/40 bg-red-950/60 text-red-200 flex items-start gap-3 text-xs sm:text-sm animate-in fade-in duration-200 shadow-lg shadow-red-950/40"
+              className="mb-6 p-3.5 rounded-xl border border-red-200 bg-red-50 text-red-700 flex items-start gap-3 text-xs sm:text-sm animate-in fade-in duration-200 shadow-lg shadow-red-100/50"
             >
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
               <span>
                 {typeof error === "string" ? error : String(error?.msg || error?.message || "Authentication error")}
               </span>
@@ -263,7 +263,7 @@ function LoginContent({ onLoginSuccess }) {
           {/* Clean Login Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-600">
                 Studio Email
               </label>
               <div className="relative">
@@ -276,14 +276,14 @@ function LoginContent({ onLoginSuccess }) {
                   placeholder="photographer@studio.com"
                   required
                   autoComplete="email"
-                  className="w-full bg-slate-900/90 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25 transition-all shadow-inner"
+                  className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/25 transition-all shadow-sm"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-600">
                   Password
                 </label>
                 <span className="text-xs text-slate-500 cursor-default">
@@ -300,12 +300,12 @@ function LoginContent({ onLoginSuccess }) {
                   placeholder="••••••••••••"
                   required
                   autoComplete="current-password"
-                  className="w-full bg-slate-900/90 border border-slate-800 rounded-xl pl-10 pr-11 py-3 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/25 transition-all shadow-inner"
+                  className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-11 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/25 transition-all shadow-sm"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -317,7 +317,7 @@ function LoginContent({ onLoginSuccess }) {
               id="login-submit-btn"
               type="submit"
               disabled={loading}
-              className="w-full mt-2 py-3 px-4 rounded-xl bg-gradient-to-r from-[#FF1A4B] via-[#FF5E3A] to-[#F59E0B] text-white font-bold text-sm hover:opacity-95 active:scale-[0.99] transition-all duration-200 shadow-xl shadow-[#FF1A4B]/20 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+              className="w-full mt-2 py-3 px-4 rounded-xl bg-indigo-600 border border-indigo-700 text-white font-bold text-sm hover:bg-indigo-700 active:scale-[0.99] transition-all duration-200 shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
             >
               {loading ? (
                 <>

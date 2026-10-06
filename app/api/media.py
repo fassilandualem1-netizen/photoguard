@@ -9,6 +9,7 @@ import shutil
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
@@ -177,9 +178,36 @@ def save_direct_upload_url(
 
     compressed_size = payload.compressed_size or (int(original_size * 0.15) if original_size else 0)
 
+    clean_filename = (payload.filename or "photo.jpg").strip()
+
+    # Deduplication Guard: if photo with this filename already exists in the album, update in place
+    existing_item = db.query(MediaItem).filter(
+        MediaItem.album_id == album.id,
+        func.lower(MediaItem.filename) == clean_filename.lower()
+    ).first()
+
+    if existing_item:
+        if owner and original_size > 0:
+            diff = original_size - int(existing_item.original_size or 0)
+            if diff != 0:
+                owner.storage_used = max(0, int(owner.storage_used or 0) + diff)
+
+        existing_item.url = high_res_url
+        existing_item.thumbnail_url = thumbnail_url
+        existing_item.original_size = original_size
+        existing_item.compressed_size = compressed_size
+        try:
+            db.commit()
+            db.refresh(existing_item)
+            increment_album_version(album.pin)
+        except Exception as exc:
+            db.rollback()
+            logger.error(f"Error updating existing media item: {exc}")
+        return existing_item
+
     media_item = MediaItem(
         album_id=album.id,
-        filename=payload.filename or "photo.jpg",
+        filename=clean_filename,
         url=high_res_url,
         thumbnail_url=thumbnail_url,
         original_size=original_size,
@@ -196,8 +224,6 @@ def save_direct_upload_url(
         db.refresh(media_item)
     except SQLAlchemyError as exc:
         db.rollback()
-        req_id = uuid.uuid4().hex
-        logger.error(f"[DB Error {req_id}] {exc}")
         req_id = uuid.uuid4().hex
         logger.error(f"[DB Error {req_id}] {exc}")
         raise HTTPException(
@@ -299,10 +325,36 @@ def upload_album_photo(
     if not high_res_url:
         raise HTTPException(status_code=502, detail="Cloud Storage Upload Failed")
 
+    clean_filename = (file.filename or "photo.jpg").strip()
+
+    # Deduplication Guard: if photo with this filename already exists in the album, update in place
+    existing_item = db.query(MediaItem).filter(
+        MediaItem.album_id == album.id,
+        func.lower(MediaItem.filename) == clean_filename.lower()
+    ).first()
+
+    if existing_item:
+        if owner and original_size > 0:
+            diff = original_size - int(existing_item.original_size or 0)
+            if diff != 0:
+                owner.storage_used = max(0, int(owner.storage_used or 0) + diff)
+
+        existing_item.url = high_res_url
+        existing_item.thumbnail_url = thumbnail_url
+        existing_item.original_size = original_size
+        existing_item.compressed_size = int(original_size * 0.15)
+        try:
+            db.commit()
+            db.refresh(existing_item)
+            increment_album_version(album.pin)
+        except Exception:
+            pass
+        return existing_item
+
     # DB Record
     media_item = MediaItem(
         album_id=album.id,
-        filename=file.filename or "photo.jpg",
+        filename=clean_filename,
         url=high_res_url,
         thumbnail_url=thumbnail_url,
         original_size=original_size,
@@ -328,28 +380,7 @@ def upload_album_photo(
     except Exception:
         pass
 
-    # CLD-01 / S3-01: Generate signed URLs for authenticated assets before returning to photographer dashboard
-    from app.core.storage import generate_signed_clean_url, generate_s3_presigned_url
-    items_out = []
-    for item in album.media_items:
-        high_res = item.url
-        thumb = item.thumbnail_url
-
-        if high_res and "res.cloudinary.com" in high_res:
-            high_res = generate_signed_clean_url(high_res) or high_res
-        elif high_res and high_res.startswith("s3://"):
-            high_res = generate_s3_presigned_url(high_res) or high_res
-            
-        if thumb and "res.cloudinary.com" in thumb:
-            thumb = generate_signed_clean_url(thumb) or thumb
-        elif thumb and thumb.startswith("s3://"):
-            thumb = generate_s3_presigned_url(thumb) or thumb
-            
-        item.url = high_res
-        item.thumbnail_url = thumb
-        items_out.append(item)
-
-    return items_out
+    return media_item
 
 @router.delete("/{media_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_media_item(
@@ -434,15 +465,18 @@ def delete_media_item(
         )
 
 @router.get("/{media_id}/download")
-def download_media_item(
+async def download_media_item(
     media_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Directly streams or redirects to the original media proof for local studio download.
+    Directly streams the original media proof for local studio download,
+    preventing browser CORS issues or credential redirect rejections.
     """
-    from fastapi.responses import FileResponse, RedirectResponse
+    from fastapi.responses import FileResponse, StreamingResponse
+    import httpx
+    from starlette.background import BackgroundTask
 
     item = db.query(MediaItem).filter(MediaItem.id == media_id).first()
     if not item:
@@ -451,7 +485,10 @@ def download_media_item(
     if not album or not check_media_album_access(album, current_user, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
     
-    if item.url and item.url.startswith("/uploads/"):
+    if not item.url:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file URL not found.")
+
+    if item.url.startswith("/uploads/"):
         clean_fn = os.path.basename(item.url)
         local_path = os.path.join(os.getcwd(), "uploads", clean_fn)
         if os.path.exists(local_path):
@@ -460,8 +497,27 @@ def download_media_item(
                 media_type="image/jpeg",
                 filename=item.filename or clean_fn
             )
-            
-    if not item.url:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media file URL not found.")
 
-    return RedirectResponse(url=item.url)
+    try:
+        client = httpx.AsyncClient(timeout=60.0, follow_redirects=True)
+        req = client.build_request("GET", item.url)
+        res = await client.send(req, stream=True)
+        if res.status_code >= 400:
+            await client.aclose()
+            raise HTTPException(status_code=res.status_code, detail="Remote media asset could not be retrieved.")
+
+        return StreamingResponse(
+            res.aiter_raw(),
+            status_code=200,
+            media_type=res.headers.get("content-type", "image/jpeg"),
+            headers={
+                "Content-Disposition": f'attachment; filename="{item.filename or "photo.jpg"}"',
+                "Cache-Control": "private, no-transform",
+            },
+            background=BackgroundTask(client.aclose)
+        )
+    except HTTPException:
+        raise
+    except Exception as stream_err:
+        logger.error(f"[Download Error] Failed to stream media {media_id}: {stream_err}")
+        raise HTTPException(status_code=502, detail="Failed to stream image from storage provider.")

@@ -64,6 +64,12 @@ export default function DashboardLayout({ children }) {
   const isAssistant = user?.role === "assistant" || Boolean(user?.parent_id);
 
   const handleNavClick = (tabId) => {
+    if (window.__PHOTOGUARD_IS_UPLOADING) {
+      const confirmLeave = window.confirm(
+        "Photos are currently uploading. Leaving this page will cancel the remaining uploads. Are you sure you want to leave?"
+      );
+      if (!confirmLeave) return;
+    }
     navigate(`/dashboard?tab=${tabId}`);
   };
 

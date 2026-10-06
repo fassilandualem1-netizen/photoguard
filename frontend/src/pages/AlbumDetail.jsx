@@ -33,7 +33,10 @@ import {
   CheckSquare,
   FolderCheck,
   ExternalLink,
-  ShieldCheck
+  ShieldCheck,
+  Archive,
+  RefreshCw,
+  FileArchive
 } from "lucide-react";
 
 // Upgrade Cloudinary/CDN URLs to pristine crisp high-res retina grid thumbnails
@@ -42,12 +45,16 @@ const getCrispThumbnailUrl = (item) => {
   const rawUrl = item.thumbnail_url || item.url || "";
   if (!rawUrl) return "";
 
-  // If already an optimized Cloudinary URL, ensure crisp w_1000,dpr_2.0,q_auto:best,f_avif
+  // Never tamper with signed URLs as altering path invalidates cryptographic signature
+  if (rawUrl.includes("/s--")) {
+    return rawUrl;
+  }
+
+  // If already an optimized Cloudinary URL, ensure clean auto format & responsive sizing
   if (rawUrl.includes("res.cloudinary.com") && rawUrl.includes("/upload/")) {
-    // Replace any legacy transformation or standard /upload/ with high-res parameters
     return rawUrl.replace(
       /\/upload\/(?:[a-zA-Z0-9_:,.-]+\/)?/,
-      "/upload/f_avif,q_auto:best,dpr_2.0,w_1000,c_limit/"
+      "/upload/f_auto,q_auto:good,w_800,c_limit/"
     );
   }
   return rawUrl;
@@ -204,8 +211,10 @@ export default function AlbumDetail() {
   const [togglingDownload, setTogglingDownload] = useState(false);
   const [deliveryToast, setDeliveryToast] = useState(null);
 
-  // Native Folder Download state (File System Access API)
+  // Native Folder Download state (File System Access API) & ZIP Download state
   const [isDownloadingFolder, setIsDownloadingFolder] = useState(false);
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+  const [deduplicating, setDeduplicating] = useState(false);
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({
     current: 0,
@@ -216,6 +225,14 @@ export default function AlbumDetail() {
     successCount: 0,
     failedFiles: [],
   });
+
+  // Global upload tracking to prevent accidental navigation away
+  useEffect(() => {
+    window.__PHOTOGUARD_IS_UPLOADING = Boolean(uploading);
+    return () => {
+      window.__PHOTOGUARD_IS_UPLOADING = false;
+    };
+  }, [uploading]);
 
   // Share PIN dropdown state
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -594,16 +611,78 @@ export default function AlbumDetail() {
     }
   };
 
-  // Helper to fetch blob with proxy fallback
+  // Helper to fetch blob with reliable proxy streaming
   const fetchPhotoBlob = async (url, mediaId) => {
+    // 1. Direct proxy stream from same-origin backend to bypass CORS and redirect issues
+    try {
+      const proxyRes = await api.get(`/api/v1/media/${mediaId}/download`, {
+        responseType: "blob",
+        timeout: 45000,
+      });
+      if (proxyRes.data && proxyRes.data.size > 0) {
+        return proxyRes.data;
+      }
+    } catch (proxyErr) {
+      console.warn(`Proxy stream failed for media ${mediaId}:`, proxyErr);
+    }
+
+    // 2. Direct fetch fallback
     try {
       const res = await fetch(url, { mode: "cors" });
-      if (res.ok) return await res.blob();
+      if (res.ok) {
+        const b = await res.blob();
+        if (b && b.size > 0) return b;
+      }
     } catch (corsErr) {
-      console.warn("Direct image fetch blocked, using studio download route:", corsErr);
+      console.warn("Direct image fetch blocked:", corsErr);
     }
-    const proxyRes = await api.get(`/api/v1/media/${mediaId}/download`, { responseType: "blob" });
-    return proxyRes.data;
+
+    throw new Error("Unable to download image data.");
+  };
+
+  // Instant 1-Click ZIP Download (saves directly to Downloads folder)
+  const handleDownloadZip = async () => {
+    if (!canDownloadAll) {
+      alert("No photos available to download yet.");
+      return;
+    }
+    try {
+      setIsDownloadingZip(true);
+      const res = await api.get(`/api/v1/albums/${id}/download-zip`, {
+        responseType: "blob",
+        timeout: 180000,
+      });
+      const blob = new Blob([res.data], { type: "application/zip" });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      const cleanTitle = (album?.title || "Gallery").replace(/[^a-zA-Z0-9_-]/g, "_");
+      a.download = `${cleanTitle}_Selections.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      console.error("ZIP download failed:", err);
+      alert(err.response?.data?.detail || "Failed to download ZIP archive. Please try again.");
+    } finally {
+      setIsDownloadingZip(false);
+    }
+  };
+
+  // Manual Deduplication handler
+  const handleDeduplicatePhotos = async () => {
+    if (deduplicating) return;
+    try {
+      setDeduplicating(true);
+      const res = await api.post(`/api/v1/albums/${id}/deduplicate`);
+      setAlbum(res.data);
+    } catch (err) {
+      console.error("Deduplication error:", err);
+      alert(err.response?.data?.detail || "Failed to clean up duplicates.");
+    } finally {
+      setDeduplicating(false);
+    }
   };
 
   // Clean, Beautifully Formatted Retouching Job Sheet Generator (00_JOB_SHEET.txt)
@@ -919,6 +998,21 @@ export default function AlbumDetail() {
                 <span>{mediaItems.length} total proofs uploaded</span>
               </div>
 
+              {mediaItems.length > new Set(mediaItems.map((m) => (m.filename || "").toLowerCase().trim())).size && (
+                <button
+                  type="button"
+                  onClick={handleDeduplicatePhotos}
+                  disabled={deduplicating}
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-indigo-500 text-xs font-semibold border border-amber-500/40 hover:bg-amber-500/30 transition-all cursor-pointer"
+                  title="Remove duplicate photos from interrupted uploads and reclaim storage"
+                >
+                  <RefreshCw className={`w-3 h-3 ${deduplicating ? "animate-spin" : ""}`} />
+                  <span>
+                    Clean Up {mediaItems.length - new Set(mediaItems.map((m) => (m.filename || "").toLowerCase().trim())).size} Duplicates
+                  </span>
+                </button>
+              )}
+
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                 <span className="font-semibold text-emerald-300">
@@ -1085,32 +1179,54 @@ export default function AlbumDetail() {
               <span>Review Selections ({selectedItems.length})</span>
             </button>
 
-            {/* DOWNLOAD ALL BUTTON: Active if selections exist or submitted */}
+            {/* PRIMARY: Instant 1-Click ZIP Download (saves directly to computer) */}
             <button
-              id="download-all-btn"
+              id="download-zip-btn"
               type="button"
-              onClick={handleDownloadAll}
-              disabled={!canDownloadAll || isDownloadingFolder}
+              onClick={handleDownloadZip}
+              disabled={!canDownloadAll || isDownloadingZip}
               className={`inline-flex items-center gap-2.5 px-5 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-xl ${
                 canDownloadAll
-                  ? "bg-gradient-to-r from-amber-500 via-amber-400 to-amber-200 text-slate-950 hover:brightness-110 active:scale-[0.98] shadow-amber-500/20 cursor-pointer"
+                  ? "bg-gradient-to-r from-amber-500 via-amber-400 to-amber-300 text-slate-950 hover:brightness-110 active:scale-[0.98] shadow-amber-500/20 cursor-pointer"
                   : "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-60 shadow-none"
               }`}
               title={
                 canDownloadAll
-                  ? `Download ${selectedItems.length > 0 ? `${selectedItems.length} client-selected photos` : `all ${mediaItems.length} photos`} to your local folder`
+                  ? `Download ${selectedItems.length > 0 ? `${selectedItems.length} client-selected photos` : `all ${mediaItems.length} photos`} as a ZIP archive to your Downloads folder`
                   : "Download All activates when the client marks selections or submits the album"
               }
             >
-              {isDownloadingFolder ? (
+              {isDownloadingZip ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                  <span>Downloading ({downloadProgress.current}/{downloadProgress.total})...</span>
+                  <span>Preparing ZIP...</span>
                 </>
               ) : (
                 <>
-                  <FolderDown className={`w-4 h-4 stroke-[2.4] ${canDownloadAll ? "text-slate-950" : "text-slate-500 dark:text-slate-400"}`} />
+                  <Archive className="w-4 h-4 text-slate-950 stroke-[2.4]" />
                   <span>Download All {selectedItems.length > 0 ? `(${selectedItems.length})` : mediaItems.length > 0 ? `(${mediaItems.length})` : ""}</span>
+                </>
+              )}
+            </button>
+
+            {/* SECONDARY: Save to Folder (File System Access) */}
+            <button
+              id="download-folder-btn"
+              type="button"
+              onClick={handleDownloadAll}
+              disabled={!canDownloadAll || isDownloadingFolder}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl font-semibold text-xs border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-white transition-all cursor-pointer"
+              title="Save photos directly into a specific local folder on your computer"
+            >
+              {isDownloadingFolder ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" />
+                  <span>Saving ({downloadProgress.current}/{downloadProgress.total})...</span>
+                </>
+              ) : (
+                <>
+                  <FolderDown className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Save to Folder</span>
                 </>
               )}
             </button>
@@ -1240,12 +1356,17 @@ export default function AlbumDetail() {
                   className="group relative aspect-[4/3] rounded-2xl sm:rounded-3xl overflow-hidden bg-black/60 border border-slate-200 dark:border-slate-800 hover:border-amber-400/50 transition-all duration-300 shadow-lg cursor-pointer"
                   onClick={() => setPreviewPhoto(item)}
                 >
-                  {/* Pure Photo */}
+                  {/* Pure Photo with resilient error fallback */}
                   <img
                     src={getCrispThumbnailUrl(item)}
                     alt={item.filename || "Photo"}
                     loading="lazy"
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    onError={(e) => {
+                      if (item.url && e.currentTarget.src !== item.url) {
+                        e.currentTarget.src = item.url;
+                      }
+                    }}
                   />
 
                   {/* Elegant Hover Overlay with Zoom & Delete */}
@@ -1304,7 +1425,11 @@ export default function AlbumDetail() {
 
             <div>
               <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                {downloadProgress.completed ? "Client Selections Saved to Folder!" : "Saving to Local Folder"}
+                {downloadProgress.completed
+                  ? downloadProgress.successCount > 0
+                    ? "Client Selections Saved to Folder!"
+                    : "Folder Save Incomplete"
+                  : "Saving to Local Folder"}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                 Folder: <span className="font-mono text-indigo-500 font-bold">{downloadProgress.folderName || "Selected Folder"}</span>
@@ -1327,11 +1452,57 @@ export default function AlbumDetail() {
                 </div>
               </div>
             ) : (
-              <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 text-xs text-emerald-200 text-center">
-                <div className="font-bold flex items-center justify-center gap-2 text-emerald-500 text-sm">
-                  <CheckCircle2 className="w-5 h-5" />
-                  <span>Download Complete</span>
-                </div>
+              <div className="space-y-3">
+                {downloadProgress.successCount > 0 && downloadProgress.failedFiles.length === 0 && (
+                  <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 text-xs text-emerald-200 text-center">
+                    <div className="font-bold flex items-center justify-center gap-2 text-emerald-500 text-sm">
+                      <CheckCircle2 className="w-5 h-5" />
+                      <span>All {downloadProgress.successCount} Photos Saved to Folder!</span>
+                    </div>
+                  </div>
+                )}
+                {downloadProgress.successCount > 0 && downloadProgress.failedFiles.length > 0 && (
+                  <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/30 text-xs text-amber-200 text-center space-y-2">
+                    <div className="font-bold flex items-center justify-center gap-2 text-amber-500 text-sm">
+                      <AlertCircle className="w-5 h-5" />
+                      <span>{downloadProgress.successCount} Saved, {downloadProgress.failedFiles.length} Failed</span>
+                    </div>
+                    <p className="text-[11px] text-amber-300">
+                      Some files could not be saved directly. You can download all selections as a ZIP archive:
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDownloadModalOpen(false);
+                        handleDownloadZip();
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs cursor-pointer"
+                    >
+                      Download as ZIP Archive
+                    </button>
+                  </div>
+                )}
+                {downloadProgress.successCount === 0 && (
+                  <div className="p-4 rounded-2xl bg-red-950/30 border border-red-500/30 text-xs text-red-200 text-center space-y-2.5">
+                    <div className="font-bold flex items-center justify-center gap-2 text-red-400 text-sm">
+                      <AlertCircle className="w-5 h-5" />
+                      <span>Folder Save Incomplete (0 Saved)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300">
+                      Browser or folder permissions prevented direct saving. Download all selections as a standard ZIP file instead:
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDownloadModalOpen(false);
+                        handleDownloadZip();
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs transition-colors cursor-pointer"
+                    >
+                      Download as ZIP Archive (Recommended)
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1340,9 +1511,9 @@ export default function AlbumDetail() {
                 type="button"
                 onClick={() => setDownloadModalOpen(false)}
                 disabled={!downloadProgress.completed}
-                className="w-full py-3 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="w-full py-3 px-4 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-900 dark:text-white font-bold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
-                {downloadProgress.completed ? "Done" : "Downloading..."}
+                Close
               </button>
             </div>
 

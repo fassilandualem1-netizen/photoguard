@@ -411,6 +411,44 @@ def get_album(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this album.")
 
         media_items = album.media_items or []
+
+        # Automatic Deduplication: Clean up duplicate filenames from interrupted network batches
+        from collections import defaultdict
+        grouped = defaultdict(list)
+        for m in media_items:
+            key = (m.filename or "photo.jpg").strip().lower()
+            grouped[key].append(m)
+
+        has_duplicates = any(len(v) > 1 for v in grouped.values())
+        if has_duplicates:
+            items_to_delete = []
+            reclaimed_bytes = 0
+            surviving_items = []
+            for key, items in grouped.items():
+                selected_items = [it for it in items if bool(it.is_selected or False)]
+                keeper = selected_items[-1] if selected_items else items[-1]
+                surviving_items.append(keeper)
+                for it in items:
+                    if it.id != keeper.id:
+                        items_to_delete.append(it)
+                        reclaimed_bytes += int(it.original_size or 0)
+
+            for it in items_to_delete:
+                db.delete(it)
+
+            owner = db.query(User).filter(User.id == album.photographer_id).first()
+            if owner and reclaimed_bytes > 0:
+                owner.storage_used = max(0, int(owner.storage_used or 0) - reclaimed_bytes)
+
+            try:
+                db.commit()
+                db.refresh(album)
+                media_items = surviving_items
+            except Exception as dedup_err:
+                db.rollback()
+                logger.warning(f"Auto-deduplication commit notice: {dedup_err}")
+                media_items = album.media_items or []
+
         media_count = len(media_items)
         selected_count = sum(1 for m in media_items if bool(m.is_selected or False))
         is_expired = check_is_expired(album.expires_at)
@@ -608,6 +646,101 @@ def download_album_selections(
 
     return selected_items
 
+@router.get("/{album_id}/download-zip")
+async def download_album_zip(
+    album_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Downloads all client selections (or all proofs if none marked) as a clean ZIP archive with 00_JOB_SHEET.txt.
+    Streams directly to the browser for instant one-click studio download.
+    """
+    import io
+    import zipfile
+    import httpx
+    from fastapi.responses import StreamingResponse
+
+    album = db.query(Album).filter(Album.id == album_id).first()
+    if not album:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
+
+    if not check_album_access(album, current_user, db):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this album.")
+
+    media_items = album.media_items or []
+    target_photos = [m for m in media_items if bool(m.is_selected or False)]
+    if not target_photos:
+        target_photos = media_items
+
+    if not target_photos:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No photos to download.")
+
+    # Record photographer download timestamp for selection auto-purge countdown
+    try:
+        album.photographer_downloaded_at = func.now()
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.warning(f"Could not record photographer_downloaded_at: {exc}")
+
+    # Build 00_JOB_SHEET.txt
+    album_title = album.title or "Gallery"
+    pin = album.pin or "N/A"
+    sheet_lines = [
+        "============================================================",
+        "PHOTOGUARD - RETOUCHING JOB SHEET",
+        f"Album: {album_title} | PIN: {pin} | Total Photos: {len(target_photos)}",
+        "============================================================\n"
+    ]
+    for idx, item in enumerate(target_photos, start=1):
+        pad = f"{idx:02d}"
+        fn = item.filename or f"Photo_{idx}.jpg"
+        notes = f" (Client Note: {item.client_notes})" if item.client_notes else ""
+        sheet_lines.append(f"[{pad}] {fn}{notes}")
+    job_sheet_content = "\n".join(sheet_lines).encode("utf-8")
+
+    # Create zip in memory
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        zip_file.writestr("00_JOB_SHEET.txt", job_sheet_content)
+
+        async with httpx.AsyncClient(timeout=45.0, follow_redirects=True) as client:
+            for idx, item in enumerate(target_photos, start=1):
+                pad = f"{idx:02d}"
+                clean_name = item.filename or f"Photo_{idx}.jpg"
+                arcname = f"{pad}_{clean_name}"
+                
+                try:
+                    if item.url and item.url.startswith("/uploads/"):
+                        local_path = os.path.join(os.getcwd(), "uploads", os.path.basename(item.url))
+                        if os.path.exists(local_path):
+                            with open(local_path, "rb") as f:
+                                zip_file.writestr(arcname, f.read())
+                            continue
+
+                    if item.url and (item.url.startswith("http://") or item.url.startswith("https://")):
+                        resp = await client.get(item.url)
+                        if resp.status_code == 200:
+                            zip_file.writestr(arcname, resp.content)
+                        else:
+                            logger.warning(f"Failed to fetch photo {item.id} for zip: {resp.status_code}")
+                except Exception as img_err:
+                    logger.warning(f"Error packing photo {item.id} into zip: {img_err}")
+
+    zip_buffer.seek(0)
+    safe_title = "".join(c for c in album_title if c.isalnum() or c in ("-", "_")).strip() or "Gallery"
+    download_filename = f"{safe_title}_Selections.zip"
+
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{download_filename}"',
+            "Cache-Control": "no-cache",
+        }
+    )
+
 @router.patch("/{album_id}", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
 @router.patch("/{album_id}/", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
 def update_album(
@@ -693,6 +826,66 @@ def update_album(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error updating album: {req_id}"
         )
+
+@router.post("/{album_id}/deduplicate", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
+def deduplicate_album_photos(
+    album_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Cleans up duplicate photos uploaded to this album (e.g. from interrupted network batches).
+    Preserves client selections and keeps the freshest/best photo for each unique filename.
+    Reclaims storage quota on the owner account.
+    """
+    album = db.query(Album).filter(Album.id == album_id).first()
+    if not album:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
+
+    if not check_album_access(album, current_user, db):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+    media_items = db.query(MediaItem).filter(MediaItem.album_id == album_id).order_by(MediaItem.id.asc()).all()
+    if not media_items:
+        return get_album(album_id, db, current_user)
+
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for m in media_items:
+        key = (m.filename or "photo.jpg").strip().lower()
+        grouped[key].append(m)
+
+    items_to_delete = []
+    reclaimed_bytes = 0
+
+    for key, items in grouped.items():
+        if len(items) > 1:
+            selected_items = [it for it in items if bool(it.is_selected or False)]
+            keeper = selected_items[-1] if selected_items else items[-1]
+
+            for it in items:
+                if it.id != keeper.id:
+                    items_to_delete.append(it)
+                    reclaimed_bytes += int(it.original_size or 0)
+
+    if items_to_delete:
+        owner = db.query(User).filter(User.id == album.photographer_id).first()
+        if owner and reclaimed_bytes > 0:
+            owner.storage_used = max(0, int(owner.storage_used or 0) - reclaimed_bytes)
+
+        for it in items_to_delete:
+            db.delete(it)
+
+        try:
+            db.commit()
+            db.refresh(album)
+            increment_album_version(album.pin)
+        except Exception as exc:
+            db.rollback()
+            logger.error(f"Error during album deduplication: {exc}")
+            raise HTTPException(status_code=500, detail="Failed to deduplicate photos.")
+
+    return get_album(album_id, db, current_user)
 
 @router.delete("/{album_id}", status_code=status.HTTP_204_NO_CONTENT)
 @router.delete("/{album_id}/", status_code=status.HTTP_204_NO_CONTENT)

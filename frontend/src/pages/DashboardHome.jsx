@@ -69,7 +69,24 @@ export default function DashboardHome() {
   useEffect(() => {
     if (!isAdmin || viewAsPhotographer) {
       if (currentTab === "albums") {
-        fetchAlbums();
+        // Use functional state update or just check the length to avoid hard loading
+        setAlbums(prevAlbums => {
+          const isBackground = prevAlbums.length > 0;
+          if (!isBackground) setLoading(true);
+          
+          api.get("/api/v1/albums")
+            .then(response => {
+              setAlbums(response.data || []);
+            })
+            .catch(err => {
+              if (!isBackground) setError(err.response?.data?.detail || "Failed to load client albums.");
+            })
+            .finally(() => {
+              setLoading(false);
+            });
+            
+          return prevAlbums; // Don't actually change state here, just using it to get current value
+        });
       }
     }
   }, [isAdmin, viewAsPhotographer, currentTab]);

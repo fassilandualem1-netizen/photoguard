@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import api from "../api/axios";
 import {
   Menu,
@@ -18,6 +19,7 @@ import {
 
 export default function DashboardLayout({ children }) {
   const { user, logout, isAdmin } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeBroadcast, setActiveBroadcast] = useState(null);
   const [isBannerDismissed, setIsBannerDismissed] = useState(false);

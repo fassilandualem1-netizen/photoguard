@@ -15,6 +15,8 @@ import {
   AlertTriangle,
   Megaphone,
   LayoutGrid, LayoutTemplate, Share2, Send
+  Sun,
+  Moon
 } from "lucide-react";
 
 export default function DashboardLayout({ children }) {

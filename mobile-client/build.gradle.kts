@@ -22,14 +22,20 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
-            if (keystorePath != null && file(keystorePath).exists()) {
-                storeFile = file(keystorePath)
-                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD") ?: ""
-                keyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: ""
-                keyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: ""
+            val envPath = System.getenv("RELEASE_KEYSTORE_PATH")
+            val releaseKeystore = if (envPath != null && file(envPath).exists()) {
+                file(envPath)
+            } else if (file("release.keystore").exists()) {
+                file("release.keystore")
             } else {
-                initWith(getByName("debug"))
+                null
+            }
+
+            if (releaseKeystore != null) {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD") ?: "photoguard_secret_pass"
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: "photoguard"
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: "photoguard_secret_pass"
             }
         }
     }
@@ -39,7 +45,10 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
+            val releaseSigning = signingConfigs.findByName("release")
+            if (releaseSigning?.storeFile?.exists() == true) {
+                signingConfig = releaseSigning
+            }
         }
         debug {
             isMinifyEnabled = false
@@ -60,7 +69,10 @@ android {
         )
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 
     composeOptions { kotlinCompilerExtensionVersion = "1.5.11" }
 
@@ -69,6 +81,9 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "META-INF/INDEX.LIST"
             excludes += "META-INF/io.netty.versions.properties"
+            excludes += "META-INF/*.kotlin_module"
+            excludes += "META-INF/*.version"
+            excludes += "META-INF/DEPENDENCIES"
         }
     }
 }

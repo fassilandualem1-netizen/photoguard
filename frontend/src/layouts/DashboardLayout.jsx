@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation, useSearchParams } from "react-router-do
 import { useAuth } from "../context/AuthContext";
 import ThemeToggle from "../components/ThemeToggle";
 import api from "../api/axios";
-import { Menu, X, LayoutDashboard, Folder, Image as ImageIcon, Settings, Users, Shield, Bell, ChevronDown, CheckCircle, Search, ExternalLink, Activity, AlertCircle, Trash2, Camera, UploadCloud, Smartphone, CreditCard, LogOut } from "lucide-react";
+import { Menu, X, LayoutGrid, ShieldCheck, LogOut, AlertTriangle, Info, FolderOpen, LayoutTemplate, Share2, Send, KeyRound } from "lucide-react";
 
 export default function DashboardLayout({ children }) {
   const { user, logout, isAdmin } = useAuth();

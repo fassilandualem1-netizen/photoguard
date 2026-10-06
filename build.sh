@@ -6,7 +6,7 @@ echo "==> Installing Python backend dependencies..."
 pip install -r requirements.txt
 
 echo "==> Running database migrations via Alembic..."
-alembic upgrade head || true
+alembic upgrade head
 
 echo "==> Production Web Dashboard dist/ is verified and ready."
 if [ ! -f "dist/index.html" ]; then

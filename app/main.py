@@ -703,3 +703,25 @@ if __name__ == "__main__":
     import uvicorn
     server_port = int(os.environ.get("PORT", 8000))
     uvicorn.run("app.main:app", host="0.0.0.0", port=server_port, reload=False)
+
+from starlette.middleware.base import BaseHTTPMiddleware
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "img-src 'self' https: data: blob:; "
+            "style-src 'self' 'unsafe-inline'; "
+            "script-src 'self'; "
+            "connect-src 'self' https://api.cloudinary.com; "
+            "font-src 'self' data:; "
+            "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; "
+            "form-action 'self'"
+        )
+        if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)

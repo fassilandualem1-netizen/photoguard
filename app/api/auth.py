@@ -211,7 +211,7 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
             key="access_token",
             value=access_token,
             httponly=True,
-            secure=is_prod,
+            secure=True,
             samesite="lax",
             max_age=86400  # 1 day
         )
@@ -241,7 +241,7 @@ def logout(response: Response):
     response.delete_cookie(
         key="access_token",
         httponly=True,
-        secure=is_prod,
+        secure=True,
         samesite="lax"
     )
     return {"message": "Successfully logged out."}
@@ -316,7 +316,7 @@ def change_password(
             key="access_token",
             value=access_token,
             httponly=True,
-            secure=is_prod,
+            secure=True,
             samesite="lax",
             max_age=86400  # 1 day
         )

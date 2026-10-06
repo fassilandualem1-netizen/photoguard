@@ -451,10 +451,7 @@ def delete_media_item(
             owner.storage_used = max(0, (owner.storage_used or 0) - item_size)
             logger.info(f"[Media API] Reclaimed {item_size} bytes for owner {owner.email}. New storage_used: {owner.storage_used}")
 
-        db.delete(item)
-        db.commit()
-
-        # Airtight Storage Cleanup: delete BOTH high-res url and thumbnail_url
+        # PG-19: Consistency. Delete from cloud FIRST, then DB.
         urls_to_delete = set()
         if item_url:
             urls_to_delete.add(item_url)
@@ -462,7 +459,13 @@ def delete_media_item(
             urls_to_delete.add(item_thumb)
 
         for u in urls_to_delete:
-            background_tasks.add_task(destroy_media_asset, u)
+            success = destroy_media_asset(u)
+            if not success:
+                logger.error(f"Failed to delete cloud asset {u}. Aborting DB deletion.")
+                raise HTTPException(status_code=500, detail="Failed to delete file from cloud storage. Please try again.")
+
+        db.delete(item)
+        db.commit()
 
         # Increment sync version for active client apps
         try:

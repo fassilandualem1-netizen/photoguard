@@ -103,7 +103,8 @@ def delete_file_from_cloudinary(public_id_or_url: str) -> bool:
             clean_parts = [
                 p for p in parts
                 if not p.startswith("v") and not (
-                    p.startswith("c_") or p.startswith("w_") or p.startswith("q_")
+                    p.startswith("c_") or p.startswith("w_") or p.startswith("q_") or
+                    p.startswith("f_") or p.startswith("dpr_") or p.startswith("h_")
                 )
             ]
             full_path = "/".join(clean_parts)

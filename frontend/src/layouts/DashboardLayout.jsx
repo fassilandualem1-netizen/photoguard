@@ -2,27 +2,11 @@
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import ThemeToggle from "../components/ThemeToggle";
-import { useTheme } from "../context/ThemeContext";
 import api from "../api/axios";
-import {
-  Menu,
-  X,
-  ShieldCheck,
-  KeyRound,
-  User,
-  LogOut,
-  FolderOpen,
-  Info,
-  AlertTriangle,
-  Megaphone,
-  LayoutGrid, LayoutTemplate, Share2, Send,
-  Sun,
-  Moon
-} from "lucide-react";
+import { Menu, X, LayoutDashboard, Folder, Image as ImageIcon, Settings, Users, Shield, Bell, ChevronDown, CheckCircle, Search, ExternalLink, Activity, AlertCircle, Trash2, Camera, UploadCloud, Smartphone, CreditCard, LogOut } from "lucide-react";
 
 export default function DashboardLayout({ children }) {
   const { user, logout, isAdmin } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeBroadcast, setActiveBroadcast] = useState(null);
   const [isBannerDismissed, setIsBannerDismissed] = useState(false);
@@ -165,15 +149,7 @@ export default function DashboardLayout({ children }) {
               {formatBytes(storageUsed)} of {formatBytes(storageQuota)}
             </div>
           </div>
-          <button
-            onClick={toggleTheme}
-            className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-[#111620] dark:bg-[#111620] dark:hover:bg-slate-800/50 transition-colors mb-2"
-          >
-            <div className="flex items-center gap-3">
-              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
-            </div>
-          </button>
+          <ThemeToggle variant="menu" className="mb-2" />
           <button
             onClick={logout}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
@@ -242,15 +218,7 @@ export default function DashboardLayout({ children }) {
                 })}
               </nav>
               <div className="p-4 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  onClick={toggleTheme}
-                  className="w-full flex items-center justify-between px-3 py-3 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-[#111620] dark:bg-[#111620] dark:hover:bg-slate-800/50 transition-colors mb-2"
-                >
-                  <div className="flex items-center gap-3">
-                    {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                    <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
-                  </div>
-                </button>
+                <ThemeToggle variant="menu" className="mb-2" />
                 <button
                   onClick={logout}
                   className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"

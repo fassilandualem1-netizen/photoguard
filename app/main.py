@@ -2,7 +2,13 @@ import os
 import asyncio
 import logging
 import traceback
+import mimetypes
 from datetime import datetime, timezone, timedelta
+
+mimetypes.init()
+mimetypes.add_type("text/css", ".css", True)
+mimetypes.add_type("application/javascript", ".js", True)
+mimetypes.add_type("image/svg+xml", ".svg", True)
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, status, Request, UploadFile, File, HTTPException
 from fastapi.exceptions import RequestValidationError
@@ -695,7 +701,14 @@ async def catch_all_spa(catchall: str):
     for candidate in candidate_dist_dirs:
         file_path = os.path.join(candidate, catchall)
         if os.path.isfile(file_path):
-            return FileResponse(file_path)
+            media_type = None
+            if catchall.endswith(".css"):
+                media_type = "text/css"
+            elif catchall.endswith(".js"):
+                media_type = "application/javascript"
+            elif catchall.endswith(".svg"):
+                media_type = "image/svg+xml"
+            return FileResponse(file_path, media_type=media_type)
     
     # Return index.html for all SPA routes like /login
     index_file = get_index_file_path()

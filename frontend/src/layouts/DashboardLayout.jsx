@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import ThemeToggle from "../components/ThemeToggle";
@@ -93,7 +93,7 @@ export default function DashboardLayout({ children }) {
       <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-[#0b0e14] border-r border-slate-200 dark:border-slate-800 h-screen sticky top-0 z-30">
         <div className="p-6 flex items-center gap-3">
           {displayLogo && !isAssistant ? (
-            <img src={displayLogo} alt="Logo" className="h-8 max-w-[140px] object-contain" />
+            <img src={displayLogo} alt="Logo" className="h-8 max-w-[140px] object-contain" style={{ maxHeight: "32px", maxWidth: "140px", objectFit: "contain" }} />
           ) : (
             <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
               <LayoutGrid className="w-4 h-4 text-indigo-600" />
@@ -168,7 +168,7 @@ export default function DashboardLayout({ children }) {
           <div className="px-4 h-16 flex items-center justify-between">
             <div className="flex items-center gap-2">
                 {displayLogo && !isAssistant ? (
-                  <img src={displayLogo} alt="Logo" className="h-7 w-7 object-contain rounded-md" />
+                  <img src={displayLogo} alt="Logo" className="h-7 w-7 object-contain rounded-md" style={{ maxHeight: "28px", maxWidth: "28px", objectFit: "contain" }} />
                 ) : (
                   <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
                     <LayoutGrid className="w-3.5 h-3.5 text-indigo-600" />

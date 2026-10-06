@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.user import User
 from app.core.dependencies import get_current_user
-from app.core.redis import client as redis_client
+from app.core.redis import get_redis
 from app.core.telegram import send_telegram_message
 
 logger = logging.getLogger("photoguard.telegram")
@@ -139,7 +139,9 @@ def get_telegram_status(current_user: User = Depends(get_current_user)):
     # API-01: Generate a secure, one-time linking token stored in Redis
     link_token = secrets.token_urlsafe(16)
     try:
-        redis_client.setex(f"telegram_link:{link_token}", 600, current_user.id) # 10 minutes expiry
+        client = get_redis()
+        if client:
+            client.setex(f"telegram_link:{link_token}", 600, current_user.id) # 10 minutes expiry
     except Exception as e:
         logger.error(f"[Telegram Linking] Failed to store link token in Redis: {e}")
         

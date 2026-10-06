@@ -127,6 +127,7 @@ def save_direct_upload_url(
     payload: DirectSaveUrlRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
+):
     """
     Instantly registers a photo in PostgreSQL after direct client-to-cloud upload.
     Generates high-fidelity AVIF/Retina thumbnail URL, records SaaS virtual quota,

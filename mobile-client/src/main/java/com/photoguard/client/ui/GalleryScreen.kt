@@ -319,7 +319,7 @@ fun GalleryScreen(
                     }
                 } else {
                     LazyVerticalStaggeredGrid(
-                        columns = StaggeredGridCells.Fixed(2),
+                        columns = StaggeredGridCells.Adaptive(minSize = 160.dp),
                         contentPadding = PaddingValues(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalItemSpacing = 8.dp,
@@ -394,7 +394,7 @@ fun GalleryScreen(
                         }
 
                         LazyVerticalStaggeredGrid(
-                            columns = StaggeredGridCells.Fixed(2),
+                            columns = StaggeredGridCells.Adaptive(minSize = 160.dp),
                             contentPadding = PaddingValues(bottom = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalItemSpacing = 8.dp,

@@ -1,4 +1,6 @@
 import os
+from PIL import Image
+import io
 import uuid
 from datetime import datetime, timezone
 import logging
@@ -23,7 +25,7 @@ from app.core.storage import (
     is_s3_configured,
 )
 from app.core.s3_cleanup import delete_file_from_s3
-from app.core.redis import increment_album_version
+from app.core.redis import increment_album_version, check_generic_rate_limit
 from app.models.user import User, UserRole
 from app.models.album import Album
 from app.models.media import MediaItem
@@ -70,6 +72,10 @@ def get_upload_signature(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # RATE-01: 30 signatures per user per minute
+    is_limited, retry_after = check_generic_rate_limit(f"rate:signature:user:{current_user.id}", 30, 60)
+    if is_limited:
+        raise HTTPException(status_code=429, detail=f"Too many signature requests. Try again in {retry_after}s.")
     """
     Generates a secure, cryptographically signed Cloudinary upload signature.
     Allows frontend clients to upload photos directly to Cloudinary edge nodes,
@@ -125,6 +131,10 @@ def save_direct_upload_url(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # RATE-01: 120 saves per user per minute
+    is_limited, retry_after = check_generic_rate_limit(f"rate:saveurl:user:{current_user.id}", 120, 60)
+    if is_limited:
+        raise HTTPException(status_code=429, detail=f"Too many save URL requests. Try again in {retry_after}s.")
     """
     Instantly registers a photo in PostgreSQL after direct client-to-cloud upload.
     Generates high-fidelity AVIF/Retina thumbnail URL, records SaaS virtual quota,
@@ -218,6 +228,10 @@ def upload_album_photo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # RATE-01: 30 uploads per user per minute
+    is_limited, retry_after = check_generic_rate_limit(f"rate:upload:user:{current_user.id}", 30, 60)
+    if is_limited:
+        raise HTTPException(status_code=429, detail=f"Too many upload requests. Try again in {retry_after}s.")
     """
     Uploads a photo with bulletproof Multi-Cloud S3 storage and automatic Local Storage Fallback.
     Enforces:
@@ -303,6 +317,23 @@ def upload_album_photo(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Uploaded file is empty."
         )
+
+    # FILE-01: Deep byte-level image validation to prevent arbitrary file hosting / stored XSS
+    ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP", "AVIF"}
+    try:
+        with open(temp_file_path, "rb") as fh:
+            sample = fh.read(32)
+        with Image.open(io.BytesIO(sample + b"")) as probe:
+            detected_fast = probe.format
+            
+        with Image.open(temp_file_path) as probe:
+            probe.verify()
+            detected = probe.format
+    except Exception:
+        raise HTTPException(status_code=415, detail="Uploaded file is not a valid supported image.")
+
+    if detected not in ALLOWED_FORMATS:
+        raise HTTPException(status_code=415, detail="Unsupported image format.")
 
     # DB-01: SaaS Virtual Quota Check with Row-Level Lock
     effective_owner_id = current_user.effective_owner_id or current_user.id

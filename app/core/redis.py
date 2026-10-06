@@ -346,3 +346,36 @@ def reset_login_rate_limit(client_ip: str, email: str) -> None:
     with _mem_lock:
         _memory_rate_limits.pop(f"login_ip:{client_ip}", None)
         _memory_rate_limits.pop(f"login_email:{email}", None)
+
+def check_generic_rate_limit(key: str, max_attempts: int, window_seconds: int = 60) -> tuple[bool, int]:
+    """Generic rate limit check for arbitrary keys."""
+    client = get_redis()
+    if client:
+        try:
+            count = client.get(key)
+            if count and int(count) >= max_attempts:
+                return True, max(client.ttl(key), 1)
+            
+            p = client.pipeline()
+            p.incr(key)
+            if not count:
+                p.expire(key, window_seconds)
+            p.execute()
+            return False, 0
+        except Exception:
+            pass
+            
+    # Fallback to memory
+    now = time.time()
+    with _mem_lock:
+        entry = _memory_rate_limits.get(key)
+        if entry:
+            if now > entry["expires_at"]:
+                _memory_rate_limits[key] = {"count": 1, "expires_at": now + window_seconds}
+            elif entry["count"] >= max_attempts:
+                return True, max(1, int(entry["expires_at"] - now))
+            else:
+                entry["count"] += 1
+        else:
+            _memory_rate_limits[key] = {"count": 1, "expires_at": now + window_seconds}
+    return False, 0

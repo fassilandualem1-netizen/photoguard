@@ -8,6 +8,7 @@ import logging
 from app.core.database import get_db
 from app.core.security import verify_password, get_password_hash, create_access_token
 from app.core.dependencies import get_current_user
+from app.core.redis import check_generic_rate_limit
 from app.core.storage import (
     is_cloudinary_configured,
     upload_file_to_cloudinary,
@@ -15,6 +16,7 @@ from app.core.storage import (
 from app.core.redis import check_login_rate_limit, record_failed_login_attempt, reset_login_rate_limit
 from app.api.client import get_client_ip
 from app.models.user import User, UserRole
+from app.models.audit import AuditLog
 from app.services.plan_service import get_or_create_plan_config
 from app.schemas.auth import (
     LoginRequest,
@@ -143,6 +145,12 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
         if not user or not is_pw_valid:
             record_failed_login_attempt(client_ip=client_ip, email=clean_email, window_seconds=900)
             logger.warning(f"[Auth Audit] Failed login attempt for '{clean_email}' (user_found={bool(user)})")
+            # AUD-01: Durable authentication audit logging
+            try:
+                db.add(AuditLog(admin_id=user.id if user else None, action="LOGIN_FAILURE", target_user_id=user.id if user else None, details={"email": clean_email, "ip": client_ip, "reason": "invalid_credentials"}))
+                db.commit()
+            except Exception:
+                db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",

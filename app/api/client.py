@@ -589,25 +589,17 @@ def submit_album_selection(
                     detail="Album has expired and cannot be submitted."
                 )
 
-        # 4. Enforce atomic single-submit lock via Redis setnx
-        lock_acquired = lock_album_submit(clean_pin)
-        if not lock_acquired:
-            try:
-                album.is_locked = True
-                album.submitted_at = func.now()
-                db.commit()
-            except Exception:
-                db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Album was just locked by another family member."
-            )
-
-        # 5. Persist lock and submission timestamp atomically in PostgreSQL
+        # DB-08: PostgreSQL is the Single Source of Truth for submission locking
         album.is_locked = True
         album.submitted_at = func.now()
         db.commit()
         db.refresh(album)
+        
+        # Redis is strictly an optimization/cache layer, updated AFTER successful DB commit
+        try:
+            lock_album_submit(clean_pin)
+        except Exception:
+            pass  # Non-fatal if Redis sync fails
 
     except HTTPException:
         db.rollback()

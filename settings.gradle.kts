@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "PhotoGuard"
-include(":app")
+include(":mobile-client")

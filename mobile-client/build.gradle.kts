@@ -26,8 +26,8 @@ android {
             val envPath = System.getenv("RELEASE_KEYSTORE_PATH")
             val releaseKeystore = if (envPath != null && file(envPath).exists()) {
                 file(envPath)
-            } else if (file("release.keystore").exists()) {
-                file("release.keystore")
+            } else if (file("photoguard-release.keystore").exists()) {
+                file("photoguard-release.keystore")
             } else {
                 null
             }

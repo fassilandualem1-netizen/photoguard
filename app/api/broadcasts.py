@@ -127,10 +127,14 @@ def create_broadcast(
 
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         logger.error(f"[Broadcast Error] Failed to publish broadcast: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error creating broadcast: {str(exc)}"
+            detail=f"Database error creating broadcast: {req_id}"
         )
 
 
@@ -164,6 +168,10 @@ def deactivate_broadcast(
         raise
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         logger.error(f"[Broadcast Error] Failed to deactivate broadcast: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

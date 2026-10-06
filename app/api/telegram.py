@@ -1,4 +1,6 @@
 import os
+import secrets
+import hmac
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -6,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.user import User
 from app.core.dependencies import get_current_user
+from app.core.redis import client as redis_client
 from app.core.telegram import send_telegram_message
 
 logger = logging.getLogger("photoguard.telegram")
@@ -132,11 +135,19 @@ def get_telegram_status(current_user: User = Depends(get_current_user)):
     """
     raw_bot_username = os.getenv("TELEGRAM_BOT_USERNAME", "Photoguard_alert_bot")
     clean_bot_username = raw_bot_username.replace("@", "").strip()
+    
+    # API-01: Generate a secure, one-time linking token stored in Redis
+    link_token = secrets.token_urlsafe(16)
+    try:
+        redis_client.setex(f"telegram_link:{link_token}", 600, current_user.id) # 10 minutes expiry
+    except Exception as e:
+        logger.error(f"[Telegram Linking] Failed to store link token in Redis: {e}")
+        
     return {
         "is_connected": bool(current_user.telegram_chat_id),
         "chat_id": current_user.telegram_chat_id,
         "bot_username": clean_bot_username,
-        "deep_link": f"https://t.me/{clean_bot_username}?start={current_user.id}"
+        "deep_link": f"https://t.me/{clean_bot_username}?start={link_token}"
     }
 
 

@@ -136,17 +136,21 @@ def add_assistant(
         raise
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         logger.error(f"[Team Management Error] Database error adding assistant: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error creating assistant: {str(exc)}"
+            detail=f"Database error creating assistant: {req_id}"
         )
     except Exception as exc:
         db.rollback()
         logger.error(f"[Team Management Error] Unexpected error adding assistant: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error creating assistant: {str(exc)}"
+            detail=f"Unexpected error creating assistant: {req_id}"
         )
 
 
@@ -191,7 +195,7 @@ def list_assistants(
         logger.error(f"[Team Management Error] Database error listing assistants: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error fetching team members: {str(exc)}"
+            detail=f"Database error fetching team members: {req_id}"
         )
 
 
@@ -242,8 +246,12 @@ def remove_assistant(
         raise
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         logger.error(f"[Team Management Error] Database error deleting assistant #{assistant_id}: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error removing assistant: {str(exc)}"
+            detail=f"Database error removing assistant: {req_id}"
         )

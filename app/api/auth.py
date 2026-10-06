@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 import os
+import uuid
 import logging
 from app.core.database import get_db
 from app.core.security import verify_password, get_password_hash, create_access_token
@@ -73,15 +74,17 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         raise
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error during user registration: {str(exc)}"
+            detail=f"Database error during user registration: {req_id}"
         )
     except Exception as exc:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error during registration: {str(exc)}"
+            detail=f"Unexpected error during registration: {req_id}"
         )
 
 @router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
@@ -229,7 +232,7 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
         logger.error(f"[Login Error] Critical unexpected login crash for '{clean_email}': {exc}\n{traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Login authentication service error: {str(exc)}"
+            detail=f"Login authentication service error: {req_id}"
         )
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
@@ -324,15 +327,17 @@ def change_password(
         return UserResponse.model_validate(current_user)
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error while changing password: {str(exc)}"
+            detail=f"Database error while changing password: {req_id}"
         )
     except Exception as exc:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error while changing password: {str(exc)}"
+            detail=f"Unexpected error while changing password: {req_id}"
         )
 
 @router.get("/me", response_model=UserResponse, status_code=status.HTTP_200_OK)
@@ -411,15 +416,17 @@ def update_profile(
         raise
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error updating profile: {str(exc)}"
+            detail=f"Database error updating profile: {req_id}"
         )
     except Exception as exc:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error updating profile: {str(exc)}"
+            detail=f"Unexpected error updating profile: {req_id}"
         )
 
 @router.post("/upload-logo", status_code=status.HTTP_200_OK)
@@ -448,7 +455,7 @@ def upload_studio_logo(
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to read image file: {str(exc)}"
+            detail=f"Failed to read image file: {req_id}"
         )
 
     if not file_bytes:

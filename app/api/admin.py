@@ -132,12 +132,12 @@ def get_platform_stats(
     except SQLAlchemyError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error querying platform statistics: {str(exc)}"
+            detail=f"Database error querying platform statistics: {req_id}"
         )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error querying platform statistics: {str(exc)}"
+            detail=f"Unexpected error querying platform statistics: {req_id}"
         )
 
 @router.get("/users", response_model=List[PhotographerDetailResponse], status_code=status.HTTP_200_OK)
@@ -253,12 +253,12 @@ def get_all_photographers(
     except SQLAlchemyError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error fetching photographers: {str(exc)}"
+            detail=f"Database error fetching photographers: {req_id}"
         )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error fetching photographers: {str(exc)}"
+            detail=f"Unexpected error fetching photographers: {req_id}"
         )
 
 @router.post("/users", response_model=PhotographerRegisterResponse, status_code=status.HTTP_201_CREATED)
@@ -362,15 +362,19 @@ def register_photographer(
         )
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error registering photographer: {str(exc)}"
+            detail=f"Database error registering photographer: {req_id}"
         )
     except Exception as exc:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error registering photographer: {str(exc)}"
+            detail=f"Unexpected error registering photographer: {req_id}"
         )
 
 @router.put("/users/{id}/suspend", status_code=status.HTTP_200_OK)
@@ -439,15 +443,19 @@ def toggle_user_suspend(
         }
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error toggling user status: {str(exc)}"
+            detail=f"Database error toggling user status: {req_id}"
         )
     except Exception as exc:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error toggling user status: {str(exc)}"
+            detail=f"Unexpected error toggling user status: {req_id}"
         )
 
 @router.put("/users/{id}/plan", status_code=status.HTTP_200_OK)
@@ -523,15 +531,19 @@ def toggle_user_plan(
         }
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error toggling user plan: {str(exc)}"
+            detail=f"Database error toggling user plan: {req_id}"
         )
     except Exception as exc:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error toggling user plan: {str(exc)}"
+            detail=f"Unexpected error toggling user plan: {req_id}"
         )
 
 @router.put("/users/{id}/quota", status_code=status.HTTP_200_OK)
@@ -599,15 +611,19 @@ def update_user_quota(
         }
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error updating storage quota: {str(exc)}"
+            detail=f"Database error updating storage quota: {req_id}"
         )
     except Exception as exc:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error updating storage quota: {str(exc)}"
+            detail=f"Unexpected error updating storage quota: {req_id}"
         )
 
 @router.post("/users/{user_id}/reset-password", status_code=status.HTTP_200_OK)
@@ -667,7 +683,7 @@ def reset_user_password(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to reset photographer password: {str(exc)}"
+            detail=f"Failed to reset photographer password: {req_id}"
         )
 
 def format_plan_response(cfg: PlanConfiguration) -> PlanConfigResponse:
@@ -740,15 +756,19 @@ def update_dynamic_plan(
         return format_plan_response(cfg)
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error updating plan configuration: {str(exc)}"
+            detail=f"Database error updating plan configuration: {req_id}"
         )
     except Exception as exc:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update plan configuration: {str(exc)}"
+            detail=f"Failed to update plan configuration: {req_id}"
         )
 
 @router.get("/audit-logs", response_model=List[AuditLogResponse], status_code=status.HTTP_200_OK)
@@ -795,12 +815,12 @@ def get_audit_logs(
     except SQLAlchemyError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error fetching audit logs: {str(exc)}"
+            detail=f"Database error fetching audit logs: {req_id}"
         )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error fetching audit logs: {str(exc)}"
+            detail=f"Unexpected error fetching audit logs: {req_id}"
         )
 
 # ============================================================================
@@ -853,7 +873,7 @@ def get_system_health_errors(
     except SQLAlchemyError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error fetching system error logs: {str(exc)}"
+            detail=f"Database error fetching system error logs: {req_id}"
         )
 
 @router.put("/system-health/errors/{error_id}/resolve", response_model=SystemErrorLogResponse, tags=["Admin Control", "System Health"])
@@ -892,8 +912,12 @@ def resolve_system_health_error(
         raise
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error resolving system error log: {str(exc)}"
+            detail=f"Database error resolving system error log: {req_id}"
         )
 

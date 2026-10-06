@@ -79,15 +79,19 @@ def update_photographer_social_links(
         )
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         logger.error(f"Database error updating social links: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error updating social links: {str(exc)}"
+            detail=f"Database error updating social links: {req_id}"
         )
     except Exception as exc:
         db.rollback()
         logger.error(f"Unexpected error updating social links: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error updating social links: {str(exc)}"
+            detail=f"Unexpected error updating social links: {req_id}"
         )

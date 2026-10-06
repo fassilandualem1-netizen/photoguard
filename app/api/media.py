@@ -1,4 +1,5 @@
 import os
+import uuid
 from datetime import datetime, timezone
 import logging
 import tempfile
@@ -183,9 +184,13 @@ def save_direct_upload_url(
         db.refresh(media_item)
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error saving photo: {str(exc)}"
+            detail=f"Database error saving photo: {req_id}"
         )
 
     try:
@@ -278,7 +283,7 @@ def upload_album_photo(
         safe_remove_temp()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to read uploaded image stream: {str(exc)}"
+            detail=f"Failed to read uploaded image stream: {req_id}"
         )
     finally:
         file.file.close()
@@ -383,6 +388,10 @@ def upload_album_photo(
         db.refresh(media_item)
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         # Clean up uploaded file if DB commit fails
         if storage_provider == "cloudinary":
             delete_file_from_cloudinary(high_res_url)
@@ -393,7 +402,7 @@ def upload_album_photo(
                 logger.warning(f"Failed to clean up S3 file after rollback: {del_err}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error saving media item: {str(exc)}"
+            detail=f"Database error saving media item: {req_id}"
         )
 
     # Inform collaborative mobile clients of new photos via Redis smart polling
@@ -489,15 +498,19 @@ def delete_media_item(
         return None
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error deleting media item: {str(exc)}"
+            detail=f"Database error deleting media item: {req_id}"
         )
     except Exception as exc:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error deleting media item: {str(exc)}"
+            detail=f"Unexpected error deleting media item: {req_id}"
         )
 
 @router.get("/{media_id}/download")

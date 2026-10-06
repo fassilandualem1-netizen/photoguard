@@ -529,15 +529,17 @@ def update_client_media_selection(
 
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error updating media item: {str(exc)}"
+            detail=f"Database error updating media item: {req_id}"
         )
     except Exception as exc:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error updating media item: {str(exc)}"
+            detail=f"Unexpected error updating media item: {req_id}"
         )
 
 @router.post("/submit/{pin}", response_model=ClientSubmitResponse, status_code=status.HTTP_200_OK)
@@ -606,15 +608,17 @@ def submit_album_selection(
         raise
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error while submitting album: {str(exc)}"
+            detail=f"Database error while submitting album: {req_id}"
         )
     except Exception as exc:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error while submitting album: {str(exc)}"
+            detail=f"Unexpected error while submitting album: {req_id}"
         )
 
     # 6. Increment sync version so all polling clients immediately lock their UI

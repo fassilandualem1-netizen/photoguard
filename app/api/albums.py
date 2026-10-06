@@ -1,4 +1,5 @@
 import os
+import uuid
 import logging
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
@@ -244,17 +245,21 @@ def create_album(
         )
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         logger.error(f"[Albums API] Database error creating album: {exc}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error creating album: {str(exc)}"
+            detail=f"Database error creating album: {req_id}"
         )
     except Exception as exc:
         db.rollback()
         logger.error(f"[Albums API] Unexpected error creating album: {exc}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error creating album: {str(exc)}"
+            detail=f"Unexpected error creating album: {req_id}"
         )
 
 @router.get("", response_model=List[AlbumListItemResponse], status_code=status.HTTP_200_OK)
@@ -365,10 +370,10 @@ def list_albums(
         return result
     except Exception as exc:
         db.rollback()
-        logger.error(f"[Albums API] Error in list_albums: {str(exc)}", exc_info=True)
+        logger.error(f"[Albums API] Error in list_albums: {req_id}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve albums: {str(exc)}"
+            detail=f"Failed to retrieve albums: {req_id}"
         )
 
 @router.get("/{album_id}", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
@@ -422,10 +427,10 @@ def get_album(
         raise
     except Exception as exc:
         db.rollback()
-        logger.error(f"[Albums API] Error in get_album: {str(exc)}", exc_info=True)
+        logger.error(f"[Albums API] Error in get_album: {req_id}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve album details: {str(exc)}"
+            detail=f"Failed to retrieve album details: {req_id}"
         )
 
 @router.put("/{album_id}/extend", response_model=AlbumDetailResponse, status_code=status.HTTP_200_OK)
@@ -507,17 +512,21 @@ def extend_album_expiration(
         )
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         logger.error(f"[Albums API] Database error extending album: {exc}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error extending album expiration: {str(exc)}"
+            detail=f"Database error extending album expiration: {req_id}"
         )
     except Exception as exc:
         db.rollback()
         logger.error(f"[Albums API] Unexpected error extending album: {exc}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error extending album expiration: {str(exc)}"
+            detail=f"Unexpected error extending album expiration: {req_id}"
         )
 
 @router.get("/{album_id}/export", response_model=List[MediaItemResponse], status_code=status.HTTP_200_OK)
@@ -653,17 +662,21 @@ def update_album(
         )
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         logger.error(f"[Albums API] Database error updating album: {exc}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error updating album: {str(exc)}"
+            detail=f"Database error updating album: {req_id}"
         )
     except Exception as exc:
         db.rollback()
         logger.error(f"[Albums API] Unexpected error updating album: {exc}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error updating album: {str(exc)}"
+            detail=f"Unexpected error updating album: {req_id}"
         )
 
 @router.delete("/{album_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -721,17 +734,21 @@ def delete_album(
         return None
     except SQLAlchemyError as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
         logger.error(f"[Albums API] Database error deleting album: {exc}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error deleting album: {str(exc)}"
+            detail=f"Database error deleting album: {req_id}"
         )
     except Exception as exc:
         db.rollback()
         logger.error(f"[Albums API] Unexpected error deleting album: {exc}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected error deleting album: {str(exc)}"
+            detail=f"Unexpected error deleting album: {req_id}"
         )
 
 @router.post("/{album_id}/upload", status_code=status.HTTP_201_CREATED)

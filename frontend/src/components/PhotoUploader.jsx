@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { UploadCloud, FolderPlus, Loader2, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
+import { UploadCloud, FolderPlus, Loader2, CheckCircle2, AlertCircle, XCircle, RefreshCw } from "lucide-react";
 
 export default function PhotoUploader({
   isSubmitted = false,
@@ -9,6 +9,8 @@ export default function PhotoUploader({
   fileInputRef,
   onFileUpload,
   uploadError = null,
+  failedCount = 0,
+  onRetryFailed = null,
 }) {
   const [isDragging, setIsDragging] = useState(false);
 
@@ -143,6 +145,11 @@ export default function PhotoUploader({
             <span>
               Batch Complete: {lastUploadSummary.success} uploaded successfully
               {lastUploadSummary.failed > 0 && `, ${lastUploadSummary.failed} failed`}
+              {lastUploadSummary.skipped > 0 && (
+                <span className="text-slate-500 dark:text-slate-400 font-normal ml-1">
+                  ({lastUploadSummary.skipped} already uploaded photos skipped)
+                </span>
+              )}
             </span>
           </div>
           {lastUploadSummary.reasons?.length > 0 && (
@@ -150,6 +157,18 @@ export default function PhotoUploader({
               {lastUploadSummary.reasons.map((r, i) => (
                 <div key={i}>• {r}</div>
               ))}
+            </div>
+          )}
+          {failedCount > 0 && onRetryFailed && !uploading && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={onRetryFailed}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-sm transition-colors cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Retry {failedCount} Failed Photos</span>
+              </button>
             </div>
           )}
         </div>

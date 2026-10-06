@@ -225,6 +225,68 @@ export default function AlbumDetail() {
   // Uploaded batch summary feedback banner
   const [lastUploadSummary, setLastUploadSummary] = useState(null);
   const [uploadError, setUploadError] = useState(null);
+  const [failedBatchFiles, setFailedBatchFiles] = useState([]);
+
+  // Network connection monitor
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      if (uploadError && uploadError.includes("offline")) {
+        setUploadError(null);
+      }
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      if (uploading) {
+        setUploadError("Internet connection lost. Incomplete uploads can be retried once reconnected.");
+      }
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [uploading, uploadError]);
+
+  // ACCIDENTAL RELOAD / TAB CLOSE / BROWSER BACK GUARD
+  // Warns photographer if they try to close, refresh the tab, or click browser back while photos are uploading
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (uploading) {
+        e.preventDefault();
+        e.returnValue = "Photos are currently uploading. Leaving or refreshing will cancel remaining uploads.";
+        return e.returnValue;
+      }
+    };
+
+    if (uploading) {
+      window.history.pushState(null, document.title, window.location.href);
+    }
+
+    const handlePopState = () => {
+      if (uploading) {
+        const confirmLeave = window.confirm(
+          `Photos are currently uploading (${uploadProgress.current}/${uploadProgress.total}). Going back will cancel the remaining uploads. Are you sure you want to leave?`
+        );
+        if (!confirmLeave) {
+          window.history.pushState(null, document.title, window.location.href);
+        } else {
+          window.history.back();
+        }
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [uploading, uploadProgress.current, uploadProgress.total]);
 
   // Lightbox Preview Modal state
   const [previewPhoto, setPreviewPhoto] = useState(null);
@@ -270,18 +332,29 @@ export default function AlbumDetail() {
     album?.status === "locked"
   );
 
-  // HIGH-SPEED CONCURRENT BULK UPLOAD (Pool of 4 parallel workers)
-  const handleFileUpload = async (e) => {
-    const fileList = Array.from(e.target.files || []);
-    if (!fileList || fileList.length === 0) return;
+  // HIGH-SPEED CONCURRENT BULK UPLOAD WITH DEDUPLICATION & RESUME
+  const executeUploadBatch = async (filesToProcess) => {
+    if (!filesToProcess || filesToProcess.length === 0) return;
 
     if (isSubmitted) {
       alert("This gallery is submitted & locked by the client. Proof uploads are permanently disabled.");
       return;
     }
 
+    // Smart Deduplication / Resume: check against existing album photos
+    const existingFilenames = new Set(mediaItems.map((m) => (m.filename || "").toLowerCase().trim()));
+    const alreadyUploaded = filesToProcess.filter((f) => existingFilenames.has((f.name || "").toLowerCase().trim()));
+    const fileList = filesToProcess.filter((f) => !existingFilenames.has((f.name || "").toLowerCase().trim()));
+
+    if (fileList.length === 0) {
+      alert(`All ${alreadyUploaded.length} selected photos have already been uploaded to this gallery. No new photos to add.`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     setUploading(true);
     setLastUploadSummary(null);
+    setUploadError(null);
     setUploadProgress({ current: 0, total: fileList.length });
 
     const totalBatchFiles = fileList.length;
@@ -290,6 +363,7 @@ export default function AlbumDetail() {
     let successfulUploads = 0;
     let failedUploads = 0;
     const failureReasons = [];
+    const failedFilesList = [];
 
     // Step 1: Request presigned Cloudinary upload signature from backend
     let sigConfig = null;
@@ -298,11 +372,11 @@ export default function AlbumDetail() {
       sigConfig = sigRes.data;
     } catch (err) {
       console.warn("Direct-to-cloud signature unavailable, fallback to backend proxy.", err);
-        if (!navigator.onLine) {
-          setUploadError("You appear to be offline. Please check your internet connection.");
-          setUploading(false);
-          return;
-        }
+      if (!navigator.onLine) {
+        setUploadError("You appear to be offline. Please check your internet connection.");
+        setUploading(false);
+        return;
+      }
     }
 
     // Direct-to-Cloud Upload Worker (High-Speed Edge Upload)
@@ -361,10 +435,11 @@ export default function AlbumDetail() {
           attempts++;
           if (attempts >= 2) {
             failedUploads++;
+            failedFilesList.push(file);
             const detail = err.response?.data?.error?.message || err.response?.data?.detail || err.message || "Upload error";
             failureReasons.push(`${file.name} (${detail})`);
           } else {
-            await new Promise((r) => setTimeout(r, 300));
+            await new Promise((r) => setTimeout(r, 400));
           }
         }
       }
@@ -396,8 +471,11 @@ export default function AlbumDetail() {
       fileInputRef.current.value = "";
     }
 
+    setFailedBatchFiles(failedFilesList);
+
     setLastUploadSummary({
       total: totalBatchFiles,
+      skipped: alreadyUploaded.length,
       success: successfulUploads,
       failed: failedUploads,
       reasons: failureReasons,
@@ -405,6 +483,19 @@ export default function AlbumDetail() {
 
     // Stay on "all" tab so newly uploaded photos appear immediately
     fetchAlbumDetail(false);
+  };
+
+  const handleFileUpload = (e) => {
+    const rawFiles = Array.from(e.target.files || []);
+    executeUploadBatch(rawFiles);
+  };
+
+  const handleRetryFailedUploads = () => {
+    if (failedBatchFiles.length > 0) {
+      const retryList = [...failedBatchFiles];
+      setFailedBatchFiles([]);
+      executeUploadBatch(retryList);
+    }
   };
 
   // Studio Allow Client Download Permission Toggle
@@ -751,6 +842,16 @@ export default function AlbumDetail() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <Link
           to="/dashboard"
+          onClick={(e) => {
+            if (uploading) {
+              const confirmLeave = window.confirm(
+                `Photos are currently uploading (${uploadProgress.current}/${uploadProgress.total}). Leaving this page will cancel the remaining uploads. Are you sure you want to leave?`
+              );
+              if (!confirmLeave) {
+                e.preventDefault();
+              }
+            }
+          }}
           className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 dark:text-slate-400 hover:text-indigo-600 transition-colors group"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform text-indigo-600" />
@@ -1037,12 +1138,25 @@ export default function AlbumDetail() {
         </div>
       )}
 
+      {/* Offline Alert Banner */}
+      {!isOnline && (
+        <div className="p-4 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs font-semibold flex items-center gap-3 animate-in fade-in">
+          <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+          <span>
+            Network disconnected. Any interrupted uploads can be easily retried once your internet connection is restored.
+          </span>
+        </div>
+      )}
+
       {/* Upload Section: Modularized PhotoUploader */}
       <PhotoUploader
         isSubmitted={isSubmitted}
         uploading={uploading}
         uploadProgress={uploadProgress}
         lastUploadSummary={lastUploadSummary}
+        uploadError={uploadError}
+        failedCount={failedBatchFiles.length}
+        onRetryFailed={handleRetryFailedUploads}
         fileInputRef={fileInputRef}
         onFileUpload={handleFileUpload}
       />

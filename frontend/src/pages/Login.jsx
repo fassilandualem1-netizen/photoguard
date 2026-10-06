@@ -226,13 +226,7 @@ function LoginContent({ onLoginSuccess }) {
       {/* Centered Login Card */}
       
         {/* Theme Toggle */}
-        <button
-          id="theme-toggle-login"
-          onClick={toggleTheme}
-          className="absolute top-4 right-4 z-50 p-2.5 rounded-full bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 shadow-sm transition-all"
-        >
-          {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-        </button>
+        <ThemeToggle className="absolute top-4 right-4 z-50" />
 
         <div className="w-full max-w-[440px] relative z-10 my-auto">
         <div className="p-8 sm:p-10 rounded-3xl bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/50 ">

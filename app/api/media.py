@@ -469,7 +469,28 @@ def list_album_media(
     if not check_media_album_access(album, current_user, db):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
-    return album.media_items
+    # CLD-01 / S3-01: Generate signed URLs for authenticated assets before returning to photographer dashboard
+    from app.core.storage import generate_signed_clean_url, generate_s3_presigned_url
+    items_out = []
+    for item in album.media_items:
+        high_res = item.url
+        thumb = item.thumbnail_url
+
+        if high_res and "res.cloudinary.com" in high_res:
+            high_res = generate_signed_clean_url(high_res) or high_res
+        elif high_res and high_res.startswith("s3://"):
+            high_res = generate_s3_presigned_url(high_res) or high_res
+            
+        if thumb and "res.cloudinary.com" in thumb:
+            thumb = generate_signed_clean_url(thumb) or thumb
+        elif thumb and thumb.startswith("s3://"):
+            thumb = generate_s3_presigned_url(thumb) or thumb
+            
+        item.url = high_res
+        item.thumbnail_url = thumb
+        items_out.append(item)
+
+    return items_out
 
 @router.delete("/{media_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_media_item(

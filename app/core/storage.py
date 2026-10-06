@@ -67,6 +67,7 @@ def upload_file_to_cloudinary(file_bytes: typing.Union[bytes, str], filename: st
         folder=folder,
         public_id=unique_public_id,
         resource_type="image",
+        type="authenticated",
         overwrite=True
     )
 
@@ -217,7 +218,7 @@ def upload_file_to_s3(file: UploadFile, filename: str) -> str:
         object_path,
         ExtraArgs={
             "ContentType": content_type,
-            "CacheControl": "max-age=31536000, public"
+            "CacheControl": "private, no-store"
         }
     )
 
@@ -322,6 +323,8 @@ def generate_signed_clean_url(raw_url: str) -> str:
         ]
         signed_url, _ = cloudinary.utils.cloudinary_url(
             public_id,
+            resource_type="image",
+            type="authenticated",
             transformation=transformation,
             sign_url=True,
             secure=True
@@ -329,4 +332,20 @@ def generate_signed_clean_url(raw_url: str) -> str:
         return signed_url
     except Exception as exc:
         logger.warning(f"[Storage] Could not generate signed Cloudinary URL: {exc}")
+        return ""
+
+def generate_s3_presigned_url(object_key: str, expires_in: int = 300) -> str:
+    """Generates a short-lived presigned URL for a private S3 object."""
+    s3 = get_s3_client()
+    if not s3:
+        return ""
+    try:
+        clean_key = object_key.replace("s3://", "")
+        return s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": S3_BUCKET_NAME, "Key": clean_key},
+            ExpiresIn=expires_in,
+        )
+    except Exception as e:
+        logger.warning(f"[S3] Could not generate presigned URL: {e}")
         return ""

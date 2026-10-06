@@ -54,14 +54,29 @@ def check_is_expired(expires_at: Optional[datetime]) -> bool:
 
 def serialize_media_item(m: MediaItem) -> MediaItemResponse:
     """
-    Guarantees null-safe serialization for a media item.
+    Guarantees null-safe serialization for a media item with dynamic CLD-01 / S3-01 signing.
     """
+    from app.core.storage import generate_signed_clean_url, generate_s3_presigned_url
+    
+    high_res = m.url or ""
+    thumb = m.thumbnail_url
+    
+    if high_res and "res.cloudinary.com" in high_res:
+        high_res = generate_signed_clean_url(high_res) or high_res
+    elif high_res and high_res.startswith("s3://"):
+        high_res = generate_s3_presigned_url(high_res) or high_res
+        
+    if thumb and "res.cloudinary.com" in thumb:
+        thumb = generate_signed_clean_url(thumb) or thumb
+    elif thumb and thumb.startswith("s3://"):
+        thumb = generate_s3_presigned_url(thumb) or thumb
+        
     return MediaItemResponse(
         id=m.id,
         album_id=m.album_id,
         filename=m.filename or "",
-        url=m.url or "",
-        thumbnail_url=m.thumbnail_url,
+        url=high_res,
+        thumbnail_url=thumb,
         original_size=int(m.original_size or 0),
         compressed_size=int(m.compressed_size or 0),
         is_selected=bool(m.is_selected or False),

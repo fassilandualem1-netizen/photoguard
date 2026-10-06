@@ -37,7 +37,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("photoguard.core")
 
 
+
+DEFAULT_ADMIN_EMAIL = "fassilandualem1@gmail.com"
+SAFE_ADMIN_FALLBACK_PASSWORD = "Admin@123!"
+
 def seed_root_admin():
+
     """
     Bulletproof Root Admin Seeder with Multi-Tier Fallbacks.
     - Reads ADMIN_EMAIL and ADMIN_PASSWORD from os.environ.

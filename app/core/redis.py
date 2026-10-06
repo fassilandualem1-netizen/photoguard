@@ -193,7 +193,7 @@ def check_pin_rate_limit(client_ip: str, pin: str, max_attempts: int = 5, window
         return False, 0
 
 
-def record_failed_pin_attempt(client_ip: str, pin: str, window_seconds: int = 900) -> int:
+def record_failed_pin_attempt(client_ip: str, pin: str, window_seconds: int = 60) -> int:
     """
     Increments failed verification attempts with expiration window.
     Falls back to in-memory store if Redis is unavailable.
@@ -255,7 +255,7 @@ def reset_pin_rate_limit(client_ip: str, pin: str) -> None:
         _memory_rate_limits.pop(f"ip:{client_ip}", None)
         _memory_rate_limits.pop(f"pin:{pin}", None)
 
-def check_login_rate_limit(client_ip: str, email: str, max_attempts: int = 5, window_seconds: int = 900) -> Tuple[bool, int]:
+def check_login_rate_limit(client_ip: str, email: str, max_attempts: int = 50, window_seconds: int = 60) -> Tuple[bool, int]:
     client = get_redis()
     if client is not None:
         try:
@@ -293,7 +293,7 @@ def check_login_rate_limit(client_ip: str, email: str, max_attempts: int = 5, wi
 
         return False, 0
 
-def record_failed_login_attempt(client_ip: str, email: str, window_seconds: int = 900) -> int:
+def record_failed_login_attempt(client_ip: str, email: str, window_seconds: int = 60) -> int:
     client = get_redis()
     if client is not None:
         try:

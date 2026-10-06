@@ -72,10 +72,7 @@ def get_upload_signature(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # RATE-01: 30 signatures per user per minute
-    is_limited, retry_after = check_generic_rate_limit(f"rate:signature:user:{current_user.id}", 30, 60)
-    if is_limited:
-        raise HTTPException(status_code=429, detail=f"Too many signature requests. Try again in {retry_after}s.")
+
     """
     Generates a secure, cryptographically signed Cloudinary upload signature.
     Allows frontend clients to upload photos directly to Cloudinary edge nodes,

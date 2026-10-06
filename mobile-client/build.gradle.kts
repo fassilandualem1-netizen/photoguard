@@ -17,8 +17,9 @@ android {
 
         vectorDrawables { useSupportLibrary = true }
         resourceConfigurations += setOf("en", "am")
-    }
 
+        buildConfigField("String", "API_BASE_URL", "\"https://photoguard.onrender.com/api/\"")
+    }
 
     signingConfigs {
         create("release") {
@@ -49,10 +50,12 @@ android {
             if (releaseSigning?.storeFile?.exists() == true) {
                 signingConfig = releaseSigning
             }
+            buildConfigField("String", "API_BASE_URL", "\"https://photoguard.onrender.com/api/\"")
         }
         debug {
             isMinifyEnabled = false
             applicationIdSuffix = ".debug"
+            buildConfigField("String", "API_BASE_URL", "\"https://photoguard.onrender.com/api/\"")
         }
     }
 
@@ -65,6 +68,7 @@ android {
         jvmTarget = "17"
         freeCompilerArgs += listOf(
             "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
+            "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
             "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi"
         )
     }

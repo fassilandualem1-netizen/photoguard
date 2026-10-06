@@ -16,19 +16,13 @@ class PhotoGuardApp : Application(), ImageLoaderFactory {
 
     private fun setupGlobalExceptionHandler() {
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
-        if (BuildConfig.DEBUG) {
-            Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-                Log.e(
-                    "PhotoGuardFatal",
-                    "Uncaught exception on thread [${thread.name}]: ${throwable.localizedMessage}",
-                    throwable
-                )
-                defaultHandler?.uncaughtException(thread, throwable)
-            }
-        } else {
-            Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-                defaultHandler?.uncaughtException(thread, throwable)
-            }
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            Log.e(
+                "PhotoGuardFatal",
+                "Uncaught exception on thread [${thread.name}]: ${throwable.localizedMessage}",
+                throwable
+            )
+            defaultHandler?.uncaughtException(thread, throwable)
         }
     }
 
@@ -40,8 +34,8 @@ class PhotoGuardApp : Application(), ImageLoaderFactory {
                     .build()
             }
             .diskCache(null) // STRICT: RAM-only, zero disk retention
-            .bitmapConfig(Bitmap.Config.HARDWARE)
-            .allowHardware(true)
+            .bitmapConfig(Bitmap.Config.ARGB_8888)
+            .allowHardware(false)
             .crossfade(true)
             .build()
     }

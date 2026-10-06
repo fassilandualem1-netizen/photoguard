@@ -296,7 +296,7 @@ fun DeliveryScreen(
         containerColor = Color(0xFF090D16)
     ) { paddingValues ->
         LazyVerticalStaggeredGrid(
-            columns = StaggeredGridCells.Fixed(2),
+            columns = StaggeredGridCells.Adaptive(minSize = 160.dp),
             contentPadding = PaddingValues(
                 start = 12.dp,
                 end = 12.dp,

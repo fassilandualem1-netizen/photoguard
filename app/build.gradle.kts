@@ -21,12 +21,37 @@ android {
         buildConfigField("String", "API_BASE_URL", "\"https://photoguard.onrender.com/api/\"")
     }
 
+    signingConfigs {
+        create("release") {
+            val envPath = System.getenv("RELEASE_KEYSTORE_PATH")
+            val releaseKeystore = if (envPath != null && file(envPath).exists()) {
+                file(envPath)
+            } else if (file("release.keystore").exists()) {
+                file("release.keystore")
+            } else if (file("app/release.keystore").exists()) {
+                file("app/release.keystore")
+            } else {
+                null
+            }
+
+            if (releaseKeystore != null) {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD") ?: "photoguard_secret_pass"
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: "photoguard"
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: "photoguard_secret_pass"
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            val releaseSigning = signingConfigs.findByName("release")
+            if (releaseSigning?.storeFile?.exists() == true) {
+                signingConfig = releaseSigning
+            }
             buildConfigField("String", "API_BASE_URL", "\"https://photoguard.onrender.com/api/\"")
         }
         debug {

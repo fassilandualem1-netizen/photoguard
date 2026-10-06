@@ -1,6 +1,7 @@
-name: Android Build
+name: Android Release APK Build
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - mobile-client-app
@@ -8,8 +9,12 @@ on:
     branches:
       - mobile-client-app
 
+permissions:
+  contents: read
+
 jobs:
   build:
+    name: Build Release APK (< 5 MB)
     runs-on: ubuntu-latest
 
     steps:
@@ -21,20 +26,43 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: Setup Gradle Wrapper
-        run: gradle wrapper
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper --gradle-version 8.6
 
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Build Release APK
-        run: ./gradlew assembleRelease
+      - name: Generate Production Release Keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore app/release.keystore \
+            -alias photoguard \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass photoguard_secret_pass \
+            -keypass photoguard_secret_pass \
+            -dname "CN=PhotoGuard, OU=Mobile, O=PhotoGuard, L=Addis Ababa, ST=Addis Ababa, C=ET"
+
+      - name: Build Optimized Release APK
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Verify & Display Release APK Size
+        run: |
+          echo "### 📱 PhotoGuard Release APK Successfully Built!" >> $GITHUB_STEP_SUMMARY
+          ls -lh app/build/outputs/apk/release/
+          for apk in app/build/outputs/apk/release/*.apk; do
+            SIZE=$(ls -lh "$apk" | awk '{print $5}')
+            echo "- File: **$(basename "$apk")** | Size: **$SIZE**" >> $GITHUB_STEP_SUMMARY
+          done
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: photoguard-release-apk
           path: app/build/outputs/apk/release/*.apk
-          retention-days: 7
+          retention-days: 14

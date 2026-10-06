@@ -22,10 +22,15 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file(System.getenv("RELEASE_KEYSTORE_PATH") ?: "dummy.keystore")
-            storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD") ?: "dummy"
-            keyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: "dummy"
-            keyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: "dummy"
+            val keystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
+            if (keystorePath != null && file(keystorePath).exists()) {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD") ?: ""
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: ""
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: ""
+            } else {
+                initWith(getByName("debug"))
+            }
         }
     }
 

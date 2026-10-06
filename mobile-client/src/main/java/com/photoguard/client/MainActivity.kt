@@ -53,16 +53,22 @@ class MainActivity : ComponentActivity() {
 
         // Global crash guard to prevent dropping to phone's home screen
         val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            Log.e("PhotoGuard", "Intercepted uncaught exception: ", throwable)
-            runOnUiThread {
-                Toast.makeText(
-                    applicationContext,
-                    "PhotoGuard Warning: ${throwable.localizedMessage ?: "Unexpected error"}",
-                    Toast.LENGTH_LONG
-                ).show()
+        if (BuildConfig.DEBUG) {
+            Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+                Log.e("PhotoGuard", "Intercepted uncaught exception: ", throwable)
+                runOnUiThread {
+                    Toast.makeText(
+                        applicationContext,
+                        "PhotoGuard Warning: ${throwable.localizedMessage ?: "Unexpected error"}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                previousHandler?.uncaughtException(thread, throwable)
             }
-            previousHandler?.uncaughtException(thread, throwable)
+        } else {
+            Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+                previousHandler?.uncaughtException(thread, throwable)
+            }
         }
 
         super.onCreate(savedInstanceState)

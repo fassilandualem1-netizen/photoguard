@@ -391,7 +391,7 @@ private fun ErrorBanner(
                 } else {
                     val userFriendlyMsg = when {
                         error.errorCode == 404 || error.message.contains("not found", ignoreCase = true) || error.message.contains("Invalid", ignoreCase = true) ->
-                            if (isAmharic) "ያስገቡት ፒን አልበሙ አልተገኘም (Active PINs: 136081, 469676)" else "Invalid PIN. Album not found. (Available: 136081, 469676)"
+                            if (isAmharic) "ያስገቡት ፒን የተሳሳተ ነው፣ ወይም አልበሙ አልተገኘም" else "Invalid PIN. Album not found."
                         error.errorCode == 403 || error.message.contains("locked", ignoreCase = true) || error.message.contains("submitted", ignoreCase = true) ->
                             if (isAmharic) "ይህ አልበም አስቀድሞ ተመርጦ ተቆልፏል" else "This album has already been submitted and locked."
                         error.message.contains("timeout", ignoreCase = true) || error.message.contains("connect", ignoreCase = true) ->

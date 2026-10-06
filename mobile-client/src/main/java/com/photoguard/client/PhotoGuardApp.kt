@@ -16,13 +16,19 @@ class PhotoGuardApp : Application(), ImageLoaderFactory {
 
     private fun setupGlobalExceptionHandler() {
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            Log.e(
-                "PhotoGuardFatal",
-                "Uncaught exception on thread [${thread.name}]: ${throwable.localizedMessage}",
-                throwable
-            )
-            defaultHandler?.uncaughtException(thread, throwable)
+        if (BuildConfig.DEBUG) {
+            Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+                Log.e(
+                    "PhotoGuardFatal",
+                    "Uncaught exception on thread [${thread.name}]: ${throwable.localizedMessage}",
+                    throwable
+                )
+                defaultHandler?.uncaughtException(thread, throwable)
+            }
+        } else {
+            Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+                defaultHandler?.uncaughtException(thread, throwable)
+            }
         }
     }
 

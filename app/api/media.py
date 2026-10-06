@@ -94,6 +94,15 @@ def get_upload_signature(
             detail="Album is locked. Client has finalized selection."
         )
 
+    # API-02: Pre-signature SaaS Virtual Quota Check
+    effective_owner_id = current_user.effective_owner_id or current_user.id
+    owner = db.query(User).filter(User.id == effective_owner_id).first()
+    if owner and ((owner.storage_used or 0) >= owner.storage_quota_limit):
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Storage quota exceeded for this studio account. Cannot generate upload signature."
+        )
+
     import time
     timestamp = int(time.time())
     folder = f"photoguard_vault/{album.pin}"

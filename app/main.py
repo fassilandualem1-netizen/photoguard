@@ -284,18 +284,19 @@ def purge_download_triggered_assets():
                 thumb_url = item.thumbnail_url or item.url
 
                 # Target ONLY the original high-res asset in the cloud provider
+                # API-03: Storage / Deletion Correctness (respect boolean false returns)
                 deleted = False
                 try:
                     if "res.cloudinary.com" in high_res_url:
-                        delete_file_from_cloudinary(high_res_url)
+                        deleted = bool(delete_file_from_cloudinary(high_res_url))
                     elif high_res_url.startswith("/uploads/"):
                         clean_fn = os.path.basename(high_res_url)
                         local_f = os.path.join(os.getcwd(), "uploads", clean_fn)
                         if os.path.exists(local_f):
                             os.remove(local_f)
+                        deleted = True
                     else:
-                        delete_file_from_s3(high_res_url)
-                    deleted = True
+                        deleted = bool(delete_file_from_s3(high_res_url))
                 except Exception as del_err:
                     logger.warning(f"[Auto-Purge Warning] Cloud deletion error for item {item.id} ({high_res_url}): {del_err}")
 

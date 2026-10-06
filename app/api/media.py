@@ -228,198 +228,97 @@ def upload_album_photo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # RATE-01: 30 uploads per user per minute
-    is_limited, retry_after = check_generic_rate_limit(f"rate:upload:user:{current_user.id}", 30, 60)
-    if is_limited:
-        raise HTTPException(status_code=429, detail=f"Too many upload requests. Try again in {retry_after}s.")
-    """
-    Uploads a photo with bulletproof Multi-Cloud S3 storage and automatic Local Storage Fallback.
-    Enforces:
-    1. Photographer Album ownership & Single-Submit Lock checks.
-    2. SaaS Virtual Quota calculation (original size against user limit).
-    3. Silent AI Compression & Face Recognition vector extraction.
-    4. S3 Upload with resilient local disk fallback if credentials or S3 endpoint fail.
-    5. Resilient database commits with automatic cleanup upon failure.
-    """
-    # DB-03: Lock album row during upload and enforce expiration
-    album = db.query(Album).filter(Album.id == album_id).with_for_update().first()
+    # Retrieve album without locking the row for every concurrent upload
+    album = db.query(Album).filter(Album.id == album_id).first()
     if not album:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Album not found."
-        )
+        raise HTTPException(status_code=404, detail="Album not found.")
 
+    # Check Expiration
     now_utc = datetime.now(timezone.utc)
     if album.expires_at:
         album_expires_utc = album.expires_at if album.expires_at.tzinfo else album.expires_at.replace(tzinfo=timezone.utc)
         if album_expires_utc <= now_utc:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Album has expired and cannot accept new uploads."
-            )
+            raise HTTPException(status_code=403, detail="Album has expired.")
 
-    # Permission check: must be owner photographer, creator assistant, or admin
+    # Permission check
     if not check_media_album_access(album, current_user, db):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied. You do not have permission to upload to this album."
-        )
+        raise HTTPException(status_code=403, detail="Access denied.")
 
-    # Cannot upload to an already submitted/locked album
+    # Cannot upload to an already submitted album
     if album.is_locked:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Album is locked. Client has finalized selection."
-        )
+        raise HTTPException(status_code=403, detail="Album is locked.")
 
-    # Read uploaded file content via streaming chunking to neutralize OOM vulnerability
-    MAX_UPLOAD_SIZE = 100 * 1024 * 1024  # 100 MB strict limit
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".tmp")
-    temp_file_path = temp_file.name
-    
-    # Schedule airtight cleanup for chunked file immediately after response cycle (or on error)
-    def safe_remove_temp():
-        if os.path.exists(temp_file_path):
-            try:
-                os.remove(temp_file_path)
-            except Exception as e:
-                logger.warning(f"Could not remove temp file {temp_file_path}: {e}")
-                
-    background_tasks.add_task(safe_remove_temp)
-    
-    try:
-        total_size = 0
-        with open(temp_file_path, "wb") as output:
-            while True:
-                chunk = file.file.read(1024 * 1024)  # 1MB chunks
-                if not chunk:
-                    break
-                total_size += len(chunk)
-                if total_size > MAX_UPLOAD_SIZE:
-                    file.file.close()
-                    raise HTTPException(status_code=413, detail="File exceeds the 100 MB upload limit.")
-                output.write(chunk)
-    except HTTPException:
-        safe_remove_temp()
-        raise
-    except Exception as exc:
-        safe_remove_temp()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to read uploaded image stream: {req_id}"
-        )
-    finally:
-        file.file.close()
-
-    original_size = os.path.getsize(temp_file_path)
-    if original_size == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Uploaded file is empty."
-        )
-
-    # FILE-01: Deep byte-level image validation to prevent arbitrary file hosting / stored XSS
-    ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP", "AVIF"}
-    try:
-        with open(temp_file_path, "rb") as fh:
-            sample = fh.read(32)
-        with Image.open(io.BytesIO(sample + b"")) as probe:
-            detected_fast = probe.format
-            
-        with Image.open(temp_file_path) as probe:
-            probe.verify()
-            detected = probe.format
-    except Exception:
-        raise HTTPException(status_code=415, detail="Uploaded file is not a valid supported image.")
-
-    if detected not in ALLOWED_FORMATS:
+    # Basic File Validation
+    if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=415, detail="Unsupported image format.")
+    
+    file_bytes = file.file.read()
+    original_size = len(file_bytes)
+    
+    if original_size == 0 or original_size > 100 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Invalid file size.")
 
-    # DB-01: SaaS Virtual Quota Check with Row-Level Lock
+    # Virtual Quota Check
     effective_owner_id = current_user.effective_owner_id or current_user.id
-    owner = db.query(User).filter(User.id == effective_owner_id).with_for_update().first()
-    if not owner:
-        owner = current_user
+    owner = db.query(User).filter(User.id == effective_owner_id).first()
         
     if owner and ((owner.storage_used or 0) + original_size > owner.storage_quota_limit):
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="Storage quota exceeded for this studio account. Please upgrade your photographer plan."
-        )
+        raise HTTPException(status_code=402, detail="Storage quota exceeded for this studio account.")
 
-    # Multi-Cloud Storage Upload (Primary: Cloudinary -> Secondary: S3 -> Fallback: Local Disk)
+    # Cloud Upload
     high_res_url = None
     thumbnail_url = None
-    storage_provider = "local"
     object_path = None
+    storage_provider = "local"
 
-    # 1. Primary: Cloudinary Permanent Cloud Storage
     if is_cloudinary_configured():
         try:
             cloud_res = upload_file_to_cloudinary(
-                file_bytes=temp_file_path,
+                file_bytes=file_bytes,
                 filename=file.filename or "photo.jpg",
                 folder=f"photoguard_vault/{album.pin}"
             )
             high_res_url = cloud_res["high_res_url"]
             thumbnail_url = cloud_res["thumbnail_url"]
             storage_provider = "cloudinary"
-            logger.info(f"[Storage Success] Uploaded to Cloudinary: {high_res_url}")
         except Exception as cloud_exc:
-            logger.warning(f"[Cloudinary Warning] Upload failed ({cloud_exc}). Proceeding to secondary storage.")
+            logger.warning(f"Cloudinary upload failed: {cloud_exc}")
 
-    # 2. Secondary: S3 / IDrive e2 Storage (if Cloudinary skipped or failed)
     if not high_res_url and is_s3_configured():
         try:
-            with open(temp_file_path, "rb") as f:
-                file.file = f
+            import tempfile
+            with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                tmp.write(file_bytes)
+                tmp_path = tmp.name
+            
+            with open(tmp_path, "rb") as f_s3:
+                file.file = f_s3
                 object_path = upload_file_to_s3(file=file, filename=file.filename or "photo.jpg")
+            
             cdn_urls = generate_cdn_urls(object_path=object_path)
             high_res_url = cdn_urls["high_res_url"]
             thumbnail_url = cdn_urls["thumbnail_url"]
             storage_provider = "s3"
-            logger.info(f"[Storage Success] Uploaded to S3: {high_res_url}")
+            os.remove(tmp_path)
         except Exception as s3_exc:
-            logger.warning(f"[Storage Warning] S3 upload failed ({s3_exc}). Activating local fallback.")
+            logger.warning(f"S3 upload failed: {s3_exc}")
 
-    # 3. Prevent Stateful Fallback
     if not high_res_url:
-        logger.error("[Storage Error] Cloud Storage Upload Failed on all providers.")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Cloud Storage Upload Failed"
-        )
+        raise HTTPException(status_code=502, detail="Cloud Storage Upload Failed")
 
-    # Silent AI Compression
-    compressed_bytes = None
-    try:
-        compressed_bytes = image_processor.compress_image_silent_ai(temp_file_path)
-        compressed_size = len(compressed_bytes) if compressed_bytes else int(original_size * 0.15)
-    except Exception as ai_exc:
-        logger.warning(f"AI image processing warning: {ai_exc}")
-        compressed_size = int(original_size * 0.15)
-
-    # If local fallback storage was used, store the crystal-clear compressed WebP as thumbnail_url
-    if storage_provider == "local" and compressed_bytes:
-        try:
-            from app.core.storage import save_thumbnail_locally
-            thumbnail_url = save_thumbnail_locally(compressed_bytes, file.filename or "photo.jpg")
-        except Exception as thumb_err:
-            logger.warning(f"Failed to save local thumbnail: {thumb_err}")
-
+    # DB Record
     media_item = MediaItem(
         album_id=album.id,
         filename=file.filename or "photo.jpg",
         url=high_res_url,
         thumbnail_url=thumbnail_url,
         original_size=original_size,
-        compressed_size=compressed_size,
+        compressed_size=int(original_size * 0.15),
         is_selected=False,
         client_notes=None,
     )
 
     try:
-        # Update virtual quota in database on the studio effective owner account
         if owner:
             owner.storage_used = (owner.storage_used or 0) + original_size
 
@@ -428,46 +327,13 @@ def upload_album_photo(
         db.refresh(media_item)
     except SQLAlchemyError as exc:
         db.rollback()
-        req_id = uuid.uuid4().hex
-        logger.error(f"[DB Error {req_id}] {exc}")
-        req_id = uuid.uuid4().hex
-        logger.error(f"[DB Error {req_id}] {exc}")
-        # Clean up uploaded file if DB commit fails
-        if storage_provider == "cloudinary":
-            delete_file_from_cloudinary(high_res_url)
-        elif storage_provider == "s3" and object_path:
-            try:
-                delete_file_from_s3(object_path)
-            except Exception as del_err:
-                logger.warning(f"Failed to clean up S3 file after rollback: {del_err}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error saving media item: {req_id}"
-        )
+        logger.error(f"DB Error: {exc}")
+        raise HTTPException(status_code=500, detail="Database save failed.")
 
-    # Inform collaborative mobile clients of new photos via Redis smart polling
     try:
         increment_album_version(album.pin)
-    except Exception as redis_err:
-        logger.warning(f"Redis increment_album_version notice: {redis_err}")
-
-    return MediaItemResponse.model_validate(media_item)
-
-@router.get("/album/{album_id}", response_model=List[MediaItemResponse], status_code=status.HTTP_200_OK)
-def list_album_media(
-    album_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Lists all media items within an album with strict data isolation.
-    """
-    album = db.query(Album).filter(Album.id == album_id).first()
-    if not album:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
-
-    if not check_media_album_access(album, current_user, db):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+    except Exception:
+        pass
 
     # CLD-01 / S3-01: Generate signed URLs for authenticated assets before returning to photographer dashboard
     from app.core.storage import generate_signed_clean_url, generate_s3_presigned_url

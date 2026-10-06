@@ -38,16 +38,34 @@ async def send_telegram_message(chat_id: str, text: str) -> bool:
         logger.error(f"Failed to transmit Telegram notification to {chat_id}: {exc}")
         return False
 
-async def notify_photographer_submission(album_title: str, client_name: str, chat_id: str):
+async def notify_photographer_submission(
+    album_title: str,
+    client_name: str,
+    chat_id: str,
+    selected_count: int = 0,
+    total_count: int = 0,
+    pin: str = ""
+):
     """
-    Sends a beautifully formatted real-time notification to the photographer
+    Sends a clean, minimalist real-time notification to the photographer
     when a client completes and submits their photo selections.
     """
+    if total_count > 0:
+        selection_text = f"{selected_count} of {total_count} Photos"
+    elif selected_count > 0:
+        selection_text = f"{selected_count} Photos"
+    else:
+        selection_text = "Completed"
+
+    client_display = client_name.strip() if client_name and client_name.strip() else "Client"
+
     message = (
-        "📸 <b>PhotoGuard Alert: Photo Selection Submitted!</b>\n\n"
-        f"👤 <b>Client:</b> {client_name}\n"
+        "📸 <b>Photo Selection Submitted</b>\n\n"
+        f"👤 <b>Client:</b> {client_display}\n"
         f"📁 <b>Album:</b> {album_title}\n"
-        "🔒 <b>Status:</b> Locked & Finalized\n\n"
-        "✨ The client has completed their review. Gallery access is locked and selections are ready for editing & export."
+        f"✅ <b>Selected:</b> {selection_text}"
     )
+    if pin:
+        message += f"\n🔑 <b>PIN:</b> {pin}"
+
     await send_telegram_message(chat_id=chat_id, text=message)

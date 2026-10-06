@@ -626,11 +626,16 @@ def submit_album_selection(
 
     # 7. Dispatch non-blocking Telegram alert to photographer
     if album.photographer and album.photographer.telegram_chat_id:
+        selected_count = sum(1 for m in (album.media_items or []) if m.is_selected)
+        total_count = len(album.media_items or [])
         background_tasks.add_task(
             notify_photographer_submission,
             album_title=album.title,
             client_name=album.client_name,
-            chat_id=album.photographer.telegram_chat_id
+            chat_id=album.photographer.telegram_chat_id,
+            selected_count=selected_count,
+            total_count=total_count,
+            pin=clean_pin
         )
 
     return ClientSubmitResponse(

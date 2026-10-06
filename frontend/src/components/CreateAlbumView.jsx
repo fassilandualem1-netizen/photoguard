@@ -7,9 +7,7 @@ import {
   AlertCircle,
   Loader2,
   Check,
-  Download,
   Clock,
-  KeyRound
 } from "lucide-react";
 
 export default function CreateAlbumView() {
@@ -18,7 +16,6 @@ export default function CreateAlbumView() {
 
   const [title, setTitle] = useState("");
   const [clientName, setClientName] = useState("");
-  const [allowDownload, setAllowDownload] = useState(false);
   const [expiresInDays, setExpiresInDays] = useState(15);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -36,7 +33,6 @@ export default function CreateAlbumView() {
     const payload = {
       title: title.trim(),
       client_name: clientName.trim(),
-      allow_download: allowDownload,
     };
 
     if (isStudio && expiresInDays) {
@@ -152,25 +148,6 @@ export default function CreateAlbumView() {
             />
           </div>
 
-          {/* Access PIN â€” Read Only */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 flex items-center gap-1.5">
-                <KeyRound className="w-4 h-4 text-slate-400" />
-                Access PIN
-              </label>
-              <span className="text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-800">
-                Auto-Generated
-              </span>
-            </div>
-            <input
-              type="text"
-              placeholder="Auto-generated" value=""
-              readOnly
-              className="w-full bg-slate-50 dark:bg-[#111620] dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-400 cursor-not-allowed select-none focus:outline-none shadow-sm"
-            />
-          </div>
-
           {/* Gallery Lifespan â€” Studio Tier Only */}
           {isStudio && (
             <div>
@@ -198,31 +175,6 @@ export default function CreateAlbumView() {
               </p>
             </div>
           )}
-
-          {/* Download Permission */}
-          <div>
-            <label className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#111620] dark:bg-slate-800/50 hover:bg-slate-100 dark:bg-slate-800 cursor-pointer transition-colors group">
-              <input
-                id="allow-download-checkbox"
-                type="checkbox"
-                checked={allowDownload}
-                onChange={(e) => setAllowDownload(e.target.checked)}
-                disabled={loading}
-                className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-0 transition-colors"
-              />
-              <div>
-                <div className="flex items-center gap-2">
-                  <Download className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition-colors" />
-                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 select-none">
-                    Allow Photo Download
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 select-none">
-                  Clients can download their selected photos directly.
-                </p>
-              </div>
-            </label>
-          </div>
 
           {/* Action Buttons */}
           <div className="flex items-center gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">

@@ -697,9 +697,9 @@ def delete_album(
         album_creator = db.query(User).filter(User.id == album.photographer_id).first()
         owner = None
         if album_creator:
-            owner = db.query(User).filter(User.id == album_creator.effective_owner_id).first() or album_creator
+            owner = db.query(User).filter(User.id == (album_creator.effective_owner_id or album_creator.id)).with_for_update().first() or album_creator
         elif current_user:
-            owner = db.query(User).filter(User.id == current_user.effective_owner_id).first() or current_user
+            owner = db.query(User).filter(User.id == (current_user.effective_owner_id or current_user.id)).with_for_update().first() or current_user
 
         if owner and total_freed_bytes > 0:
             owner.storage_used = max(0, (owner.storage_used or 0) - total_freed_bytes)

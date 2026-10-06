@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 import logging
 import tempfile
 import shutil
@@ -176,7 +177,7 @@ def save_direct_upload_url(
 
     try:
         if owner and original_size > 0:
-            owner.storage_used += original_size
+            owner.storage_used = (owner.storage_used or 0) + original_size
         db.add(media_item)
         db.commit()
         db.refresh(media_item)
@@ -212,12 +213,22 @@ def upload_album_photo(
     4. S3 Upload with resilient local disk fallback if credentials or S3 endpoint fail.
     5. Resilient database commits with automatic cleanup upon failure.
     """
-    album = db.query(Album).filter(Album.id == album_id).first()
+    # DB-03: Lock album row during upload and enforce expiration
+    album = db.query(Album).filter(Album.id == album_id).with_for_update().first()
     if not album:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Album not found."
         )
+
+    now_utc = datetime.now(timezone.utc)
+    if album.expires_at:
+        album_expires_utc = album.expires_at if album.expires_at.tzinfo else album.expires_at.replace(tzinfo=timezone.utc)
+        if album_expires_utc <= now_utc:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Album has expired and cannot accept new uploads."
+            )
 
     # Permission check: must be owner photographer, creator assistant, or admin
     if not check_media_album_access(album, current_user, db):
@@ -279,11 +290,13 @@ def upload_album_photo(
             detail="Uploaded file is empty."
         )
 
-    # SaaS Virtual Quota Check: routed through effective_owner_id
-    effective_owner_id = current_user.effective_owner_id
-    owner = db.query(User).filter(User.id == effective_owner_id).first() or current_user
-    
-    if owner and (owner.storage_used + original_size > owner.storage_quota_limit):
+    # DB-01: SaaS Virtual Quota Check with Row-Level Lock
+    effective_owner_id = current_user.effective_owner_id or current_user.id
+    owner = db.query(User).filter(User.id == effective_owner_id).with_for_update().first()
+    if not owner:
+        owner = current_user
+        
+    if owner and ((owner.storage_used or 0) + original_size > owner.storage_quota_limit):
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="Storage quota exceeded for this studio account. Please upgrade your photographer plan."
@@ -363,7 +376,7 @@ def upload_album_photo(
     try:
         # Update virtual quota in database on the studio effective owner account
         if owner:
-            owner.storage_used += original_size
+            owner.storage_used = (owner.storage_used or 0) + original_size
 
         db.add(media_item)
         db.commit()
@@ -443,9 +456,9 @@ def delete_media_item(
         album_creator = db.query(User).filter(User.id == album.photographer_id).first()
         owner = None
         if album_creator:
-            owner = db.query(User).filter(User.id == album_creator.effective_owner_id).first() or album_creator
+            owner = db.query(User).filter(User.id == (album_creator.effective_owner_id or album_creator.id)).with_for_update().first() or album_creator
         elif current_user:
-            owner = db.query(User).filter(User.id == current_user.effective_owner_id).first() or current_user
+            owner = db.query(User).filter(User.id == (current_user.effective_owner_id or current_user.id)).with_for_update().first() or current_user
 
         if owner and item_size > 0:
             owner.storage_used = max(0, (owner.storage_used or 0) - item_size)

@@ -302,14 +302,14 @@ def destroy_media_asset(url_or_path: str) -> bool:
 def generate_signed_clean_url(raw_url: str) -> str:
     """
     Generates a cryptographically signed delivery URL with light compression.
-    Watermarks have been completely eradicated as the mobile client enforces FLAG_SECURE.
+    Backward compatible with legacy (type='upload') images.
     """
     if not is_cloudinary_configured() or "res.cloudinary.com" not in raw_url:
         return ""
     try:
         import cloudinary.utils
         
-        # Dynamically determine the asset type
+        # Dynamically determine the asset type (backward compatibility)
         asset_type = "authenticated" if "/authenticated/" in raw_url else "upload"
         
         if asset_type == "authenticated":
@@ -340,35 +340,7 @@ def generate_signed_clean_url(raw_url: str) -> str:
         return signed_url
     except Exception as exc:
         logger.warning(f"[Storage] Could not generate signed Cloudinary URL: {exc}")
-        return ""
-    try:
-        import cloudinary.utils
-        parts = raw_url.split("/upload/")[-1].split("/")
-        clean_parts = [
-            p for p in parts
-            if not p.startswith("v") and not (
-                p.startswith("c_") or p.startswith("w_") or p.startswith("q_") or p.startswith("s--") or p.startswith("l_") or p.startswith("f_")
-            )
-        ]
-        full_path = "/".join(clean_parts)
-        public_id = os.path.splitext(full_path)[0]
-
-        transformation = [
-            {"width": 1200, "crop": "limit", "quality": "auto:good", "fetch_format": "auto"}
-        ]
-        signed_url, _ = cloudinary.utils.cloudinary_url(
-            public_id,
-            resource_type="image",
-            type="authenticated",
-            transformation=transformation,
-            sign_url=True,
-            secure=True
-        )
-        return signed_url
-    except Exception as exc:
-        logger.warning(f"[Storage] Could not generate signed Cloudinary URL: {exc}")
-        return ""
-
+        return raw_url
 def generate_s3_presigned_url(object_key: str, expires_in: int = 300) -> str:
     """Generates a short-lived presigned URL for a private S3 object."""
     s3 = get_s3_client()

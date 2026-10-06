@@ -1,12 +1,15 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import {
   Lock,
   Mail,
   ArrowRight,
   AlertCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  Sun,
+  Moon
 } from "lucide-react";
 
 /**

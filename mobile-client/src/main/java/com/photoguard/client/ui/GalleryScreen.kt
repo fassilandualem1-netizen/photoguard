@@ -1,10 +1,14 @@
 package com.photoguard.client.ui
 
+import kotlinx.coroutines.delay
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
@@ -504,70 +508,25 @@ fun GalleryScreen(
                     .background(Color.Black)
             ) {
                 val currentMedia = uiState.mediaItems.getOrNull(pagerState.currentPage)
+                var isCurrentPageZoomed by remember { mutableStateOf(false) }
 
                 // The Horizontal Pager allows effortless left/right swiping without exiting
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
+                    userScrollEnabled = !isCurrentPageZoomed,
                     key = { page -> uiState.mediaItems[page].id }
                 ) { page ->
                     val media = uiState.mediaItems[page]
-                    val context = LocalContext.current
-                    val fullRequest = remember(media.url) {
-                        ImageRequest.Builder(context)
-                            .data(media.url)
-                            .crossfade(true)
-                            .precision(Precision.EXACT)
-                            .diskCachePolicy(CachePolicy.DISABLED)
-                            .memoryCachePolicy(CachePolicy.ENABLED)
-                            .build()
-                    }
-
-                    var scale by remember { mutableFloatStateOf(1f) }
-                    var offset by remember { mutableStateOf(Offset.Zero) }
-
-                    // Reset zoom & pan when navigating to another photo
-                    LaunchedEffect(page, pagerState.currentPage) {
-                        if (pagerState.currentPage != page) {
-                            scale = 1f
-                            offset = Offset.Zero
+                    FullScreenZoomablePhotoItem(
+                        media = media,
+                        isCurrentPage = (pagerState.currentPage == page),
+                        onZoomStateChanged = { zoomed ->
+                            if (pagerState.currentPage == page) {
+                                isCurrentPageZoomed = zoomed
+                            }
                         }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .pointerInput(page) {
-                                detectTransformGestures { _, pan, zoom, _ ->
-                                    val newScale = (scale * zoom).coerceIn(1f, 5f)
-                                    scale = newScale
-                                    offset = if (newScale > 1f) {
-                                        Offset(
-                                            x = offset.x + pan.x,
-                                            y = offset.y + pan.y
-                                        )
-                                    } else {
-                                        Offset.Zero
-                                    }
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AsyncImage(
-                            model = fullRequest,
-                            contentDescription = media.filename,
-                            contentScale = ContentScale.Fit,
-                            imageLoader = context.imageLoader,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer(
-                                    scaleX = scale,
-                                    scaleY = scale,
-                                    translationX = offset.x,
-                                    translationY = offset.y
-                                )
-                        )
-                    }
+                    )
                 }
 
                 // Top control bar showing Position Counter ("5 of 45")
@@ -926,7 +885,7 @@ fun GalleryItem(
                         .data(crispUrl)
                         .crossfade(true)
                         .precision(Precision.EXACT)
-                        .diskCachePolicy(CachePolicy.DISABLED)
+                        .diskCachePolicy(CachePolicy.ENABLED)
                         .memoryCachePolicy(CachePolicy.ENABLED)
                         .build()
                 }
@@ -1062,7 +1021,7 @@ fun ReviewItemCard(
                         .data(crispUrl)
                         .crossfade(true)
                         .precision(Precision.EXACT)
-                        .diskCachePolicy(CachePolicy.DISABLED)
+                        .diskCachePolicy(CachePolicy.ENABLED)
                         .memoryCachePolicy(CachePolicy.ENABLED)
                         .build()
                 }
@@ -1177,3 +1136,208 @@ fun NoteEditorDialog(
         }
     )
 }
+
+/**
+ * Ultra-smooth, responsive zoomable full-screen photo item with multi-layer loading.
+ * Layer 1: Instant preview from thumbnail cache (Guarantees zero black screens).
+ * Layer 2: Full-res image stream with auto-retry and single-tap reload fallback.
+ * Gestures: Smooth double-tap zoom (1x <-> 2.5x) and fluid pinch-to-zoom with screen-bounds clamping.
+ */
+@Composable
+fun FullScreenZoomablePhotoItem(
+    media: MediaItemResponse,
+    isCurrentPage: Boolean,
+    onZoomStateChanged: (Boolean) -> Unit
+) {
+    val context = LocalContext.current
+    var retryCount by remember { mutableIntStateOf(0) }
+    var isLoadingHighRes by remember { mutableStateOf(true) }
+    var isError by remember { mutableStateOf(false) }
+
+    var targetScale by remember { mutableFloatStateOf(1f) }
+    val animatedScale by animateFloatAsState(
+        targetValue = targetScale,
+        animationSpec = tween(durationMillis = 200),
+        label = "ZoomAnimation"
+    )
+    var offset by remember { mutableStateOf(Offset.Zero) }
+
+    // Auto-retry up to 3 times if network hiccups
+    LaunchedEffect(isError, retryCount) {
+        if (isError && retryCount < 3) {
+            delay(1200)
+            retryCount++
+        }
+    }
+
+    // Reset zoom and pan whenever user swipes away from this page
+    LaunchedEffect(isCurrentPage) {
+        if (!isCurrentPage) {
+            targetScale = 1f
+            offset = Offset.Zero
+            onZoomStateChanged(false)
+        }
+    }
+
+    // Keep parent pager informed if current photo is zoomed in
+    LaunchedEffect(animatedScale) {
+        if (isCurrentPage) {
+            onZoomStateChanged(animatedScale > 1.05f)
+        }
+    }
+
+    val thumbnailRequest = remember(media.thumbnailUrl, media.url) {
+        val thumb = media.thumbnailUrl ?: media.url
+        ImageRequest.Builder(context)
+            .data(thumb)
+            .crossfade(true)
+            .diskCachePolicy(CachePolicy.ENABLED)
+            .memoryCachePolicy(CachePolicy.ENABLED)
+            .build()
+    }
+
+    val fullRequest = remember(media.url, retryCount) {
+        ImageRequest.Builder(context)
+            .data(media.url)
+            .crossfade(true)
+            .precision(Precision.EXACT)
+            .diskCachePolicy(CachePolicy.ENABLED)
+            .memoryCachePolicy(CachePolicy.ENABLED)
+            .listener(
+                onStart = {
+                    isLoadingHighRes = true
+                    isError = false
+                },
+                onSuccess = { _, _ ->
+                    isLoadingHighRes = false
+                    isError = false
+                },
+                onError = { _, _ ->
+                    isLoadingHighRes = false
+                    isError = true
+                }
+            )
+            .build()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(media.id) {
+                detectTapGestures(
+                    onDoubleTap = { tapOffset ->
+                        if (targetScale > 1.1f) {
+                            targetScale = 1f
+                            offset = Offset.Zero
+                        } else {
+                            targetScale = 2.5f
+                            val center = Offset(size.width / 2f, size.height / 2f)
+                            val maxOffsetX = ((2.5f - 1f) * size.width) / 2f
+                            val maxOffsetY = ((2.5f - 1f) * size.height) / 2f
+                            val rawOffset = (center - tapOffset) * 1.5f
+                            offset = Offset(
+                                x = rawOffset.x.coerceIn(-maxOffsetX, maxOffsetX),
+                                y = rawOffset.y.coerceIn(-maxOffsetY, maxOffsetY)
+                            )
+                        }
+                    }
+                )
+            }
+            .pointerInput(media.id) {
+                detectTransformGestures { _, pan, zoom, _ ->
+                    val newScale = (targetScale * zoom).coerceIn(1f, 4.5f)
+                    targetScale = newScale
+
+                    if (newScale > 1.05f) {
+                        val maxOffsetX = ((newScale - 1f) * size.width) / 2f
+                        val maxOffsetY = ((newScale - 1f) * size.height) / 2f
+                        offset = Offset(
+                            x = (offset.x + pan.x).coerceIn(-maxOffsetX, maxOffsetX),
+                            y = (offset.y + pan.y).coerceIn(-maxOffsetY, maxOffsetY)
+                        )
+                    } else {
+                        offset = Offset.Zero
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer(
+                    scaleX = animatedScale,
+                    scaleY = animatedScale,
+                    translationX = offset.x,
+                    translationY = offset.y
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            // Layer 1: Instant Low-Res / Thumbnail preview (Guarantees screen is NEVER black!)
+            AsyncImage(
+                model = thumbnailRequest,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                imageLoader = context.imageLoader,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Layer 2: Full-Resolution photo (loaded smoothly on top)
+            AsyncImage(
+                model = fullRequest,
+                contentDescription = media.filename,
+                contentScale = ContentScale.Fit,
+                imageLoader = context.imageLoader,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        // Loading spinner while high-res streams in (thumbnail remains visible underneath)
+        if (isLoadingHighRes && !isError) {
+            CircularProgressIndicator(
+                color = Color.White.copy(alpha = 0.8f),
+                strokeWidth = 2.dp,
+                modifier = Modifier
+                    .size(32.dp)
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 80.dp)
+            )
+        }
+
+        // If load failed after auto-retries, provide single-tap refresh
+        if (isError && retryCount >= 3) {
+            Surface(
+                onClick = {
+                    retryCount = 0
+                    isLoadingHighRes = true
+                    isError = false
+                },
+                shape = RoundedCornerShape(24.dp),
+                color = Color(0xCC1E293B),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Sync,
+                        contentDescription = "Retry",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Tap to reload photo",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+    }
+}
+

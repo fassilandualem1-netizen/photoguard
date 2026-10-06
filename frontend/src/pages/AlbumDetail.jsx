@@ -1213,18 +1213,11 @@ export default function AlbumDetail() {
                 </div>
               </div>
             ) : (
-              <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 text-xs text-emerald-200 space-y-2 text-left">
-                <div className="font-bold flex items-center gap-1.5 text-emerald-600">
-                  <CheckCircle2 className="w-4 h-4" />
+              <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 text-xs text-emerald-200 text-center">
+                <div className="font-bold flex items-center justify-center gap-2 text-emerald-500 text-sm">
+                  <CheckCircle2 className="w-5 h-5" />
                   <span>Download Complete</span>
                 </div>
-                <p>
-                  â€¢ <strong>{downloadProgress.successCount} photos</strong> saved directly to your local folder without ZIP extraction.
-                </p>
-                <p>
-                  â€¢ <strong>00_JOB_SHEET.txt</strong> placed at the top with client retouching instructions.
-                </p>
-
               </div>
             )}
 

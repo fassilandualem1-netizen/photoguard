@@ -6,21 +6,13 @@ on:
     branches:
       - main
       - mobile-client-app
-    paths:
-      - 'mobile-client/**'
-      - 'build.gradle.kts'
-      - 'settings.gradle.kts'
-      - 'gradle.properties'
-      - '.github/workflows/android-build.yml'
   pull_request:
     branches:
       - main
       - mobile-client-app
-    paths:
-      - 'mobile-client/**'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -48,8 +40,12 @@ jobs:
 
       - name: Restore Permanent Release Keystore
         run: |
-          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > mobile-client/photoguard-release.keystore
-          echo "✅ Permanent keystore restored"
+          if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > mobile-client/photoguard-release.keystore
+            echo "✅ Permanent keystore restored from secret"
+          else
+            echo "ℹ️ Using repo keystore fallback"
+          fi
 
       - name: Build Optimized Release APK
         env:
@@ -74,3 +70,20 @@ jobs:
           name: photoguard-release-apk
           path: mobile-client/build/outputs/apk/release/*.apk
           retention-days: 14
+
+      - name: Publish GitHub Release with Direct APK
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
+        with:
+          tag_name: v1.0.3
+          name: "PhotoGuard Mobile App v1.0.3"
+          body: |
+            ### 📱 PhotoGuard Android Release APK v1.0.3
+            Direct download link for your Android phone:
+            - **Clean proofing**: 100% un-watermarked high-resolution previews
+            - **Anti-piracy**: Android FLAG_SECURE screenshot protection
+            - **Fast syncing**: Real-time client selections
+          files: mobile-client/build/outputs/apk/release/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

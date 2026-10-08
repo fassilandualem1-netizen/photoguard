@@ -158,10 +158,9 @@ def build_client_album_response(album: Album, db: Session) -> AlbumDetailRespons
     except Exception:
         db.rollback()
 
-    # Anti-Piracy Protection for Client Proofing:
-    # If allow_download is False, the API MUST NOT return the original high-resolution
-    # URL in the url field. Instead, map the url to a downscaled, watermarked preview.
-    # Only provide the raw master url if allow_download is True.
+    # Client Proofing Mode (100% Clean Photos - Never Any Watermark):
+    # Photos are always delivered clean and un-watermarked.
+    # The client mobile app protects photos from screenshotting via Android FLAG_SECURE.
     client_media_items: list[MediaItemResponse] = []
     for item in (album.media_items or []):
         if final_allow_download:

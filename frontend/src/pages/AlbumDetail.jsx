@@ -526,7 +526,7 @@ export default function AlbumDetail() {
       setDeliveryToast(
         newAllowed
           ? "Client Delivery Active: Clients can now download high-resolution photos in the mobile app."
-          : "Client Delivery Disabled: Gallery is currently restricted to watermarked proofing."
+          : "Client Proofing Mode: Client direct downloading is disabled in mobile app."
       );
       setTimeout(() => setDeliveryToast(null), 4000);
     } catch (err) {

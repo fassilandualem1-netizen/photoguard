@@ -407,7 +407,7 @@ export default function AlbumDetail() {
           let highResUrl = "";
           let originalSize = fileToUpload?.size || file.size;
 
-          if (sigConfig?.signature && sigConfig?.upload_url) {
+          if (sigConfig?.signature && sigConfig?.upload_url && attempts === 0) {
             // DIRECT TO CLOUDINARY EDGE (Bypasses backend server completely)
             const cldFormData = new FormData();
             cldFormData.append("file", fileToUpload);
@@ -420,17 +420,7 @@ export default function AlbumDetail() {
               headers: { "Content-Type": "multipart/form-data" },
             });
             highResUrl = cldRes.data.secure_url;
-          } else {
-            // Fallback to backend multipart upload if signature absent
-            const fallbackData = new FormData();
-            fallbackData.append("file", fileToUpload);
-            const fbRes = await api.post(`/api/v1/media/upload/${id}`, fallbackData, {
-              headers: { "Content-Type": "multipart/form-data" },
-            });
-            highResUrl = fbRes.data.url;
-          }
 
-          if (highResUrl && sigConfig?.signature) {
             // Instantly register photo metadata into PostgreSQL
             await api.post(`/api/v1/media/save-url`, {
               album_id: parseInt(id, 10),
@@ -438,6 +428,14 @@ export default function AlbumDetail() {
               url: highResUrl,
               original_size: originalSize,
             });
+          } else {
+            // Fallback to backend multipart upload if signature absent or on retry
+            const fallbackData = new FormData();
+            fallbackData.append("file", fileToUpload);
+            const fbRes = await api.post(`/api/v1/media/upload/${id}`, fallbackData, {
+              headers: { "Content-Type": "multipart/form-data" },
+            });
+            highResUrl = fbRes.data.url;
           }
 
           successfulUploads++;

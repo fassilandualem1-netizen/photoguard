@@ -383,8 +383,11 @@ def list_albums(
                 )
             )
         return result
+    except HTTPException:
+        raise
     except Exception as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
         logger.error(f"[Albums API] Error in list_albums: {req_id}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -480,6 +483,7 @@ def get_album(
         raise
     except Exception as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
         logger.error(f"[Albums API] Error in get_album: {req_id}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

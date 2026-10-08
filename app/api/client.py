@@ -537,6 +537,8 @@ def update_client_media_selection(
         )
     except Exception as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[Unexpected Error {req_id}] {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error updating media item: {req_id}"
@@ -616,6 +618,8 @@ def submit_album_selection(
         )
     except Exception as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[Unexpected Error {req_id}] {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error while submitting album: {req_id}"

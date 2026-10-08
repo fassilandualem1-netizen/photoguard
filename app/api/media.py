@@ -447,10 +447,11 @@ def delete_media_item(
             logger.warning(f"Redis increment_album_version notice: {redis_err}")
 
         return None
+    except HTTPException:
+        db.rollback()
+        raise
     except SQLAlchemyError as exc:
         db.rollback()
-        req_id = uuid.uuid4().hex
-        logger.error(f"[DB Error {req_id}] {exc}")
         req_id = uuid.uuid4().hex
         logger.error(f"[DB Error {req_id}] {exc}")
         raise HTTPException(
@@ -459,6 +460,8 @@ def delete_media_item(
         )
     except Exception as exc:
         db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[Unexpected Error {req_id}] {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error deleting media item: {req_id}"
@@ -506,12 +509,17 @@ async def download_media_item(
             await client.aclose()
             raise HTTPException(status_code=res.status_code, detail="Remote media asset could not be retrieved.")
 
+        from urllib.parse import quote
+        raw_name = (item.filename or "photo.jpg").replace('"', '').replace('\r', '').replace('\n', '').strip()
+        ascii_name = raw_name.encode('ascii', 'ignore').decode('ascii') or "photo.jpg"
+        encoded_name = quote(raw_name)
+
         return StreamingResponse(
             res.aiter_raw(),
             status_code=200,
             media_type=res.headers.get("content-type", "image/jpeg"),
             headers={
-                "Content-Disposition": f'attachment; filename="{item.filename or "photo.jpg"}"',
+                "Content-Disposition": f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{encoded_name}',
                 "Cache-Control": "private, no-transform",
             },
             background=BackgroundTask(client.aclose)

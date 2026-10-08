@@ -147,14 +147,9 @@ export default function CreateAlbumView() {
                 disabled={loading}
                 className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 transition-colors cursor-pointer"
               />
-              <div>
-                <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 block select-none">
-                  Allow Photo Download
-                </span>
-                <span className="text-xs text-slate-500 dark:text-slate-400 block mt-0.5 select-none">
-                  Enable clients to download high-resolution photos in the mobile app.
-                </span>
-              </div>
+              <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 select-none">
+                Allow Photo Download
+              </span>
             </label>
           </div>
 

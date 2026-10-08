@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
@@ -7,7 +7,6 @@ import {
   AlertCircle,
   Loader2,
   Check,
-  Clock,
 } from "lucide-react";
 
 export default function CreateAlbumView() {
@@ -16,12 +15,10 @@ export default function CreateAlbumView() {
 
   const [title, setTitle] = useState("");
   const [clientName, setClientName] = useState("");
-  const [expiresInDays, setExpiresInDays] = useState(15);
+  const [allowDownload, setAllowDownload] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-
-  const isStudio = user?.subscription_plan === "studio" || user?.role === "admin";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,16 +30,8 @@ export default function CreateAlbumView() {
     const payload = {
       title: title.trim(),
       client_name: clientName.trim(),
+      allow_download: Boolean(allowDownload),
     };
-
-    if (isStudio && expiresInDays) {
-      const days = parseInt(expiresInDays, 10);
-      if (isNaN(days) || days < 1 || days > 15) {
-        setError("Lifespan must be between 1 and 15 days.");
-        return;
-      }
-      payload.expires_in_days = days;
-    }
 
     try {
       setLoading(true);
@@ -72,7 +61,6 @@ export default function CreateAlbumView() {
     setTitle("");
     setClientName("");
     setAllowDownload(false);
-    setExpiresInDays(15);
     setError(null);
     setSuccess(null);
   };
@@ -148,33 +136,27 @@ export default function CreateAlbumView() {
             />
           </div>
 
-          {/* Gallery Lifespan â€” Studio Tier Only */}
-          {isStudio && (
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-slate-400" />
-                  Gallery Lifespan (Days)
-                </label>
-                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
-                  Studio Tier
+          {/* Download Permission Toggle */}
+          <div className="pt-1">
+            <label className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#111620] hover:bg-slate-100 dark:hover:bg-slate-800/60 cursor-pointer transition-colors shadow-sm">
+              <input
+                id="allow-download-checkbox"
+                type="checkbox"
+                checked={allowDownload}
+                onChange={(e) => setAllowDownload(e.target.checked)}
+                disabled={loading}
+                className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 transition-colors cursor-pointer"
+              />
+              <div>
+                <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 block select-none">
+                  Allow Photo Download
+                </span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 block mt-0.5 select-none">
+                  Enable clients to download high-resolution photos in the mobile app.
                 </span>
               </div>
-              <input
-                id="expires-in-days-input"
-                type="number"
-                min="1"
-                max="15"
-                value={expiresInDays}
-                onChange={(e) => setExpiresInDays(e.target.value)}
-                disabled={loading}
-                className="w-full bg-white dark:bg-[#0b0e14] border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm disabled:opacity-50"
-              />
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                Days before client selection expires. Between 1 and 15 days (default: 15).
-              </p>
-            </div>
-          )}
+            </label>
+          </div>
 
           {/* Action Buttons */}
           <div className="flex items-center gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">

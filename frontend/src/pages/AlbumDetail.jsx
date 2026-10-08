@@ -649,6 +649,11 @@ export default function AlbumDetail() {
 
   // HIGH-SPEED PARALLEL DIRECT PHOTO DOWNLOAD (Saves directly to browser Downloads folder)
   const handleDownloadAll = async () => {
+    if (!isSubmitted) {
+      alert("Download All is unavailable until the client submits their selections.");
+      return;
+    }
+
     if (!canDownloadAll) {
       alert("No photos available to download yet.");
       return;
@@ -841,8 +846,8 @@ export default function AlbumDetail() {
     ? selectedItems
     : (activeViewTab === "selections" ? selectedItems : mediaItems);
 
-  // Download All button enablement: active if client made selections OR if proofs exist in album
-  const canDownloadAll = selectedItems.length > 0 || mediaItems.length > 0;
+  // Download All button enablement: strictly disabled until the client explicitly submits their selected proofs
+  const canDownloadAll = Boolean(isSubmitted && (selectedItems.length > 0 || mediaItems.length > 0));
 
   return (
     <div id="album-detail-page" className="space-y-6 max-w-7xl mx-auto pb-16">
@@ -1121,7 +1126,9 @@ export default function AlbumDetail() {
                   : "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-60 shadow-none"
               }`}
               title={
-                canDownloadAll
+                !isSubmitted
+                  ? "Download All activates once the client submits their selections"
+                  : canDownloadAll
                   ? `Download ${selectedItems.length > 0 ? `${selectedItems.length} client-selected photos` : `all ${mediaItems.length} photos`} directly to your computer`
                   : "No photos available to download yet"
               }
@@ -1133,8 +1140,8 @@ export default function AlbumDetail() {
                 </>
               ) : (
                 <>
-                  <Download className="w-4 h-4 text-slate-950 stroke-[2.4]" />
-                  <span>Download All {selectedItems.length > 0 ? `(${selectedItems.length})` : mediaItems.length > 0 ? `(${mediaItems.length})` : ""}</span>
+                  <Download className={`w-4 h-4 ${canDownloadAll ? "text-slate-950 stroke-[2.4]" : "text-slate-400 stroke-[2]"}`} />
+                  <span>Download All {canDownloadAll ? (selectedItems.length > 0 ? `(${selectedItems.length})` : `(${mediaItems.length})`) : ""}</span>
                 </>
               )}
             </button>

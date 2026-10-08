@@ -28,15 +28,11 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  FolderDown,
   Check,
   CheckSquare,
-  FolderCheck,
   ExternalLink,
   ShieldCheck,
-  Archive,
-  RefreshCw,
-  FileArchive
+  RefreshCw
 } from "lucide-react";
 
 // Upgrade Cloudinary/CDN URLs to pristine crisp high-res retina grid thumbnails
@@ -211,16 +207,14 @@ export default function AlbumDetail() {
   const [togglingDownload, setTogglingDownload] = useState(false);
   const [deliveryToast, setDeliveryToast] = useState(null);
 
-  // Native Folder Download state (File System Access API) & ZIP Download state
-  const [isDownloadingFolder, setIsDownloadingFolder] = useState(false);
-  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+  // Direct Photo Download state (High-Speed Multi-Photo Direct Download)
+  const [isDownloading, setIsDownloading] = useState(false);
   const [deduplicating, setDeduplicating] = useState(false);
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({
     current: 0,
     total: 0,
     currentFilename: "",
-    folderName: "",
     completed: false,
     successCount: 0,
     failedFiles: [],
@@ -640,36 +634,6 @@ export default function AlbumDetail() {
     throw new Error("Unable to download image data.");
   };
 
-  // Instant 1-Click ZIP Download (saves directly to Downloads folder)
-  const handleDownloadZip = async () => {
-    if (!canDownloadAll) {
-      alert("No photos available to download yet.");
-      return;
-    }
-    try {
-      setIsDownloadingZip(true);
-      const res = await api.get(`/api/v1/albums/${id}/download-zip`, {
-        responseType: "blob",
-        timeout: 180000,
-      });
-      const blob = new Blob([res.data], { type: "application/zip" });
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = downloadUrl;
-      const cleanTitle = (album?.title || "Gallery").replace(/[^a-zA-Z0-9_-]/g, "_");
-      a.download = `${cleanTitle}_Selections.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(downloadUrl);
-    } catch (err) {
-      console.error("ZIP download failed:", err);
-      alert(err.response?.data?.detail || "Failed to download ZIP archive. Please try again.");
-    } finally {
-      setIsDownloadingZip(false);
-    }
-  };
-
   // Manual Deduplication handler
   const handleDeduplicatePhotos = async () => {
     if (deduplicating) return;
@@ -704,8 +668,7 @@ export default function AlbumDetail() {
     return out;
   };
 
-  // NATIVE FOLDER DOWNLOAD (window.showDirectoryPicker)
-  // Downloads client-selected photos (or all proofs if none specifically marked)
+  // HIGH-SPEED PARALLEL DIRECT PHOTO DOWNLOAD (Saves directly to browser Downloads folder)
   const handleDownloadAll = async () => {
     if (!canDownloadAll) {
       alert("No photos available to download yet.");
@@ -723,68 +686,125 @@ export default function AlbumDetail() {
       };
     });
 
-    const supportsDirectoryPicker = typeof window !== "undefined" && "showDirectoryPicker" in window;
-    if (!supportsDirectoryPicker) {
-      handleFallbackMultiDownload(preparedDownloads);
+    if (preparedDownloads.length === 0) {
+      alert("No photos found to download.");
       return;
     }
 
+    setIsDownloading(true);
+    setDownloadModalOpen(true);
+    setDownloadProgress({
+      current: 0,
+      total: preparedDownloads.length,
+      currentFilename: "Initializing high-speed download...",
+      completed: false,
+      successCount: 0,
+      failedFiles: [],
+    });
+
+    // Step 1: Download 00_JOB_SHEET.txt for client/photographer reference
     try {
-      const dirHandle = await window.showDirectoryPicker({
-        id: "photoguard_studio_downloads",
-        mode: "readwrite",
-        startIn: "downloads",
+      const jobSheetText = generateJobSheetText(album, preparedDownloads, preparedDownloads.length);
+      const jobSheetBlob = new Blob([jobSheetText], { type: "text/plain;charset=utf-8" });
+      const jsUrl = URL.createObjectURL(jobSheetBlob);
+      const jsLink = document.createElement("a");
+      jsLink.href = jsUrl;
+      jsLink.download = "00_JOB_SHEET.txt";
+      document.body.appendChild(jsLink);
+      jsLink.click();
+      document.body.removeChild(jsLink);
+      setTimeout(() => URL.revokeObjectURL(jsUrl), 5000);
+      await new Promise((r) => setTimeout(r, 150));
+    } catch (sheetErr) {
+      console.warn("Could not download 00_JOB_SHEET.txt:", sheetErr);
+    }
+
+    // Step 2: High-Speed Parallel Worker Queue (4 concurrent streams)
+    const CONCURRENCY = Math.min(4, preparedDownloads.length);
+    let completedCount = 0;
+    let successCount = 0;
+    const failedFiles = [];
+    let currentIndex = 0;
+
+    // Mutex helper for triggering file saves with a 150ms stagger
+    // to prevent browser throttle/drop of rapid multi-file downloads
+    let triggerChain = Promise.resolve();
+    const triggerFileSave = (blobOrUrl, filename, isBlob = true) => {
+      triggerChain = triggerChain.then(async () => {
+        try {
+          const fileUrl = isBlob ? URL.createObjectURL(blobOrUrl) : blobOrUrl;
+          const a = document.createElement("a");
+          a.href = fileUrl;
+          a.download = filename;
+          if (!isBlob) {
+            a.target = "_blank";
+          }
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          if (isBlob) {
+            setTimeout(() => URL.revokeObjectURL(fileUrl), 60000);
+          }
+          await new Promise((r) => setTimeout(r, 150));
+        } catch (saveErr) {
+          console.error(`Save trigger failed for ${filename}:`, saveErr);
+        }
       });
+      return triggerChain;
+    };
 
-      setIsDownloadingFolder(true);
-      setDownloadModalOpen(true);
-      setDownloadProgress({
-        current: 0,
-        total: preparedDownloads.length,
-        currentFilename: "Creating 00_JOB_SHEET.txt...",
-        folderName: dirHandle.name,
-        completed: false,
-        successCount: 0,
-        failedFiles: [],
-      });
-
-      // Step 1: Write 00_JOB_SHEET.txt at the very top of the designated folder
-      try {
-        const jobSheetText = generateJobSheetText(album, preparedDownloads, preparedDownloads.length);
-        const jobSheetHandle = await dirHandle.getFileHandle("00_JOB_SHEET.txt", { create: true });
-        const jobSheetWritable = await jobSheetHandle.createWritable();
-        await jobSheetWritable.write(jobSheetText);
-        await jobSheetWritable.close();
-      } catch (jsErr) {
-        console.warn("Could not write 00_JOB_SHEET.txt:", jsErr);
-      }
-
-      let successCount = 0;
-      const failedFiles = [];
-
-      // Step 2: Stream all high-resolution photos directly into the selected folder
-      for (let i = 0; i < preparedDownloads.length; i++) {
-        const item = preparedDownloads[i];
+    const worker = async () => {
+      while (currentIndex < preparedDownloads.length) {
+        const itemIdx = currentIndex++;
+        const item = preparedDownloads[itemIdx];
         const filename = item.downloadFilename;
 
         setDownloadProgress((prev) => ({
           ...prev,
-          current: i + 1,
           currentFilename: filename,
         }));
 
         try {
-          const blob = await fetchPhotoBlob(item.url, item.id);
-          const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
-          const writable = await fileHandle.createWritable();
-          await writable.write(blob);
-          await writable.close();
+          // Attempt 1: Fetch blob via backend streaming proxy (fastest & high reliability)
+          let blob = null;
+          try {
+            blob = await fetchPhotoBlob(item.url, item.id);
+          } catch (blobErr) {
+            console.warn(`Direct blob fetch failed for ${filename}, using URL fallback:`, blobErr);
+          }
+
+          if (blob) {
+            await triggerFileSave(blob, filename, true);
+          } else {
+            // Fallback: direct download link
+            const downloadUrl = `/api/v1/media/${item.id}/download`;
+            await triggerFileSave(downloadUrl, filename, false);
+          }
           successCount++;
-        } catch (fileErr) {
-          console.error(`Failed to write ${filename}:`, fileErr);
+        } catch (err) {
+          console.error(`Failed to download ${filename}:`, err);
           failedFiles.push(filename);
+        } finally {
+          completedCount++;
+          setDownloadProgress((prev) => ({
+            ...prev,
+            current: completedCount,
+            successCount,
+            failedFiles: [...failedFiles],
+          }));
         }
       }
+    };
+
+    // Launch worker threads
+    const workers = [];
+    for (let w = 0; w < CONCURRENCY; w++) {
+      workers.push(worker());
+    }
+
+    try {
+      await Promise.all(workers);
+      await triggerChain;
 
       setDownloadProgress((prev) => ({
         ...prev,
@@ -792,61 +812,10 @@ export default function AlbumDetail() {
         successCount,
         failedFiles,
       }));
-    } catch (err) {
-      if (err.name === "AbortError") {
-        console.log("Folder selection cancelled by photographer.");
-      } else {
-        console.error("Native folder download error:", err);
-        alert(`Folder download error: ${err.message || "Unknown error"}`);
-      }
-      setDownloadModalOpen(false);
+    } catch (queueErr) {
+      console.error("Direct download queue error:", queueErr);
     } finally {
-      setIsDownloadingFolder(false);
-    }
-  };
-
-  const handleFallbackMultiDownload = async (preparedDownloads) => {
-    alert("Your browser does not support direct directory write. Files and 00_JOB_SHEET.txt will be downloaded individually.");
-
-    // First download 00_JOB_SHEET.txt
-    try {
-      const jobSheetText = generateJobSheetText(album, preparedDownloads, preparedDownloads.length);
-      const blob = new Blob([jobSheetText], { type: "text/plain;charset=utf-8" });
-      const jobSheetUrl = URL.createObjectURL(blob);
-      const jsA = document.createElement("a");
-      jsA.href = jobSheetUrl;
-      jsA.download = "00_JOB_SHEET.txt";
-      document.body.appendChild(jsA);
-      jsA.click();
-      document.body.removeChild(jsA);
-      URL.revokeObjectURL(jobSheetUrl);
-      await new Promise((r) => setTimeout(r, 200));
-    } catch (err) {
-      console.warn("Fallback job sheet download error:", err);
-    }
-
-    for (const item of preparedDownloads) {
-      if (!item.url) continue;
-      try {
-        const blob = await fetchPhotoBlob(item.url, item.id);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = item.downloadFilename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      } catch {
-        const a = document.createElement("a");
-        a.href = item.url;
-        a.download = item.downloadFilename;
-        a.target = "_blank";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
-      await new Promise((r) => setTimeout(r, 250));
+      setIsDownloading(false);
     }
   };
 
@@ -911,8 +880,8 @@ export default function AlbumDetail() {
     ? selectedItems
     : (activeViewTab === "selections" ? selectedItems : mediaItems);
 
-  // Download All button enablement: active if client made selections OR if submitted with photos
-  const canDownloadAll = selectedItems.length > 0 || (isSubmitted && mediaItems.length > 0);
+  // Download All button enablement: active if client made selections OR if proofs exist in album
+  const canDownloadAll = selectedItems.length > 0 || mediaItems.length > 0;
 
   return (
     <div id="album-detail-page" className="space-y-6 max-w-7xl mx-auto pb-16">
@@ -1179,54 +1148,32 @@ export default function AlbumDetail() {
               <span>Review Selections ({selectedItems.length})</span>
             </button>
 
-            {/* PRIMARY: Instant 1-Click ZIP Download (saves directly to computer) */}
+            {/* PRIMARY: Direct High-Speed Download (Downloads directly to computer) */}
             <button
-              id="download-zip-btn"
+              id="download-all-btn"
               type="button"
-              onClick={handleDownloadZip}
-              disabled={!canDownloadAll || isDownloadingZip}
+              onClick={handleDownloadAll}
+              disabled={!canDownloadAll || isDownloading}
               className={`inline-flex items-center gap-2.5 px-5 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-xl ${
-                canDownloadAll
+                canDownloadAll && !isDownloading
                   ? "bg-gradient-to-r from-amber-500 via-amber-400 to-amber-300 text-slate-950 hover:brightness-110 active:scale-[0.98] shadow-amber-500/20 cursor-pointer"
                   : "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-60 shadow-none"
               }`}
               title={
                 canDownloadAll
-                  ? `Download ${selectedItems.length > 0 ? `${selectedItems.length} client-selected photos` : `all ${mediaItems.length} photos`} as a ZIP archive to your Downloads folder`
-                  : "Download All activates when the client marks selections or submits the album"
+                  ? `Download ${selectedItems.length > 0 ? `${selectedItems.length} client-selected photos` : `all ${mediaItems.length} photos`} directly to your computer`
+                  : "No photos available to download yet"
               }
             >
-              {isDownloadingZip ? (
+              {isDownloading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                  <span>Preparing ZIP...</span>
+                  <span>Downloading ({downloadProgress.current}/{downloadProgress.total})...</span>
                 </>
               ) : (
                 <>
-                  <Archive className="w-4 h-4 text-slate-950 stroke-[2.4]" />
+                  <Download className="w-4 h-4 text-slate-950 stroke-[2.4]" />
                   <span>Download All {selectedItems.length > 0 ? `(${selectedItems.length})` : mediaItems.length > 0 ? `(${mediaItems.length})` : ""}</span>
-                </>
-              )}
-            </button>
-
-            {/* SECONDARY: Save to Folder (File System Access) */}
-            <button
-              id="download-folder-btn"
-              type="button"
-              onClick={handleDownloadAll}
-              disabled={!canDownloadAll || isDownloadingFolder}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl font-semibold text-xs border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-white transition-all cursor-pointer"
-              title="Save photos directly into a specific local folder on your computer"
-            >
-              {isDownloadingFolder ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" />
-                  <span>Saving ({downloadProgress.current}/{downloadProgress.total})...</span>
-                </>
-              ) : (
-                <>
-                  <FolderDown className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Save to Folder</span>
                 </>
               )}
             </button>
@@ -1405,7 +1352,7 @@ export default function AlbumDetail() {
       </div>
 
       {/* =========================================================================
-          NATIVE FOLDER DOWNLOAD PROGRESS MODAL
+          DIRECT HIGH-SPEED PHOTO DOWNLOAD PROGRESS MODAL
           ========================================================================= */}
       {downloadModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
@@ -1413,13 +1360,13 @@ export default function AlbumDetail() {
             
             <div className={`w-14 h-14 rounded-2xl mx-auto flex items-center justify-center shadow-lg ${
               downloadProgress.completed
-                ? "bg-emerald-50 border border-emerald-200 text-emerald-600"
-                : "bg-indigo-50 border border-indigo-200 text-indigo-600"
+                ? "bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400"
+                : "bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400"
             }`}>
               {downloadProgress.completed ? (
-                <FolderCheck className="w-7 h-7" />
+                <CheckCircle2 className="w-7 h-7" />
               ) : (
-                <FolderDown className="w-7 h-7 animate-bounce" />
+                <Download className="w-7 h-7 animate-bounce" />
               )}
             </div>
 
@@ -1427,12 +1374,14 @@ export default function AlbumDetail() {
               <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                 {downloadProgress.completed
                   ? downloadProgress.successCount > 0
-                    ? "Client Selections Saved to Folder!"
-                    : "Folder Save Incomplete"
-                  : "Saving to Local Folder"}
+                    ? "All Photos Downloaded!"
+                    : "Download Incomplete"
+                  : "High-Speed Direct Download"}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Folder: <span className="font-mono text-indigo-500 font-bold">{downloadProgress.folderName || "Selected Folder"}</span>
+                {downloadProgress.completed
+                  ? "Saved directly to your computer's Downloads folder"
+                  : "Downloading photos in parallel directly to your computer"}
               </p>
             </div>
 
@@ -1457,50 +1406,19 @@ export default function AlbumDetail() {
                   <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 text-xs text-emerald-200 text-center">
                     <div className="font-bold flex items-center justify-center gap-2 text-emerald-500 text-sm">
                       <CheckCircle2 className="w-5 h-5" />
-                      <span>All {downloadProgress.successCount} Photos Saved to Folder!</span>
+                      <span>All {downloadProgress.successCount} Photos Downloaded Successfully!</span>
                     </div>
                   </div>
                 )}
-                {downloadProgress.successCount > 0 && downloadProgress.failedFiles.length > 0 && (
+                {downloadProgress.failedFiles.length > 0 && (
                   <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/30 text-xs text-amber-200 text-center space-y-2">
                     <div className="font-bold flex items-center justify-center gap-2 text-amber-500 text-sm">
                       <AlertCircle className="w-5 h-5" />
-                      <span>{downloadProgress.successCount} Saved, {downloadProgress.failedFiles.length} Failed</span>
+                      <span>{downloadProgress.successCount} Downloaded, {downloadProgress.failedFiles.length} Failed</span>
                     </div>
                     <p className="text-[11px] text-amber-300">
-                      Some files could not be saved directly. You can download all selections as a ZIP archive:
+                      Some files could not be downloaded due to network interruptions.
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDownloadModalOpen(false);
-                        handleDownloadZip();
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs cursor-pointer"
-                    >
-                      Download as ZIP Archive
-                    </button>
-                  </div>
-                )}
-                {downloadProgress.successCount === 0 && (
-                  <div className="p-4 rounded-2xl bg-red-950/30 border border-red-500/30 text-xs text-red-200 text-center space-y-2.5">
-                    <div className="font-bold flex items-center justify-center gap-2 text-red-400 text-sm">
-                      <AlertCircle className="w-5 h-5" />
-                      <span>Folder Save Incomplete (0 Saved)</span>
-                    </div>
-                    <p className="text-[11px] text-slate-300">
-                      Browser or folder permissions prevented direct saving. Download all selections as a standard ZIP file instead:
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDownloadModalOpen(false);
-                        handleDownloadZip();
-                      }}
-                      className="w-full py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs transition-colors cursor-pointer"
-                    >
-                      Download as ZIP Archive (Recommended)
-                    </button>
                   </div>
                 )}
               </div>

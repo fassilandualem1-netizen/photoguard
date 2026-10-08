@@ -649,25 +649,6 @@ export default function AlbumDetail() {
     }
   };
 
-  // Clean, Beautifully Formatted Retouching Job Sheet Generator (00_JOB_SHEET.txt)
-  const generateJobSheetText = (albumObj, targetPhotos, totalCount) => {
-    const albumName = albumObj?.title || "Gallery Proofs";
-    const pin = albumObj?.pin || albumObj?.client_pin || "N/A";
-
-    let out = "============================================================\n";
-    out += "PHOTOGUARD - RETOUCHING JOB SHEET\n";
-    out += `Album: ${albumName} | PIN: ${pin} | Total Photos: ${totalCount}\n`;
-    out += "============================================================\n\n";
-
-    targetPhotos.forEach((item, idx) => {
-      const pad = String(idx + 1).padStart(2, "0");
-      const name = item.downloadFilename || item.filename || `Photo_${idx + 1}.jpg`;
-      out += `[${pad}] ${name}\n`;
-    });
-
-    return out;
-  };
-
   // HIGH-SPEED PARALLEL DIRECT PHOTO DOWNLOAD (Saves directly to browser Downloads folder)
   const handleDownloadAll = async () => {
     if (!canDownloadAll) {
@@ -678,11 +659,10 @@ export default function AlbumDetail() {
     const rawTargetPhotos = (isSubmitted || selectedItems.length > 0) ? selectedItems : mediaItems;
 
     const preparedDownloads = (Array.isArray(rawTargetPhotos) ? rawTargetPhotos : []).map((item, idx) => {
-      const pad = String(idx + 1).padStart(2, "0");
       const rawName = item.filename || `Photo_${idx + 1}.jpg`;
       return {
         ...item,
-        downloadFilename: `${pad}_${rawName}`,
+        downloadFilename: rawName,
       };
     });
 
@@ -696,30 +676,13 @@ export default function AlbumDetail() {
     setDownloadProgress({
       current: 0,
       total: preparedDownloads.length,
-      currentFilename: "Initializing high-speed download...",
+      currentFilename: "Starting direct download...",
       completed: false,
       successCount: 0,
       failedFiles: [],
     });
 
-    // Step 1: Download 00_JOB_SHEET.txt for client/photographer reference
-    try {
-      const jobSheetText = generateJobSheetText(album, preparedDownloads, preparedDownloads.length);
-      const jobSheetBlob = new Blob([jobSheetText], { type: "text/plain;charset=utf-8" });
-      const jsUrl = URL.createObjectURL(jobSheetBlob);
-      const jsLink = document.createElement("a");
-      jsLink.href = jsUrl;
-      jsLink.download = "00_JOB_SHEET.txt";
-      document.body.appendChild(jsLink);
-      jsLink.click();
-      document.body.removeChild(jsLink);
-      setTimeout(() => URL.revokeObjectURL(jsUrl), 5000);
-      await new Promise((r) => setTimeout(r, 150));
-    } catch (sheetErr) {
-      console.warn("Could not download 00_JOB_SHEET.txt:", sheetErr);
-    }
-
-    // Step 2: High-Speed Parallel Worker Queue (4 concurrent streams)
+    // High-Speed Parallel Worker Queue (4 concurrent streams)
     const CONCURRENCY = Math.min(4, preparedDownloads.length);
     let completedCount = 0;
     let successCount = 0;

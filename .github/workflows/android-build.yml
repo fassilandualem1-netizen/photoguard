@@ -76,10 +76,10 @@ jobs:
         if: github.ref == 'refs/heads/main'
         continue-on-error: true
         with:
-          tag_name: v1.0.3
-          name: "PhotoGuard Mobile App v1.0.3"
+          tag_name: v1.0.4
+          name: "PhotoGuard Mobile App v1.0.4"
           body: |
-            ### 📱 PhotoGuard Android Release APK v1.0.3
+            ### 📱 PhotoGuard Android Release APK v1.0.4
             Direct download link for your Android phone:
             - **Clean proofing**: 100% un-watermarked high-resolution previews
             - **Anti-piracy**: Android FLAG_SECURE screenshot protection

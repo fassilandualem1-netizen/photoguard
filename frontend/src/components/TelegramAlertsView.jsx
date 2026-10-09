@@ -21,7 +21,23 @@ export default function TelegramAlertsView() {
   const [telegramStatusMsg, setTelegramStatusMsg] = useState(null);
   const [telegramErrorMsg, setTelegramErrorMsg] = useState(null);
 
-  const telegramDeepLink = `https://t.me/PhotoGuardBot?start=${user?.id}`;
+  const [telegramDeepLink, setTelegramDeepLink] = useState(`https://t.me/Photoguard_alert_bot?start=${user?.id}`);
+
+  React.useEffect(() => {
+    if (user?.id) {
+      api.get("/api/telegram/status")
+        .then(res => {
+          if (res.data?.deep_link) {
+            setTelegramDeepLink(res.data.deep_link);
+          } else if (res.data?.bot_username) {
+            setTelegramDeepLink(`https://t.me/${res.data.bot_username}?start=${user.id}`);
+          }
+        })
+        .catch(() => {
+          setTelegramDeepLink(`https://t.me/Photoguard_alert_bot?start=${user.id}`);
+        });
+    }
+  }, [user?.id]);
 
   const handleCheckConnection = async () => {
     setIsCheckingConnection(true);

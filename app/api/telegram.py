@@ -62,6 +62,17 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
             except ValueError:
                 user_id = None
 
+            # Fallback: check if raw_param is a secure token in Redis
+            if user_id is None:
+                try:
+                    client = get_redis()
+                    if client:
+                        cached_uid = client.get(f"telegram_link:{raw_param}")
+                        if cached_uid:
+                            user_id = int(cached_uid)
+                except Exception as r_err:
+                    logger.warning(f"[Telegram Webhook] Redis token lookup failed: {r_err}")
+
             if user_id:
                 user = db.query(User).filter(User.id == user_id).first()
                 if user:
@@ -149,7 +160,7 @@ def get_telegram_status(current_user: User = Depends(get_current_user)):
         "is_connected": bool(current_user.telegram_chat_id),
         "chat_id": current_user.telegram_chat_id,
         "bot_username": clean_bot_username,
-        "deep_link": f"https://t.me/{clean_bot_username}?start={link_token}"
+        "deep_link": f"https://t.me/{clean_bot_username}?start={current_user.id}"
     }
 
 

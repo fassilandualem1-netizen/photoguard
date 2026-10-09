@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import api from "../api/axios";
 import AdminPhotographerTable from "../components/AdminPhotographerTable";
+import ThemeToggle from "../components/ThemeToggle";
 import { useAuth } from "../context/AuthContext";
 import {
   Users,
@@ -456,180 +457,194 @@ export default function AdminDashboard() {
     return `${mb.toFixed(1)} MB`;
   };
 
+  const adminStorageUsed = Number(stats?.total_storage_used_bytes || user?.storage_used || 0);
+  const adminStorageLimit = Number(user?.storage_quota_limit) > 0 ? Number(user.storage_quota_limit) : 5368709120;
+  const adminStoragePercentage = Math.min(100, Math.max(0, Math.round((adminStorageUsed / adminStorageLimit) * 100)));
+  const adminStorageUsedDisplay = stats?.total_storage_used_gb 
+    ? `${Number(stats.total_storage_used_gb).toFixed(2)} GB` 
+    : formatBytes(adminStorageUsed);
+
   return (
-    <div className="flex h-screen bg-[#0b0f19] text-slate-300 font-sans overflow-hidden">
-      {/* LEFT SIDEBAR */}
-      <aside className="w-64 bg-[#05070d] border-r border-slate-800 flex flex-col shrink-0">
-        {/* Logo Area */}
-        <div className="p-6 flex items-center gap-3">
-          <img src="/logo.svg" alt="PhotoGuard Logo" className="w-8 h-8 object-contain shrink-0" />
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-white font-bold text-xl tracking-tight">PhotoGuard</span>
-              <span className="text-[10px] bg-indigo-900/50 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-700/50 font-mono">
-                SUPER ADMIN
-              </span>
+    <div className="flex h-screen bg-[#080b12] text-slate-300 font-sans overflow-hidden">
+      {/* FIXED LEFT SIDEBAR */}
+      <aside className="w-64 bg-[#05070d] border-r border-slate-800/80 flex flex-col shrink-0 justify-between h-full">
+        <div className="flex flex-col flex-1 min-h-0">
+          {/* Logo Area */}
+          <div className="p-6 flex items-center gap-3">
+            <img src="/logo.svg" alt="PhotoGuard Logo" className="w-8 h-8 object-contain shrink-0" />
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-white font-bold text-xl tracking-tight">PhotoGuard</span>
+                <span className="text-[10px] bg-indigo-900/50 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-700/50 font-mono">
+                  SUPER ADMIN
+                </span>
+              </div>
             </div>
           </div>
+
+          {/* Navigation Links (Vertical) */}
+          <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto">
+            {/* Directory */}
+            <button
+              type="button"
+              id="sidebar-nav-directory"
+              onClick={() => handleTabChange("directory")}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
+                activeTab === "directory"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-400 hover:text-white hover:bg-slate-900/60"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Users className={`w-5 h-5 ${activeTab === "directory" ? "text-indigo-600" : "text-slate-400"}`} />
+                <span>Directory</span>
+              </div>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold ${
+                activeTab === "directory"
+                  ? "bg-indigo-600 text-white"
+                  : "bg-indigo-900/60 text-indigo-300 border border-indigo-700/40"
+              }`}>
+                {filteredPhotographers.length}
+              </span>
+            </button>
+
+            {/* Broadcasts */}
+            <button
+              type="button"
+              id="sidebar-nav-broadcasts"
+              onClick={() => handleTabChange("broadcasts")}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
+                activeTab === "broadcasts"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-400 hover:text-white hover:bg-slate-900/60"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Megaphone className={`w-5 h-5 ${activeTab === "broadcasts" ? "text-sky-600" : "text-slate-400"}`} />
+                <span>Broadcasts</span>
+              </div>
+              {currentBroadcast && currentBroadcast.is_active ? (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold flex items-center gap-1.5 ${
+                  activeTab === "broadcasts"
+                    ? "bg-emerald-600 text-white"
+                    : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                }`}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
+                  Live
+                </span>
+              ) : (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold ${
+                  activeTab === "broadcasts"
+                    ? "bg-slate-200 text-slate-800"
+                    : "bg-slate-800 text-slate-400 border border-slate-700/40"
+                }`}>
+                  {broadcastList.length}
+                </span>
+              )}
+            </button>
+
+            {/* Audit Logs */}
+            <button
+              type="button"
+              id="sidebar-nav-audit-logs"
+              onClick={() => handleTabChange("audit_logs")}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
+                activeTab === "audit_logs"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-400 hover:text-white hover:bg-slate-900/60"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Shield className={`w-5 h-5 ${activeTab === "audit_logs" ? "text-amber-600" : "text-slate-400"}`} />
+                <span>Audit Logs</span>
+              </div>
+              {auditLogs.length > 0 && (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold ${
+                  activeTab === "audit_logs"
+                    ? "bg-amber-600 text-white"
+                    : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                }`}>
+                  {auditLogs.length}
+                </span>
+              )}
+            </button>
+
+            {/* System Health */}
+            <button
+              type="button"
+              id="sidebar-nav-system-health"
+              onClick={() => handleTabChange("system_health")}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
+                activeTab === "system_health"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-400 hover:text-white hover:bg-slate-900/60"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <AlertTriangle className={`w-5 h-5 ${activeTab === "system_health" ? "text-rose-600" : "text-slate-400"}`} />
+                <span>System Health</span>
+              </div>
+              {systemErrors.length > 0 && (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold ${
+                  activeTab === "system_health"
+                    ? "bg-rose-600 text-white"
+                    : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                }`}>
+                  {systemErrors.length}
+                </span>
+              )}
+            </button>
+          </nav>
         </div>
 
-        {/* Navigation Links (Vertical) */}
-        <nav className="flex-1 px-4 space-y-2 mt-4">
-          {/* Directory */}
-          <button
-            type="button"
-            id="sidebar-nav-directory"
-            onClick={() => handleTabChange("directory")}
-            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition-all cursor-pointer ${
-              activeTab === "directory"
-                ? "bg-[#13192b] text-indigo-400 font-semibold border border-indigo-800/40"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Users className="w-5 h-5 text-indigo-400" />
-              <span>Directory</span>
+        {/* SIDEBAR FOOTER */}
+        <div className="p-4 border-t border-slate-800/80 space-y-3 shrink-0">
+          {/* Storage Progress Indicator */}
+          <div className="px-2">
+            <div className="flex justify-between text-xs text-slate-400 mb-1.5 font-medium">
+              <span>Storage</span>
+              <span className="font-mono">{adminStoragePercentage}%</span>
             </div>
-            <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-indigo-900/60 text-indigo-300 border border-indigo-700/40">
-              {filteredPhotographers.length}
-            </span>
-          </button>
+            <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+              <div
+                className="h-full bg-indigo-500 rounded-full transition-all duration-300"
+                style={{ width: `${adminStoragePercentage}%` }}
+              />
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1 font-mono">
+              {adminStorageUsedDisplay} of {formatBytes(adminStorageLimit)}
+            </div>
+          </div>
 
-          {/* Broadcasts */}
-          <button
-            type="button"
-            id="sidebar-nav-broadcasts"
-            onClick={() => handleTabChange("broadcasts")}
-            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition-all cursor-pointer ${
-              activeTab === "broadcasts"
-                ? "bg-[#13192b] text-sky-400 font-semibold border border-sky-800/40"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Megaphone className="w-5 h-5 text-sky-400" />
-              <span>Broadcasts</span>
-            </div>
-            {currentBroadcast && currentBroadcast.is_active ? (
-              <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                Live
-              </span>
-            ) : (
-              <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-slate-800 text-slate-400 border border-slate-700/40">
-                {broadcastList.length}
-              </span>
-            )}
-          </button>
+          {/* Light Mode Toggle */}
+          <ThemeToggle variant="menu" className="!px-3 !py-2.5 rounded-xl !text-slate-400 hover:!text-white hover:!bg-slate-900/60 transition-colors" />
 
-          {/* Audit Logs */}
+          {/* Sign Out Button (Red) */}
           <button
             type="button"
-            id="sidebar-nav-audit-logs"
-            onClick={() => handleTabChange("audit_logs")}
-            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition-all cursor-pointer ${
-              activeTab === "audit_logs"
-                ? "bg-[#13192b] text-amber-400 font-semibold border border-amber-800/40"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent"
-            }`}
+            onClick={logout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
           >
-            <div className="flex items-center gap-3">
-              <Shield className="w-5 h-5 text-amber-400" />
-              <span>Audit Logs</span>
-            </div>
-            {auditLogs.length > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                {auditLogs.length}
-              </span>
-            )}
+            <LogOut className="w-4 h-4 text-red-500" />
+            <span>Sign Out</span>
           </button>
-
-          {/* System Health */}
-          <button
-            type="button"
-            id="sidebar-nav-system-health"
-            onClick={() => handleTabChange("system_health")}
-            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition-all cursor-pointer ${
-              activeTab === "system_health"
-                ? "bg-[#13192b] text-rose-400 font-semibold border border-rose-800/40"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="w-5 h-5 text-rose-400" />
-              <span>System Health</span>
-            </div>
-            {systemErrors.length > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                {systemErrors.length}
-              </span>
-            )}
-          </button>
-        </nav>
+        </div>
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* TOP HEADER */}
-        <header className="h-[72px] flex items-center justify-between px-8 border-b border-slate-800 bg-[#0b0f19] shrink-0">
-          <h1 className="text-xl text-slate-400 font-normal">System Administration</h1>
+        <header className="h-[72px] flex items-center justify-between px-8 border-b border-slate-800/80 bg-[#080b12] shrink-0">
+          <h1 className="text-xl text-slate-200 font-semibold tracking-tight">System Administration</h1>
           <div className="flex items-center gap-4">
             {/* Refresh Icon */}
             <button
               onClick={fetchData}
-              className="p-2.5 rounded-xl bg-[#131826] hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 transition-colors cursor-pointer"
+              className="p-2.5 rounded-xl bg-[#101422] hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 transition-colors cursor-pointer"
               title="Refresh Analytics"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-indigo-400" : ""}`} />
             </button>
-
-            {/* Avatar Profile Dropdown */}
-            <div className="relative" ref={profileMenuRef}>
-              <button
-                type="button"
-                id="admin-profile-menu-btn"
-                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-slate-800/60 transition-all cursor-pointer text-slate-300 hover:text-white"
-                aria-label="Admin Profile Menu"
-              >
-                <CircleUser className="w-6 h-6 text-indigo-400 shrink-0" />
-                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isProfileMenuOpen ? "rotate-180" : ""}`} />
-              </button>
-
-              {/* Popover */}
-              {isProfileMenuOpen && (
-                <div
-                  id="admin-profile-dropdown"
-                  className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-800 bg-[#0e121b]/95 backdrop-blur-xl shadow-2xl shadow-black/80 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
-                >
-                  <div className="px-4 py-3 border-b border-slate-800">
-                    <p className="text-xs font-semibold text-white truncate">
-                      {user?.full_name || "Super Admin"}
-                    </p>
-                    <p className="text-[11px] text-slate-400 font-mono truncate mt-0.5">
-                      {user?.email}
-                    </p>
-                    <span className="inline-block mt-2 px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                      Super Administrator
-                    </span>
-                  </div>
-
-                  <div className="p-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsProfileMenuOpen(false);
-                        logout();
-                      }}
-                      className="flex items-center gap-2.5 w-full px-3 py-2 text-xs text-red-400 hover:text-white hover:bg-red-500/10 rounded-xl transition-colors font-medium cursor-pointer"
-                    >
-                      <LogOut className="w-4 h-4 text-red-400" />
-                      <span>Log Out</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
         </header>
 

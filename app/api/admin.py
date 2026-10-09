@@ -1,8 +1,12 @@
 import secrets
 import string
+import uuid
+import logging
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+
+logger = logging.getLogger("photoguard.admin")
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
@@ -456,6 +460,95 @@ def toggle_user_suspend(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unexpected error toggling user status: {req_id}"
+        )
+
+@router.delete("/users/{id}", status_code=status.HTTP_200_OK)
+def delete_photographer(
+    id: int,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_admin)
+):
+    """
+    Permanently deletes a photographer account, associated studio assistants,
+    albums, media items, and physical cloud assets.
+    Restricted strictly to administrators.
+    """
+    target_user = db.query(User).filter(User.id == id).first()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with ID {id} not found."
+        )
+
+    if target_user.id == admin_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete own administrator account."
+        )
+
+    if str(target_user.role).lower() == "admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete an administrator account via this endpoint."
+        )
+
+    try:
+        user_email = target_user.email
+        user_id = target_user.id
+        user_name = target_user.full_name or "Photographer"
+
+        # Clean up cloud/local storage files for all albums belonging to photographer & assistants
+        assistant_ids = [a.id for a in target_user.assistants] if hasattr(target_user, "assistants") else []
+        all_user_ids = [user_id] + assistant_ids
+
+        albums = db.query(Album).filter(Album.photographer_id.in_(all_user_ids)).all()
+        for album in albums:
+            for item in album.media_items:
+                try:
+                    from app.core.storage import destroy_media_asset
+                    if item.url:
+                        destroy_media_asset(item.url)
+                    if item.thumbnail_url:
+                        destroy_media_asset(item.thumbnail_url)
+                except Exception as asset_err:
+                    logger.warning(f"Failed to destroy asset for media {item.id}: {asset_err}")
+
+        # Delete assistants directly
+        if assistant_ids:
+            db.query(User).filter(User.id.in_(assistant_ids)).delete(synchronize_session=False)
+
+        # Log security audit entry before user deletion (target_user_id=None because user is deleted)
+        audit_entry = AuditLog(
+            admin_id=admin_user.id,
+            action="DELETE_USER",
+            target_user_id=None,
+            details=f"Admin {admin_user.email} permanently deleted photographer '{user_name}' ({user_email}, ID #{user_id}) and all associated albums/media."
+        )
+        db.add(audit_entry)
+
+        # Delete photographer (SQLAlchemy cascade deletes remaining records)
+        db.delete(target_user)
+        db.commit()
+
+        logger.info(f"[Admin] Successfully deleted photographer ID #{user_id} ({user_email})")
+        return {
+            "message": f"Photographer '{user_name}' ({user_email}) was permanently deleted.",
+            "deleted_user_id": user_id
+        }
+    except SQLAlchemyError as exc:
+        db.rollback()
+        req_id = uuid.uuid4().hex
+        logger.error(f"[DB Error {req_id}] {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error deleting photographer: {req_id}"
+        )
+    except Exception as exc:
+        db.rollback()
+        logger.error(f"[Admin Delete Error] {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error deleting photographer: {str(exc)}"
         )
 
 @router.put("/users/{id}/plan", status_code=status.HTTP_200_OK)

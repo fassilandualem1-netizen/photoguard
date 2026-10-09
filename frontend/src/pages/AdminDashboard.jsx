@@ -374,6 +374,27 @@ export default function AdminDashboard() {
     }
   };
 
+  // Permanently Delete Photographer
+  const handleDeletePhotographer = async (userId, photographerName) => {
+    const confirmed = window.confirm(
+      `⚠️ PERMANENT ACTION:\n\nAre you sure you want to permanently delete photographer "${photographerName}"?\n\nThis will permanently remove:\n• Their account and login credentials\n• All their albums and uploaded photos\n• All client selections and assistant accounts\n\nThis action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setActionLoadingId(userId);
+      await api.delete(`/api/v1/admin/users/${userId}`);
+      // Remove from table immediately
+      setPhotographers((prev) => prev.filter((p) => p.id !== userId));
+      // Refresh stats
+      await fetchData();
+    } catch (err) {
+      alert(err.response?.data?.detail || "Failed to delete photographer.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   // Emergency Password Reset for Individual Users (Phase 2 Frontend)
   const handleResetPassword = async (userId, userEmail) => {
     if (
@@ -688,6 +709,7 @@ export default function AdminDashboard() {
             handleTogglePlan={handleTogglePlan}
             handleResetPassword={handleResetPassword}
             handleEditQuota={handleEditQuota}
+            handleDeletePhotographer={handleDeletePhotographer}
             formatBytes={formatBytes}
             onOpenRegisterModal={() => setIsRegisterModalOpen(true)}
           />

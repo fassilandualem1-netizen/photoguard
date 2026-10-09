@@ -11,6 +11,7 @@ import {
   RefreshCw,
   UserPlus,
   MoreVertical,
+  Trash2,
 } from "lucide-react";
 
 export default function AdminPhotographerTable({
@@ -23,6 +24,7 @@ export default function AdminPhotographerTable({
   handleTogglePlan,
   handleResetPassword,
   handleEditQuota,
+  handleDeletePhotographer,
   formatBytes,
   onOpenRegisterModal,
 }) {
@@ -346,12 +348,28 @@ export default function AdminPhotographerTable({
                                 setOpenDropdownId(null);
                                 handleToggleSuspend?.(p.id, p.is_active);
                               }}
-                              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors cursor-pointer text-left font-medium"
+                              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-colors cursor-pointer text-left font-medium"
                             >
-                              <Power className="w-4 h-4 text-red-400 shrink-0" />
+                              <Power className="w-4 h-4 text-amber-400 shrink-0" />
                               <span>
                                 {p.is_active ? "Suspend Account" : "Activate Account"}
                               </span>
+                            </button>
+
+                            <div className="my-1 border-t border-slate-700/60" />
+
+                            {/* 6. Delete Photographer (Permanent) */}
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setOpenDropdownId(null);
+                                handleDeletePhotographer?.(p.id, p.full_name || p.email);
+                              }}
+                              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-xs text-rose-500 hover:text-rose-400 hover:bg-rose-500/15 transition-colors cursor-pointer text-left font-semibold"
+                            >
+                              <Trash2 className="w-4 h-4 text-rose-500 shrink-0" />
+                              <span>Delete Photographer</span>
                             </button>
                           </div>
                         )}

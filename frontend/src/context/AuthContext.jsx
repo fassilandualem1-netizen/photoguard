@@ -20,6 +20,20 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   }, []);
 
+  // Synchronously update local user state in memory & localStorage
+  const updateUser = useCallback((partialUser) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, ...partialUser };
+      try {
+        localStorage.setItem("user", JSON.stringify(updated));
+      } catch (e) {
+        console.warn("Failed to persist updated user to localStorage", e);
+      }
+      return updated;
+    });
+  }, []);
+
   // Verify cookie and re-fetch profile from backend
   const refreshProfile = useCallback(async () => {
     try {
@@ -167,6 +181,7 @@ export const AuthProvider = ({ children }) => {
     changePassword,
     logout,
     refreshProfile,
+    updateUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

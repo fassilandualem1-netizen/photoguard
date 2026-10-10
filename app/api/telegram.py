@@ -74,29 +74,50 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
                     logger.warning(f"[Telegram Webhook] Redis token lookup failed: {r_err}")
 
             if user_id:
-                user = db.query(User).filter(User.id == user_id).first()
-                if user:
-                    user.telegram_chat_id = str(chat_id)
-                    db.commit()
-                    db.refresh(user)
-                    logger.info(f"[Telegram Webhook] Successfully linked Photographer #{user.id} ({user.email}) to Telegram Chat ID: {chat_id}")
-
-                    welcome_msg = (
-                        "🎉 <b>PhotoGuard Telegram Alerts Connected!</b>\n\n"
-                        f"Welcome, <b>{user.full_name or first_name}</b>!\n"
-                        f"Your Telegram account is now successfully linked to your PhotoGuard studio profile (<code>{user.email}</code>).\n\n"
-                        "⚡ <b>What happens now:</b>\n"
-                        "The instant any client reviews, locks, and submits their photo selections, you will receive a real-time alert with album details right here!\n\n"
-                        "<i>You can return to your PhotoGuard dashboard now.</i>"
+                try:
+                    user = db.query(User).filter(User.id == user_id).first()
+                except Exception as db_exc:
+                    db.rollback()
+                    logger.error(f"[Telegram Webhook] DB query failed during user lookup: {db_exc}")
+                    err_msg = (
+                        "⚠️ <b>PhotoGuard Service Notice</b>\n\n"
+                        "Unable to link account right now due to a temporary database connection delay.\n"
+                        "Please tap /start again in a few moments from your PhotoGuard dashboard."
                     )
-                    await send_telegram_message(chat_id=str(chat_id), text=welcome_msg)
-                    return {"ok": True, "status": "linked", "user_id": user.id, "chat_id": chat_id}
+                    await send_telegram_message(chat_id=str(chat_id), text=err_msg)
+                    return {"ok": False, "detail": "Database error"}
+
+                if user:
+                    try:
+                        user.telegram_chat_id = str(chat_id)
+                        db.commit()
+                        db.refresh(user)
+                        logger.info(f"[Telegram Webhook] Successfully linked Photographer #{user.id} ({user.email}) to Telegram Chat ID: {chat_id}")
+
+                        welcome_msg = (
+                            "🎉 <b>PhotoGuard Telegram Alerts Connected!</b>\n\n"
+                            f"Welcome, <b>{user.full_name or first_name}</b>!\n"
+                            f"Your Telegram account is now successfully linked to your PhotoGuard studio profile (<code>{user.email}</code>).\n\n"
+                            "⚡ <b>What happens now:</b>\n"
+                            "The instant any client reviews, locks, and submits their photo selections, you will receive a real-time alert with album details right here!\n\n"
+                            "<i>You can return to your PhotoGuard dashboard now.</i>"
+                        )
+                        await send_telegram_message(chat_id=str(chat_id), text=welcome_msg)
+                        return {"ok": True, "status": "linked", "user_id": user.id, "chat_id": chat_id}
+                    except Exception as commit_err:
+                        db.rollback()
+                        logger.error(f"[Telegram Webhook] Failed to save chat_id to DB: {commit_err}")
+                        await send_telegram_message(
+                            chat_id=str(chat_id),
+                            text="⚠️ <b>Temporary Database Delay</b>\n\nPlease tap /start again in 5 seconds to complete linking."
+                        )
+                        return {"ok": False, "detail": "Database commit error"}
                 else:
                     logger.warning(f"[Telegram Webhook] User ID {user_id} not found in database.")
                     not_found_msg = (
                         "⚠️ <b>PhotoGuard Studio Account Not Found</b>\n\n"
                         f"We could not locate an active photographer account matching ID <code>{user_id}</code>.\n"
-                        "Please return to your PhotoGuard Dashboard, open Settings > Telegram Integration, and click the deep link button again."
+                        "Please open your PhotoGuard Dashboard, go to <b>Telegram Alerts</b>, and click <b>Connect with Telegram</b>."
                     )
                     await send_telegram_message(chat_id=str(chat_id), text=not_found_msg)
                     return {"ok": True, "status": "user_not_found"}
@@ -104,7 +125,7 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
                 generic_msg = (
                     "👋 <b>Welcome to PhotoGuard Alerts Bot!</b>\n\n"
                     "To link this bot to your Photographer account, please open your "
-                    "<b>PhotoGuard Dashboard</b>, click <b>Settings</b>, and tap <b>Connect Telegram</b>."
+                    "<b>PhotoGuard Dashboard</b>, click <b>Telegram Alerts</b>, and tap <b>Connect with Telegram</b>."
                 )
                 await send_telegram_message(chat_id=str(chat_id), text=generic_msg)
                 return {"ok": True, "status": "invalid_parameter"}
@@ -113,28 +134,33 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
             generic_msg = (
                 "👋 <b>Welcome to PhotoGuard Alerts Bot!</b>\n\n"
                 "To link this bot to your Photographer account, please open your "
-                "<b>PhotoGuard Dashboard</b>, click <b>Settings</b>, and tap <b>Connect Telegram</b>."
+                "<b>PhotoGuard Dashboard</b>, click <b>Telegram Alerts</b>, and tap <b>Connect with Telegram</b>."
             )
             await send_telegram_message(chat_id=str(chat_id), text=generic_msg)
             return {"ok": True, "status": "start_no_param"}
 
     elif text.startswith("/disconnect") or text.startswith("/unlink"):
-        user = db.query(User).filter(User.telegram_chat_id == str(chat_id)).first()
-        if user:
-            user.telegram_chat_id = None
-            db.commit()
-            db.refresh(user)
-            await send_telegram_message(
-                chat_id=str(chat_id),
-                text="🔒 <b>PhotoGuard Alerts Disconnected:</b> Your account has been unlinked from this Telegram chat."
-            )
-            return {"ok": True, "status": "unlinked"}
-        else:
-            await send_telegram_message(
-                chat_id=str(chat_id),
-                text="ℹ️ This chat is not currently connected to any active PhotoGuard account."
-            )
-            return {"ok": True, "status": "not_linked"}
+        try:
+            user = db.query(User).filter(User.telegram_chat_id == str(chat_id)).first()
+            if user:
+                user.telegram_chat_id = None
+                db.commit()
+                db.refresh(user)
+                await send_telegram_message(
+                    chat_id=str(chat_id),
+                    text="🔒 <b>PhotoGuard Alerts Disconnected:</b> Your account has been unlinked from this Telegram chat."
+                )
+                return {"ok": True, "status": "unlinked"}
+            else:
+                await send_telegram_message(
+                    chat_id=str(chat_id),
+                    text="ℹ️ This chat is not currently connected to any active PhotoGuard account."
+                )
+                return {"ok": True, "status": "not_linked"}
+        except Exception as unl_err:
+            db.rollback()
+            logger.error(f"[Telegram Webhook] Disconnect error: {unl_err}")
+            return {"ok": False, "detail": "Database error"}
 
     return {"ok": True, "status": "ignored"}
 
@@ -165,6 +191,7 @@ def get_telegram_status(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/unlink")
+@router.delete("/unlink")
 def unlink_telegram_chat(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -175,4 +202,8 @@ def unlink_telegram_chat(
     current_user.telegram_chat_id = None
     db.commit()
     db.refresh(current_user)
-    return {"message": "Telegram account disconnected successfully."}
+    return {
+        "message": "Telegram account disconnected successfully.",
+        "telegram_chat_id": None,
+        "is_connected": False
+    }

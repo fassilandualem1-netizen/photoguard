@@ -14,7 +14,7 @@ import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
 
 export default function TelegramAlertsView() {
-  const { user, refreshProfile } = useAuth();
+  const { user, refreshProfile, updateUser } = useAuth();
   
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const [isDisconnectingTelegram, setIsDisconnectingTelegram] = useState(false);
@@ -44,8 +44,14 @@ export default function TelegramAlertsView() {
     setTelegramStatusMsg(null);
     setTelegramErrorMsg(null);
     try {
-      if (refreshProfile) await refreshProfile();
-      setTelegramStatusMsg("Connection checked. If linked, your chat ID will appear above.");
+      if (refreshProfile) {
+        const freshUser = await refreshProfile();
+        if (freshUser?.telegram_chat_id) {
+          setTelegramStatusMsg(`Connected successfully! Chat ID: ${freshUser.telegram_chat_id}`);
+        } else {
+          setTelegramStatusMsg("Not yet linked. Open Telegram, tap Start, then check again.");
+        }
+      }
     } catch (err) {
       setTelegramErrorMsg("Failed to verify Telegram connection.");
     } finally {
@@ -60,10 +66,21 @@ export default function TelegramAlertsView() {
     setTelegramStatusMsg(null);
     setTelegramErrorMsg(null);
     try {
+      // 1. Call dedicated unlink endpoint
+      await api.post("/api/telegram/unlink");
+      // 2. Also ensure profile endpoint sets it to null
       await api.put("/api/auth/profile", { telegram_chat_id: null });
-      if (refreshProfile) await refreshProfile();
+      // 3. Immediately update local state
+      if (updateUser) {
+        updateUser({ telegram_chat_id: null });
+      }
+      // 4. Re-fetch from server to verify
+      if (refreshProfile) {
+        await refreshProfile();
+      }
       setTelegramStatusMsg("Telegram account disconnected successfully.");
     } catch (err) {
+      console.error("Failed to disconnect Telegram:", err);
       setTelegramErrorMsg("Failed to disconnect Telegram.");
     } finally {
       setIsDisconnectingTelegram(false);
@@ -106,7 +123,7 @@ export default function TelegramAlertsView() {
                 type="button"
                 onClick={handleDisconnectTelegram}
                 disabled={isDisconnectingTelegram}
-                className="w-full py-2.5 rounded-xl bg-white dark:bg-[#0b0e14] hover:bg-red-50 hover:text-red-600 hover:border-red-200 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 transition-all flex items-center justify-center gap-2 shadow-sm"
+                className="w-full py-2.5 rounded-xl bg-white dark:bg-[#0b0e14] hover:bg-red-50 hover:text-red-600 hover:border-red-200 border border-slate-200 dark:border-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-200 dark:text-slate-300 transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
               >
                 {isDisconnectingTelegram ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
                 <span>Disconnect Telegram</span>
@@ -127,7 +144,7 @@ export default function TelegramAlertsView() {
                 href={telegramDeepLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-3 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-semibold text-sm transition-all shadow-sm flex items-center justify-center gap-2 group"
+                className="w-full py-3 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-semibold text-sm transition-all shadow-sm flex items-center justify-center gap-2 group cursor-pointer"
               >
                 <Send className="w-4 h-4 fill-current" />
                 <span>Connect with Telegram</span>
@@ -138,7 +155,7 @@ export default function TelegramAlertsView() {
                 type="button"
                 onClick={handleCheckConnection}
                 disabled={isCheckingConnection}
-                className="w-full py-3 rounded-xl bg-white dark:bg-[#0b0e14] hover:bg-slate-50 dark:hover:bg-[#111620] dark:bg-[#111620] dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 dark:text-slate-300 font-semibold text-sm transition-all shadow-sm flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-white dark:bg-[#0b0e14] hover:bg-slate-50 dark:hover:bg-[#111620] dark:bg-[#111620] dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 dark:text-slate-300 font-semibold text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isCheckingConnection ? (
                   <><Loader2 className="w-4 h-4 animate-spin text-sky-500" /><span>Checking Connection...</span></>
@@ -153,16 +170,14 @@ export default function TelegramAlertsView() {
         {/* Status Messages */}
         <div className="pt-2">
           {telegramStatusMsg && (
-            <div className={`p-3 rounded-xl text-sm flex items-center gap-2 shadow-sm ${
-              user?.telegram_chat_id ? "bg-emerald-50 border border-emerald-200 text-emerald-700" : "bg-sky-50 border border-sky-200 text-sky-700"
-            }`}>
-              {user?.telegram_chat_id ? <Check className="w-5 h-5 shrink-0" /> : <RefreshCw className="w-5 h-5 animate-spin shrink-0" />}
+            <div className="p-3 rounded-xl text-sm flex items-center gap-2.5 shadow-sm bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 animate-in fade-in duration-200">
+              <Check className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
               <span className="font-medium">{telegramStatusMsg}</span>
             </div>
           )}
           {telegramErrorMsg && (
-            <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2 shadow-sm mt-2">
-              <AlertCircle className="w-5 h-5 shrink-0" />
+            <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 text-red-700 dark:text-red-300 text-sm flex items-center gap-2.5 shadow-sm mt-2 animate-in fade-in duration-200">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
               <span className="font-medium">{telegramErrorMsg}</span>
             </div>
           )}

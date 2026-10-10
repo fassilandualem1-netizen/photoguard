@@ -373,7 +373,7 @@ def update_profile(
         if payload.full_name is not None:
             current_user.full_name = payload.full_name.strip()
             
-        if payload.telegram_chat_id is not None:
+        if "telegram_chat_id" in payload.model_fields_set:
             current_user.telegram_chat_id = payload.telegram_chat_id.strip() if payload.telegram_chat_id else None
             
         if payload.studio_logo_url is not None:

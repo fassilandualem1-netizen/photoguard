@@ -362,6 +362,45 @@ async def run_auto_purge_loop():
             logger.info("[Auto-Purge Worker] Sleep interrupted by shutdown.")
             break
 
+async def auto_register_telegram_webhook():
+    """
+    Auto-registers Telegram Webhook on application startup.
+    Ensures that Telegram Bot API directs /start and notifications
+    strictly to this active backend, overriding any defunct or legacy endpoints.
+    """
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    if not token:
+        logger.info("[Telegram Lifecycle] TELEGRAM_BOT_TOKEN not configured. Skipping webhook auto-registration.")
+        return
+
+    base_url = (
+        os.environ.get("APP_URL") or 
+        os.environ.get("RENDER_EXTERNAL_URL") or 
+        "https://photoguard.onrender.com"
+    ).rstrip("/")
+    target_webhook_url = f"{base_url}/api/telegram/webhook"
+
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            info_res = await client.get(f"https://api.telegram.org/bot{token}/getWebhookInfo")
+            if info_res.status_code == 200:
+                current_info = info_res.json().get("result", {})
+                current_url = current_info.get("url", "")
+                if current_url != target_webhook_url:
+                    logger.info(f"[Telegram Lifecycle] Updating Telegram Webhook from '{current_url}' to '{target_webhook_url}'...")
+                    set_res = await client.post(
+                        f"https://api.telegram.org/bot{token}/setWebhook",
+                        json={"url": target_webhook_url, "drop_pending_updates": True}
+                    )
+                    logger.info(f"[Telegram Lifecycle] setWebhook response: {set_res.text}")
+                else:
+                    logger.info(f"[Telegram Lifecycle] Telegram Webhook is active and correctly targeted to: {target_webhook_url}")
+            else:
+                logger.warning(f"[Telegram Lifecycle] getWebhookInfo query returned {info_res.status_code}: {info_res.text}")
+    except Exception as exc:
+        logger.warning(f"[Telegram Lifecycle] Non-fatal notice during Telegram webhook sync: {exc}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -397,8 +436,9 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.critical(f"[PhotoGuard Lifecycle Error] Non-fatal startup sequence error: {exc}\n{traceback.format_exc()}")
     
-    # 5. Start intelligent Download-Triggered Auto-Purge background loop
+    # 5. Start intelligent Download-Triggered Auto-Purge background loop and Telegram webhook sync
     auto_purge_task = asyncio.create_task(run_auto_purge_loop())
+    asyncio.create_task(auto_register_telegram_webhook())
 
     yield
 

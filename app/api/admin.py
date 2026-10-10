@@ -1014,3 +1014,60 @@ def resolve_system_health_error(
             detail=f"Database error resolving system error log: {req_id}"
         )
 
+# ============================================================================
+# Telegram Webhook Diagnostic & Management Endpoints (Admin)
+# ============================================================================
+
+@router.get("/telegram/webhook-status", tags=["Admin Control", "Telegram Integration"])
+async def get_telegram_webhook_status(current_admin: User = Depends(require_admin)):
+    """
+    Diagnostic endpoint for administrators to check live Telegram Bot Webhook configuration.
+    """
+    import os
+    import httpx
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    if not token:
+        return {"status": "unconfigured", "detail": "TELEGRAM_BOT_TOKEN environment variable is not set."}
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.get(f"https://api.telegram.org/bot{token}/getWebhookInfo")
+            return res.json()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to query Telegram API: {exc}")
+
+@router.post("/telegram/set-webhook", tags=["Admin Control", "Telegram Integration"])
+async def manual_set_telegram_webhook(
+    custom_url: Optional[str] = None,
+    current_admin: User = Depends(require_admin)
+):
+    """
+    Admin endpoint to explicitly register the Telegram Webhook URL.
+    """
+    import os
+    import httpx
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    if not token:
+        raise HTTPException(status_code=400, detail="TELEGRAM_BOT_TOKEN environment variable is not set.")
+    
+    base_url = (
+        custom_url or 
+        os.environ.get("APP_URL") or 
+        os.environ.get("RENDER_EXTERNAL_URL") or 
+        "https://photoguard.onrender.com"
+    ).rstrip("/")
+    target_webhook_url = f"{base_url}/api/telegram/webhook"
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.post(
+                f"https://api.telegram.org/bot{token}/setWebhook",
+                json={"url": target_webhook_url, "drop_pending_updates": True}
+            )
+            return {
+                "target_url": target_webhook_url,
+                "telegram_response": res.json() if res.status_code == 200 else res.text
+            }
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to set webhook: {exc}")
+

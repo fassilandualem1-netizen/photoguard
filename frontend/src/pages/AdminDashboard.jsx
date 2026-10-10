@@ -457,25 +457,18 @@ export default function AdminDashboard() {
     return `${mb.toFixed(1)} MB`;
   };
 
-  const adminStorageUsed = Number(stats?.total_storage_used_bytes || user?.storage_used || 0);
-  const adminStorageLimit = Number(user?.storage_quota_limit) > 0 ? Number(user.storage_quota_limit) : 5368709120;
-  const adminStoragePercentage = Math.min(100, Math.max(0, Math.round((adminStorageUsed / adminStorageLimit) * 100)));
-  const adminStorageUsedDisplay = stats?.total_storage_used_gb 
-    ? `${Number(stats.total_storage_used_gb).toFixed(2)} GB` 
-    : formatBytes(adminStorageUsed);
-
   return (
-    <div className="flex h-screen bg-[#080b12] text-slate-300 font-sans overflow-hidden">
+    <div className="flex h-screen bg-[#F6F7FB] dark:bg-[#080b12] text-slate-800 dark:text-slate-300 font-sans overflow-hidden">
       {/* FIXED LEFT SIDEBAR */}
-      <aside className="w-64 bg-[#05070d] border-r border-slate-800/80 flex flex-col shrink-0 justify-between h-full">
+      <aside className="w-64 bg-white dark:bg-[#05070d] border-r border-slate-200 dark:border-slate-800/80 flex flex-col shrink-0 justify-between h-full">
         <div className="flex flex-col flex-1 min-h-0">
           {/* Logo Area */}
           <div className="p-6 flex items-center gap-3">
             <img src="/logo.svg" alt="PhotoGuard Logo" className="w-8 h-8 object-contain shrink-0" />
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-white font-bold text-xl tracking-tight">PhotoGuard</span>
-                <span className="text-[10px] bg-indigo-900/50 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-700/50 font-mono">
+                <span className="text-slate-900 dark:text-white font-bold text-xl tracking-tight">PhotoGuard</span>
+                <span className="text-[10px] bg-indigo-50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-700/50 font-mono font-semibold">
                   SUPER ADMIN
                 </span>
               </div>
@@ -491,18 +484,18 @@ export default function AdminDashboard() {
               onClick={() => handleTabChange("directory")}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
                 activeTab === "directory"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-400 hover:text-white hover:bg-slate-900/60"
+                  ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/60"
               }`}
             >
               <div className="flex items-center gap-3">
-                <Users className={`w-5 h-5 ${activeTab === "directory" ? "text-indigo-600" : "text-slate-400"}`} />
+                <Users className={`w-5 h-5 ${activeTab === "directory" ? "text-indigo-400 dark:text-indigo-600" : "text-slate-400"}`} />
                 <span>Directory</span>
               </div>
               <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold ${
                 activeTab === "directory"
                   ? "bg-indigo-600 text-white"
-                  : "bg-indigo-900/60 text-indigo-300 border border-indigo-700/40"
+                  : "bg-slate-100 dark:bg-indigo-900/60 text-slate-600 dark:text-indigo-300 border border-slate-200 dark:border-indigo-700/40"
               }`}>
                 {filteredPhotographers.length}
               </span>
@@ -515,28 +508,28 @@ export default function AdminDashboard() {
               onClick={() => handleTabChange("broadcasts")}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
                 activeTab === "broadcasts"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-400 hover:text-white hover:bg-slate-900/60"
+                  ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/60"
               }`}
             >
               <div className="flex items-center gap-3">
-                <Megaphone className={`w-5 h-5 ${activeTab === "broadcasts" ? "text-sky-600" : "text-slate-400"}`} />
+                <Megaphone className={`w-5 h-5 ${activeTab === "broadcasts" ? "text-sky-400 dark:text-sky-600" : "text-slate-400"}`} />
                 <span>Broadcasts</span>
               </div>
               {currentBroadcast && currentBroadcast.is_active ? (
                 <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold flex items-center gap-1.5 ${
                   activeTab === "broadcasts"
                     ? "bg-emerald-600 text-white"
-                    : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                    : "bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30"
                 }`}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                   Live
                 </span>
               ) : (
                 <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold ${
                   activeTab === "broadcasts"
-                    ? "bg-slate-200 text-slate-800"
-                    : "bg-slate-800 text-slate-400 border border-slate-700/40"
+                    ? "bg-slate-200 dark:bg-slate-200 text-slate-800"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700/40"
                 }`}>
                   {broadcastList.length}
                 </span>
@@ -550,19 +543,19 @@ export default function AdminDashboard() {
               onClick={() => handleTabChange("audit_logs")}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
                 activeTab === "audit_logs"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-400 hover:text-white hover:bg-slate-900/60"
+                  ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/60"
               }`}
             >
               <div className="flex items-center gap-3">
-                <Shield className={`w-5 h-5 ${activeTab === "audit_logs" ? "text-amber-600" : "text-slate-400"}`} />
+                <Shield className={`w-5 h-5 ${activeTab === "audit_logs" ? "text-amber-400 dark:text-amber-600" : "text-slate-400"}`} />
                 <span>Audit Logs</span>
               </div>
               {auditLogs.length > 0 && (
                 <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold ${
                   activeTab === "audit_logs"
                     ? "bg-amber-600 text-white"
-                    : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                    : "bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30"
                 }`}>
                   {auditLogs.length}
                 </span>
@@ -576,19 +569,19 @@ export default function AdminDashboard() {
               onClick={() => handleTabChange("system_health")}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
                 activeTab === "system_health"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-400 hover:text-white hover:bg-slate-900/60"
+                  ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/60"
               }`}
             >
               <div className="flex items-center gap-3">
-                <AlertTriangle className={`w-5 h-5 ${activeTab === "system_health" ? "text-rose-600" : "text-slate-400"}`} />
+                <AlertTriangle className={`w-5 h-5 ${activeTab === "system_health" ? "text-rose-400 dark:text-rose-600" : "text-slate-400"}`} />
                 <span>System Health</span>
               </div>
               {systemErrors.length > 0 && (
                 <span className={`px-2 py-0.5 rounded-full text-xs font-mono font-bold ${
                   activeTab === "system_health"
                     ? "bg-rose-600 text-white"
-                    : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                    : "bg-rose-50 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30"
                 }`}>
                   {systemErrors.length}
                 </span>
@@ -598,32 +591,18 @@ export default function AdminDashboard() {
         </div>
 
         {/* SIDEBAR FOOTER */}
-        <div className="p-4 border-t border-slate-800/80 space-y-3 shrink-0">
-          {/* Storage Progress Indicator */}
-          <div className="px-2">
-            <div className="flex justify-between text-xs text-slate-400 mb-1.5 font-medium">
-              <span>Storage</span>
-              <span className="font-mono">{adminStoragePercentage}%</span>
-            </div>
-            <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-              <div
-                className="h-full bg-indigo-500 rounded-full transition-all duration-300"
-                style={{ width: `${adminStoragePercentage}%` }}
-              />
-            </div>
-            <div className="text-[11px] text-slate-400 mt-1 font-mono">
-              {adminStorageUsedDisplay} of {formatBytes(adminStorageLimit)}
-            </div>
-          </div>
-
-          {/* Light Mode Toggle */}
-          <ThemeToggle variant="menu" className="!px-3 !py-2.5 rounded-xl !text-slate-400 hover:!text-white hover:!bg-slate-900/60 transition-colors" />
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800/80 space-y-2 shrink-0">
+          {/* Light Mode / Dark Mode Toggle */}
+          <ThemeToggle
+            variant="menu"
+            className="!px-3.5 !py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/60 transition-colors cursor-pointer"
+          />
 
           {/* Sign Out Button (Red) */}
           <button
             type="button"
             onClick={logout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-red-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-red-600 dark:text-red-500 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4 text-red-500" />
             <span>Sign Out</span>
@@ -634,26 +613,26 @@ export default function AdminDashboard() {
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* TOP HEADER */}
-        <header className="h-[72px] flex items-center justify-between px-8 border-b border-slate-800/80 bg-[#080b12] shrink-0">
-          <h1 className="text-xl text-slate-200 font-semibold tracking-tight">System Administration</h1>
+        <header className="h-[72px] flex items-center justify-between px-8 border-b border-slate-200 dark:border-slate-800/80 bg-white dark:bg-[#080b12] shrink-0">
+          <h1 className="text-xl text-slate-900 dark:text-slate-200 font-semibold tracking-tight">System Administration</h1>
           <div className="flex items-center gap-4">
             {/* Refresh Icon */}
             <button
               onClick={fetchData}
-              className="p-2.5 rounded-xl bg-[#101422] hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 transition-colors cursor-pointer"
+              className="p-2.5 rounded-xl bg-slate-100 dark:bg-[#101422] hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
               title="Refresh Analytics"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-indigo-400" : ""}`} />
+              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-indigo-500" : ""}`} />
             </button>
           </div>
         </header>
 
         {/* SCROLLABLE BODY */}
-        <main className="flex-1 overflow-y-auto p-8">
+        <main className="flex-1 overflow-y-auto p-8 bg-[#F6F7FB] dark:bg-[#080b12]">
           {/* Error Notification */}
           {errorBanner && (
-            <div className="mb-6 p-4 rounded-xl bg-red-950/40 border border-red-800/60 text-red-300 flex items-center gap-3 text-sm animate-fade-in">
-              <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+            <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 text-red-700 dark:text-red-300 flex items-center gap-3 text-sm animate-fade-in">
+              <AlertTriangle className="w-5 h-5 text-red-500 dark:text-red-400 flex-shrink-0" />
               <span>{errorBanner}</span>
             </div>
           )}
@@ -661,49 +640,49 @@ export default function AdminDashboard() {
           {/* 4 STAT CARDS GRID */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {/* Photographers */}
-            <div className="bg-[#0e1320] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-indigo-400 shrink-0">
+            <div className="bg-white dark:bg-[#0e1320] border border-slate-200 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm dark:shadow-lg flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
                 <Users className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono">PHOTOGRAPHERS</p>
-                <div className="text-2xl font-bold text-white font-mono mt-0.5">{stats.total_photographers}</div>
+                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider font-mono">PHOTOGRAPHERS</p>
+                <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono mt-0.5">{stats.total_photographers}</div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">Registered studio accounts</p>
               </div>
             </div>
 
             {/* Storage Used */}
-            <div className="bg-[#0e1320] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-cyan-400 shrink-0">
+            <div className="bg-white dark:bg-[#0e1320] border border-slate-200 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm dark:shadow-lg flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-cyan-600 dark:text-cyan-400 shrink-0">
                 <HardDrive className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono">STORAGE USED</p>
-                <div className="text-2xl font-bold text-white font-mono mt-0.5">{stats.total_storage_used_gb} GB</div>
+                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider font-mono">STORAGE USED</p>
+                <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono mt-0.5">{stats.total_storage_used_gb} GB</div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">Total allocated space used</p>
               </div>
             </div>
 
             {/* Active Galleries */}
-            <div className="bg-[#0e1320] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400 shrink-0">
+            <div className="bg-white dark:bg-[#0e1320] border border-slate-200 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm dark:shadow-lg flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
                 <FolderLock className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono">ACTIVE GALLERIES</p>
-                <div className="text-2xl font-bold text-white font-mono mt-0.5">{stats.total_albums}</div>
+                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider font-mono">ACTIVE GALLERIES</p>
+                <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono mt-0.5">{stats.total_albums}</div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">Active galleries ({stats.total_photos} photos)</p>
               </div>
             </div>
 
             {/* System Health */}
-            <div className="bg-[#0e1320] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-indigo-400 shrink-0">
+            <div className="bg-white dark:bg-[#0e1320] border border-slate-200 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm dark:shadow-lg flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
                 <Activity className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono">SYSTEM HEALTH</p>
-                <div className="text-xl font-bold text-emerald-400 font-mono flex items-center gap-2 mt-0.5">
+                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider font-mono">SYSTEM HEALTH</p>
+                <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono flex items-center gap-2 mt-0.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                   <span>Operational</span>
                 </div>
@@ -711,6 +690,7 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
+
 
         {/* Tab 1: Directory */}
         {activeTab === "directory" && (
@@ -734,23 +714,23 @@ export default function AdminDashboard() {
     {activeTab === "broadcasts" && (
       <section className="space-y-6 animate-fade-in">
         {/* Broadcast Creation & Live Banner Card */}
-        <div className="p-6 rounded-2xl bg-[#0e121b] border border-sky-950/70 shadow-xl shadow-black/30 space-y-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-indigo-950/60">
+        <div className="p-6 rounded-2xl bg-white dark:bg-[#0e121b] border border-slate-200 dark:border-sky-950/70 shadow-sm dark:shadow-xl space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-indigo-950/60">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center text-sky-400 border border-sky-500/20 shadow-sm">
+              <div className="w-10 h-10 rounded-xl bg-sky-50 dark:bg-sky-500/10 flex items-center justify-center text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-500/20 shadow-sm">
                 <Megaphone className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
                   <span>Dashboard Broadcasts</span>
                   {currentBroadcast && currentBroadcast.is_active && (
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 flex items-center gap-1.5">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-emerald-500" />
                       Live Banner Active
                     </span>
                   )}
                 </h2>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   Publish announcement banners to photographer dashboards.
                 </p>
               </div>
@@ -759,49 +739,49 @@ export default function AdminDashboard() {
               type="button"
               onClick={fetchBroadcasts}
               disabled={loadingBroadcasts}
-              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-2 border border-slate-700/60 transition-colors"
+              className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2 border border-slate-200 dark:border-slate-700/60 transition-colors"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loadingBroadcasts ? "animate-spin text-sky-400" : ""}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingBroadcasts ? "animate-spin text-sky-500" : ""}`} />
               <span>Refresh</span>
             </button>
           </div>
 
           {/* Feedback banner */}
           {broadcastSuccessMsg && (
-            <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-emerald-300 flex items-center gap-2.5 text-xs animate-fade-in">
-              <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+            <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 flex items-center gap-2.5 text-xs animate-fade-in">
+              <CheckCircle className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0" />
               <span>{broadcastSuccessMsg}</span>
             </div>
           )}
 
           {/* Active Live Banner Showcase Card */}
           <div className="space-y-2">
-            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono">
+            <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider font-mono">
               Current Live Status
             </div>
             {currentBroadcast && currentBroadcast.is_active ? (
-              <div className="p-4 rounded-xl bg-[#090c13] border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#090c13] border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold tracking-wider ${
                         currentBroadcast.type === "warning"
-                          ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                          ? "bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30"
                           : currentBroadcast.type === "promo"
-                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                          : "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+                          ? "bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30"
+                          : "bg-sky-50 dark:bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-500/30"
                       }`}
                     >
                       {currentBroadcast.type || "INFO"}
                     </span>
-                    <span className="text-xs text-slate-400 font-mono">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                       Published: {new Date(currentBroadcast.created_at).toLocaleString()}
                     </span>
                   </div>
-                  <h4 className="text-sm font-bold text-white">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                     {currentBroadcast.title}
                   </h4>
-                  <p className="text-xs text-slate-300 max-w-3xl leading-relaxed">
+                  <p className="text-xs text-slate-600 dark:text-slate-300 max-w-3xl leading-relaxed">
                     {currentBroadcast.message}
                   </p>
                 </div>
@@ -809,7 +789,7 @@ export default function AdminDashboard() {
                   type="button"
                   onClick={() => handleDeactivateBroadcast(currentBroadcast.id)}
                   disabled={deactivatingId === currentBroadcast.id}
-                  className="px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30 text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {deactivatingId === currentBroadcast.id && (
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -818,21 +798,21 @@ export default function AdminDashboard() {
                 </button>
               </div>
             ) : (
-              <div className="p-4 rounded-xl bg-[#080a0f] border border-indigo-950/70 text-slate-400 text-xs flex items-center justify-between">
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#080a0f] border border-slate-200 dark:border-indigo-950/70 text-slate-500 dark:text-slate-400 text-xs flex items-center justify-between">
                 <span>No active announcements. Dashboards are currently clear.</span>
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">Status: Idle</span>
+                <span className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">Status: Idle</span>
               </div>
             )}
           </div>
 
           {/* New Broadcast Composition Form */}
           <form onSubmit={handlePublishBroadcast} className="space-y-4 pt-2">
-            <div className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider font-mono">
+            <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-mono">
               New Announcement
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
               <div className="sm:col-span-8 space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                   Announcement Title
                 </label>
                 <input
@@ -843,11 +823,11 @@ export default function AdminDashboard() {
                   onChange={(e) =>
                     setBroadcastForm({ ...broadcastForm, title: e.target.value })
                   }
-                  className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-sky-400 transition-colors"
+                  className="w-full bg-slate-50 dark:bg-[#080a0f] border border-slate-200 dark:border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-sky-500 transition-colors"
                 />
               </div>
               <div className="sm:col-span-4 space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                   Type
                 </label>
                 <select
@@ -855,7 +835,7 @@ export default function AdminDashboard() {
                   onChange={(e) =>
                     setBroadcastForm({ ...broadcastForm, type: e.target.value })
                   }
-                  className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-sky-400 transition-colors capitalize"
+                  className="w-full bg-slate-50 dark:bg-[#080a0f] border border-slate-200 dark:border-indigo-950/80 rounded-xl px-3 py-2.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-sky-500 transition-colors capitalize"
                 >
                   <option value="info">Info</option>
                   <option value="warning">Warning</option>
@@ -865,7 +845,7 @@ export default function AdminDashboard() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Message
               </label>
               <textarea
@@ -876,18 +856,18 @@ export default function AdminDashboard() {
                 onChange={(e) =>
                   setBroadcastForm({ ...broadcastForm, message: e.target.value })
                 }
-                className="w-full bg-[#080a0f] border border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-sky-400 transition-colors resize-none"
+                className="w-full bg-slate-50 dark:bg-[#080a0f] border border-slate-200 dark:border-indigo-950/80 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-sky-500 transition-colors resize-none"
               />
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                <Zap className="w-3 h-3 text-sky-400" /> Publishing deactivates previous active announcements.
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <Zap className="w-3 h-3 text-sky-500" /> Publishing deactivates previous active announcements.
               </span>
               <button
                 type="submit"
                 disabled={isPublishingBroadcast}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-sky-500/20 transition-all active:scale-[0.98] disabled:opacity-50"
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-sky-500/20 transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer"
               >
                 {isPublishingBroadcast ? (
                   <>
@@ -906,25 +886,25 @@ export default function AdminDashboard() {
         </div>
 
         {/* Historical Broadcast Announcements Table */}
-        <div className="p-6 rounded-2xl bg-[#0e121b] border border-indigo-950/70 shadow-xl shadow-black/30 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-indigo-950/60">
+        <div className="p-6 rounded-2xl bg-white dark:bg-[#0e121b] border border-slate-200 dark:border-indigo-950/70 shadow-sm dark:shadow-xl space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-indigo-950/60">
             <div>
-              <h3 className="text-sm font-bold text-white tracking-tight">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">
                 Announcement History
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Past broadcast messages sent to users.
               </p>
             </div>
-            <span className="text-xs font-mono text-slate-400">
+            <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
               {broadcastList.length} Announcements
             </span>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-indigo-950/80 bg-[#080a0f]">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-indigo-950/80 bg-white dark:bg-[#080a0f]">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-indigo-950/80 bg-indigo-950/30 text-slate-400 uppercase tracking-wider font-mono">
+                <tr className="border-b border-slate-200 dark:border-indigo-950/80 bg-slate-50 dark:bg-indigo-950/30 text-slate-500 dark:text-slate-400 uppercase tracking-wider font-mono">
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Type</th>
                   <th className="py-3 px-4">Title</th>
@@ -933,12 +913,12 @@ export default function AdminDashboard() {
                   <th className="py-3 px-4 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-indigo-950/60 text-slate-300 font-sans">
+              <tbody className="divide-y divide-slate-200 dark:divide-indigo-950/60 text-slate-700 dark:text-slate-300 font-sans">
                 {loadingBroadcasts ? (
                   <tr>
                     <td colSpan={6} className="py-10 text-center text-slate-500 dark:text-slate-400">
                       <div className="flex items-center justify-center gap-2">
-                        <RefreshCw className="w-4 h-4 animate-spin text-sky-400" />
+                        <RefreshCw className="w-4 h-4 animate-spin text-sky-500" />
                         <span>Loading announcements...</span>
                       </div>
                     </td>
@@ -951,16 +931,16 @@ export default function AdminDashboard() {
                   </tr>
                 ) : (
                   broadcastList.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-900/40 transition-colors">
+                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40 transition-colors">
                       <td className="py-3 px-4">
                         {item.is_active ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 w-fit">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 flex items-center gap-1.5 w-fit">
                             <span className="w-2 h-2 rounded-full bg-emerald-500" />
                             Active
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono text-slate-400 bg-slate-800/60 border border-slate-700/40 flex items-center gap-1.5 w-fit">
-                            <span className="w-2 h-2 rounded-full bg-slate-50 dark:bg-[#111620]0" />
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/40 flex items-center gap-1.5 w-fit">
+                            <span className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-500" />
                             Archived
                           </span>
                         )}
@@ -969,22 +949,22 @@ export default function AdminDashboard() {
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider ${
                             item.type === "warning"
-                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                              ? "bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30"
                               : item.type === "promo"
-                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                              : "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+                              ? "bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30"
+                              : "bg-sky-50 dark:bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-500/30"
                           }`}
                         >
                           {item.type || "INFO"}
                         </span>
                       </td>
-                      <td className="py-3 px-4 font-semibold text-white whitespace-nowrap">
+                      <td className="py-3 px-4 font-semibold text-slate-900 dark:text-white whitespace-nowrap">
                         {item.title}
                       </td>
-                      <td className="py-3 px-4 max-w-md text-slate-300 truncate" title={item.message}>
+                      <td className="py-3 px-4 max-w-md text-slate-600 dark:text-slate-300 truncate" title={item.message}>
                         {item.message}
                       </td>
-                      <td className="py-3 px-4 font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                      <td className="py-3 px-4 font-mono text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
                         {new Date(item.created_at).toLocaleString()}
                       </td>
                       <td className="py-3 px-4 text-right">
@@ -993,12 +973,12 @@ export default function AdminDashboard() {
                             type="button"
                             onClick={() => handleDeactivateBroadcast(item.id)}
                             disabled={deactivatingId === item.id}
-                            className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+                            className="px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30 text-[11px] font-semibold transition-colors disabled:opacity-50 cursor-pointer"
                           >
                             Deactivate
                           </button>
                         ) : (
-                          <span className="text-[11px] text-slate-600 dark:text-slate-300 dark:text-slate-400 font-mono">-</span>
+                          <span className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">-</span>
                         )}
                       </td>
                     </tr>
@@ -1013,17 +993,17 @@ export default function AdminDashboard() {
 
     {/* Tab 2: Security Ledger & Audit Logs View */}
     {activeTab === "audit_logs" && (
-      <section className="p-6 rounded-2xl bg-[#0e121b] border border-amber-950/50 shadow-xl shadow-black/30 space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-indigo-950/60">
+      <section className="p-6 rounded-2xl bg-white dark:bg-[#0e121b] border border-slate-200 dark:border-amber-950/50 shadow-sm dark:shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-indigo-950/60">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+            <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400">
               <Shield className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white tracking-tight">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
                 Audit Logs
               </h2>
-              <p className="text-xs text-slate-400 font-sans">
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-sans">
                 History of administrative actions and account changes.
               </p>
             </div>
@@ -1031,9 +1011,9 @@ export default function AdminDashboard() {
           <button
             onClick={fetchAuditLogs}
             disabled={loadingAuditLogs}
-            className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loadingAuditLogs ? "animate-spin text-amber-400" : ""}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loadingAuditLogs ? "animate-spin text-amber-500" : ""}`} />
             <span>Refresh</span>
           </button>
         </div>
@@ -1041,7 +1021,7 @@ export default function AdminDashboard() {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-indigo-950/80 text-slate-400 font-mono uppercase tracking-wider">
+              <tr className="border-b border-slate-200 dark:border-indigo-950/80 text-slate-500 dark:text-slate-400 font-mono uppercase tracking-wider">
                 <th className="pb-3 px-3">Timestamp</th>
                 <th className="pb-3 px-3">Action</th>
                 <th className="pb-3 px-3">Admin</th>
@@ -1049,7 +1029,7 @@ export default function AdminDashboard() {
                 <th className="pb-3 px-3">Event Details</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-indigo-950/40 font-mono">
+            <tbody className="divide-y divide-slate-200 dark:divide-indigo-950/40 font-mono">
               {auditLogs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-12 text-center text-slate-500 dark:text-slate-400 font-sans">
@@ -1058,34 +1038,34 @@ export default function AdminDashboard() {
                 </tr>
               ) : (
                 auditLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-indigo-950/20 transition-colors">
-                    <td className="py-3 px-3 text-slate-400 text-[11px] whitespace-nowrap">
+                  <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-indigo-950/20 transition-colors">
+                    <td className="py-3 px-3 text-slate-500 dark:text-slate-400 text-[11px] whitespace-nowrap">
                       {new Date(log.created_at).toLocaleString()}
                     </td>
                     <td className="py-3 px-3 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
                         log.action.includes("RESET")
-                          ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                          ? "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30"
                           : log.action.includes("SUSPEND")
-                          ? "bg-red-500/15 text-red-300 border-red-500/30"
-                          : "bg-indigo-500/15 text-indigo-300 border-indigo-500/30"
+                          ? "bg-red-50 dark:bg-red-500/15 text-red-700 dark:text-red-300 border-red-200 dark:border-red-500/30"
+                          : "bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30"
                       }`}>
                         {log.action}
                       </span>
                     </td>
-                    <td className="py-3 px-3 text-slate-300 text-xs font-sans whitespace-nowrap">
+                    <td className="py-3 px-3 text-slate-700 dark:text-slate-300 text-xs font-sans whitespace-nowrap">
                       {log.admin_email || `Admin #${log.admin_id}`}
                     </td>
-                    <td className="py-3 px-3 text-slate-300 text-xs font-sans whitespace-nowrap">
+                    <td className="py-3 px-3 text-slate-700 dark:text-slate-300 text-xs font-sans whitespace-nowrap">
                       {log.target_user_email ? (
-                        <span className="text-white font-medium">{log.target_user_email}</span>
+                        <span className="text-slate-900 dark:text-white font-medium">{log.target_user_email}</span>
                       ) : log.target_user_id ? (
                         `User #${log.target_user_id}`
                       ) : (
-                        <span className="text-slate-600 dark:text-slate-300 dark:text-slate-400">—</span>
+                        <span className="text-slate-400 dark:text-slate-600">—</span>
                       )}
                     </td>
-                    <td className="py-3 px-3 text-slate-300 text-xs font-sans max-w-md truncate" title={log.details}>
+                    <td className="py-3 px-3 text-slate-600 dark:text-slate-300 text-xs font-sans max-w-md truncate" title={log.details}>
                       {log.details}
                     </td>
                   </tr>
@@ -1099,17 +1079,17 @@ export default function AdminDashboard() {
 
     {/* Tab 3: System Health & Crash Diagnostics */}
     {activeTab === "system_health" && (
-      <section className="p-6 rounded-2xl bg-[#0e121b] border border-rose-950/70 shadow-xl shadow-black/30">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-indigo-950/60">
+      <section className="p-6 rounded-2xl bg-white dark:bg-[#0e121b] border border-slate-200 dark:border-rose-950/70 shadow-sm dark:shadow-xl">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200 dark:border-indigo-950/60">
           <div>
-            <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-rose-400" />
+            <h2 className="text-base font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-500 dark:text-rose-400" />
               <span>System Health & Errors</span>
-              <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30">
+              <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-rose-50 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30">
                 {systemErrors.length} {systemErrors.length === 1 ? "Incident" : "Incidents"}
               </span>
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Monitor runtime errors and API incidents.
             </p>
           </div>
@@ -1118,17 +1098,17 @@ export default function AdminDashboard() {
             type="button"
             onClick={fetchSystemErrors}
             disabled={loadingErrors}
-            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-2 border border-slate-700/60 transition-colors cursor-pointer"
+            className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-2 border border-slate-200 dark:border-slate-700/60 transition-colors cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loadingErrors ? "animate-spin" : ""}`} />
             <span>Refresh</span>
           </button>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-indigo-950/80 bg-[#080a0f]">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-indigo-950/80 bg-white dark:bg-[#080a0f]">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-indigo-950/80 bg-indigo-950/30 text-slate-400 uppercase tracking-wider font-mono">
+              <tr className="border-b border-slate-200 dark:border-indigo-950/80 bg-slate-50 dark:bg-indigo-950/30 text-slate-500 dark:text-slate-400 uppercase tracking-wider font-mono">
                 <th className="py-3 px-4">Error Type</th>
                 <th className="py-3 px-4">Timestamp</th>
                 <th className="py-3 px-4">Endpoint</th>
@@ -1136,12 +1116,12 @@ export default function AdminDashboard() {
                 <th className="py-3 px-4 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-indigo-950/60 text-slate-300 font-sans">
+            <tbody className="divide-y divide-slate-200 dark:divide-indigo-950/60 text-slate-700 dark:text-slate-300 font-sans">
               {loadingErrors ? (
                 <tr>
                   <td colSpan="5" className="py-12 text-center text-slate-500 dark:text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2">
-                      <RefreshCw className="w-5 h-5 animate-spin text-rose-400" />
+                      <RefreshCw className="w-5 h-5 animate-spin text-rose-500" />
                       <span>Scanning system error logs...</span>
                     </div>
                   </td>
@@ -1150,10 +1130,10 @@ export default function AdminDashboard() {
                 <tr>
                   <td colSpan="5" className="py-12 text-center text-slate-500 dark:text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2">
-                      <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                      <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
                         <Check className="w-5 h-5 stroke-[2.5]" />
                       </div>
-                      <span className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                      <span className="text-sm font-semibold text-slate-800 dark:text-slate-300 flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-emerald-500" />
                         All Systems Operational
                       </span>
@@ -1163,34 +1143,34 @@ export default function AdminDashboard() {
                 </tr>
               ) : (
                 systemErrors.map((err) => (
-                  <tr key={err.id} className="hover:bg-slate-900/40 transition-colors">
+                  <tr key={err.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40 transition-colors">
                     <td className="py-3 px-4">
                       <span
                         className={`px-2 py-1 rounded-md text-[10px] font-mono font-bold uppercase tracking-wider ${
                           err.error_type === "DATABASE"
-                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                            ? "bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30"
                             : err.error_type === "NETWORK"
-                            ? "bg-sky-500/20 text-sky-300 border border-sky-500/30"
-                            : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                            ? "bg-sky-50 dark:bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-500/30"
+                            : "bg-rose-50 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30"
                         }`}
                       >
                         {err.error_type}
                       </span>
                     </td>
-                    <td className="py-3 px-4 font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                    <td className="py-3 px-4 font-mono text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
                       {err.timestamp ? new Date(err.timestamp).toLocaleString() : "N/A"}
                     </td>
-                    <td className="py-3 px-4 font-mono text-[11px] text-slate-300 whitespace-nowrap">
+                    <td className="py-3 px-4 font-mono text-[11px] text-slate-600 dark:text-slate-300 whitespace-nowrap">
                       {err.endpoint || "Global Service"}
                     </td>
                     <td className="py-3 px-4 max-w-md">
-                      <p className="font-medium text-rose-200 line-clamp-2" title={err.error_message}>
+                      <p className="font-medium text-rose-700 dark:text-rose-200 line-clamp-2" title={err.error_message}>
                         {err.error_message}
                       </p>
                       {err.traceback_details && (
                         <details className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-mono cursor-pointer">
-                          <summary className="hover:text-slate-400">View Stack Trace</summary>
-                          <pre className="mt-1 p-2 rounded bg-black/60 text-slate-400 whitespace-pre-wrap max-h-36 overflow-y-auto border border-rose-950/40">
+                          <summary className="hover:text-slate-700 dark:hover:text-slate-300">View Stack Trace</summary>
+                          <pre className="mt-1 p-2 rounded bg-slate-100 dark:bg-black/60 text-slate-700 dark:text-slate-400 whitespace-pre-wrap max-h-36 overflow-y-auto border border-slate-200 dark:border-rose-950/40">
                             {err.traceback_details}
                           </pre>
                         </details>
@@ -1201,7 +1181,7 @@ export default function AdminDashboard() {
                         type="button"
                         onClick={() => handleResolveError(err.id)}
                         disabled={resolvingErrorId === err.id}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 ml-auto transition-all disabled:opacity-50"
+                        className="px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-600/20 hover:bg-emerald-100 dark:hover:bg-emerald-600/30 text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 dark:hover:text-emerald-200 border border-emerald-200 dark:border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 ml-auto transition-all disabled:opacity-50 cursor-pointer"
                         title="Mark this system crash as resolved"
                       >
                         {resolvingErrorId === err.id ? (
@@ -1229,18 +1209,18 @@ export default function AdminDashboard() {
           id="register-photographer-modal-overlay"
           className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
         >
-          <div className="w-full max-w-xl rounded-2xl bg-[#0e121b] border border-slate-800 p-6 sm:p-7 shadow-2xl shadow-black/80 space-y-5 relative animate-in fade-in zoom-in-95 duration-150">
+          <div className="w-full max-w-xl rounded-2xl bg-white dark:bg-[#0e121b] border border-slate-200 dark:border-slate-800 p-6 sm:p-7 shadow-2xl shadow-slate-900/20 dark:shadow-black/80 space-y-5 relative animate-in fade-in zoom-in-95 duration-150">
             {/* Header */}
-            <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-800">
+            <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20 shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20 shrink-0">
                   <UserPlus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white tracking-tight">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
                     Add Photographer
                   </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     Create a new photographer account with temporary credentials.
                   </p>
                 </div>
@@ -1248,7 +1228,7 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => setIsRegisterModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                 title="Close modal"
               >
                 <X className="w-5 h-5" />
@@ -1260,7 +1240,7 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Full Name */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     Full Name / Studio
                   </label>
                   <input
@@ -1271,13 +1251,13 @@ export default function AdminDashboard() {
                     onChange={(e) =>
                       setRegisterForm({ ...registerForm, full_name: e.target.value })
                     }
-                    className="w-full bg-[#080a0f] border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
+                    className="w-full bg-slate-50 dark:bg-[#080a0f] border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
                   />
                 </div>
 
                 {/* Email */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     Email Address
                   </label>
                   <input
@@ -1288,13 +1268,13 @@ export default function AdminDashboard() {
                     onChange={(e) =>
                       setRegisterForm({ ...registerForm, email: e.target.value })
                     }
-                    className="w-full bg-[#080a0f] border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
+                    className="w-full bg-slate-50 dark:bg-[#080a0f] border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
                   />
                 </div>
 
                 {/* Tier Plan */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     Tier Plan
                   </label>
                   <select
@@ -1311,7 +1291,7 @@ export default function AdminDashboard() {
                         setCustomQuotaGB(5);
                       }
                     }}
-                    className="w-full bg-[#080a0f] border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
+                    className="w-full bg-slate-50 dark:bg-[#080a0f] border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all"
                   >
                     <option value="basic">Basic (Default: 5 GB)</option>
                     <option value="studio">Studio (Default: 25 GB)</option>
@@ -1320,7 +1300,7 @@ export default function AdminDashboard() {
 
                 {/* Storage Quota */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     Storage Quota (GB)
                   </label>
                   <input
@@ -1331,7 +1311,7 @@ export default function AdminDashboard() {
                     placeholder="5"
                     value={customQuotaGB}
                     onChange={(e) => setCustomQuotaGB(e.target.value)}
-                    className="w-full bg-[#080a0f] border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all font-mono"
+                    className="w-full bg-slate-50 dark:bg-[#080a0f] border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/40 transition-all font-mono"
                   />
                   <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                     (Enter 9999 for Unlimited)
@@ -1339,11 +1319,11 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsRegisterModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/60 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1376,18 +1356,18 @@ export default function AdminDashboard() {
           id="photographer-created-modal-overlay"
           className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
         >
-          <div className="w-full max-w-lg rounded-2xl bg-[#0e121b] border-2 border-indigo-500/60 p-6 shadow-2xl shadow-indigo-950/50 space-y-5 relative">
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-[#0e121b] border-2 border-indigo-500/60 p-6 shadow-2xl shadow-indigo-950/20 dark:shadow-indigo-950/50 space-y-5 relative">
             {/* Header */}
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-500/20 border border-indigo-200 dark:border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
                   <CheckCircle2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white tracking-wide">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-wide">
                     Account Created
                   </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     Temporary login credentials:
                   </p>
                 </div>
@@ -1395,7 +1375,7 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => setCreatedCredentials(null)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                 title="Dismiss"
               >
                 <X className="w-5 h-5" />
@@ -1403,27 +1383,27 @@ export default function AdminDashboard() {
             </div>
 
             <div className="pt-2 flex flex-col gap-2 text-xs font-mono">
-              <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-black/50 border border-indigo-800/60">
-                <span className="text-slate-400">User:</span>
-                <strong className="text-white">{createdCredentials.full_name}</strong>
+              <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-indigo-800/60">
+                <span className="text-slate-500 dark:text-slate-400">User:</span>
+                <strong className="text-slate-900 dark:text-white">{createdCredentials.full_name}</strong>
               </div>
-              <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-black/50 border border-indigo-800/60">
-                <span className="text-slate-400">Email:</span>
-                <strong className="text-white">{createdCredentials.email}</strong>
+              <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-indigo-800/60">
+                <span className="text-slate-500 dark:text-slate-400">Email:</span>
+                <strong className="text-slate-900 dark:text-white">{createdCredentials.email}</strong>
               </div>
-              <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-indigo-500/10 border border-indigo-500/30">
-                <span className="text-indigo-300">Plan:</span>
-                <strong className="text-indigo-300 uppercase">{createdCredentials.plan}</strong>
+              <div className="flex justify-between items-center px-3 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30">
+                <span className="text-indigo-700 dark:text-indigo-300">Plan:</span>
+                <strong className="text-indigo-700 dark:text-indigo-300 uppercase">{createdCredentials.plan}</strong>
               </div>
             </div>
 
             {/* Temporary Password Box */}
             <div className="space-y-2 mt-4">
-              <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono">
+              <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider font-mono">
                 Temporary Password
               </label>
-              <div className="flex items-center justify-between gap-3 bg-black/90 p-3.5 rounded-xl border border-indigo-500/40">
-                <span className="font-mono text-xl font-bold tracking-widest text-indigo-300 select-all">
+              <div className="flex items-center justify-between gap-3 bg-slate-100 dark:bg-black/90 p-3.5 rounded-xl border border-indigo-200 dark:border-indigo-500/40">
+                <span className="font-mono text-xl font-bold tracking-widest text-indigo-700 dark:text-indigo-300 select-all">
                   {createdCredentials.temp_password}
                 </span>
                 <button
@@ -1447,10 +1427,10 @@ export default function AdminDashboard() {
             </div>
 
             {/* Critical Security Warning */}
-            <div className="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 flex items-start gap-2.5 text-xs text-indigo-200/90 leading-relaxed mt-4">
-              <AlertTriangle className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+            <div className="p-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-500/30 flex items-start gap-2.5 text-xs text-indigo-900 dark:text-indigo-200/90 leading-relaxed mt-4">
+              <AlertTriangle className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
               <p>
-                <strong className="text-indigo-300 font-semibold">Security Warning:</strong> Please copy and deliver this temporary password immediately. The user will be required to change their password on next sign-in.
+                <strong className="text-indigo-700 dark:text-indigo-300 font-semibold">Security Warning:</strong> Please copy and deliver this temporary password immediately. The user will be required to change their password on next sign-in.
               </p>
             </div>
 
@@ -1474,26 +1454,26 @@ export default function AdminDashboard() {
           id="password-reset-modal-overlay"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
         >
-          <div className="w-full max-w-md rounded-2xl bg-[#0e121b] border-2 border-amber-500/60 p-6 shadow-2xl shadow-amber-950/50 space-y-5 relative">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#0e121b] border-2 border-amber-500/60 p-6 shadow-2xl shadow-amber-950/20 dark:shadow-amber-950/50 space-y-5 relative">
             {/* Header */}
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-500/20 border border-amber-200 dark:border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
                   <KeyRound className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white tracking-wide">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-wide">
                     Password Reset
                   </h3>
-                  <p className="text-xs text-slate-400 font-mono mt-0.5">
-                    User: <span className="text-amber-300 font-medium">{resetModalData.email}</span>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5">
+                    User: <span className="text-amber-600 dark:text-amber-300 font-medium">{resetModalData.email}</span>
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setResetModalData(null)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                 title="Dismiss"
               >
                 <X className="w-5 h-5" />
@@ -1502,11 +1482,11 @@ export default function AdminDashboard() {
 
             {/* Temporary Password Box */}
             <div className="space-y-2">
-              <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-mono">
+              <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider font-mono">
                 New Temporary Password
               </label>
-              <div className="flex items-center justify-between gap-3 bg-black/90 p-3.5 rounded-xl border border-amber-500/40">
-                <span className="font-mono text-xl font-bold tracking-widest text-amber-300 select-all">
+              <div className="flex items-center justify-between gap-3 bg-slate-100 dark:bg-black/90 p-3.5 rounded-xl border border-amber-200 dark:border-amber-500/40">
+                <span className="font-mono text-xl font-bold tracking-widest text-amber-600 dark:text-amber-300 select-all">
                   {resetModalData.temporary_password}
                 </span>
                 <button
@@ -1530,10 +1510,10 @@ export default function AdminDashboard() {
             </div>
 
             {/* Critical Security Warning */}
-            <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-200/90 leading-relaxed">
-              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-200/90 leading-relaxed">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <p>
-                <strong className="text-amber-300 font-semibold">Security Note:</strong> Please share this temporary password with the user. It will not be shown again. The user must change it upon sign-in.
+                <strong className="text-amber-700 dark:text-amber-300 font-semibold">Security Note:</strong> Please share this temporary password with the user. It will not be shown again. The user must change it upon sign-in.
               </p>
             </div>
 
@@ -1542,7 +1522,7 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => setResetModalData(null)}
-                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors cursor-pointer"
+                className="px-5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-colors cursor-pointer"
               >
                 Done
               </button>

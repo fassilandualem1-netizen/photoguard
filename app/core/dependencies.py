@@ -1,10 +1,9 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import SECRET_KEY, ALGORITHM
-from fastapi import Request
 from app.models.user import User, UserRole
 
 # Standard OAuth2 Bearer token extractor (for fallback/Swagger)
@@ -21,6 +20,7 @@ def get_current_user(
     """
     if not token:
         token = request.cookies.get("access_token")
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -35,7 +35,7 @@ def get_current_user(
         raise credentials_exception
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id_raw = payload.get("sub")
         if user_id_raw is None:
             raise credentials_exception
@@ -57,7 +57,10 @@ def get_current_user(
     # Enforce forced password reset globally across all secured endpoints
     if getattr(user, "needs_password_change", False):
         allowed_paths = ["/api/auth/change-password", "/api/auth/me", "/api/auth/logout"]
-        if request.url.path not in allowed_paths:
+        # Normalize path to ignore trailing slashes
+        current_path = request.url.path.rstrip("/")
+        normalized_allowed = [p.rstrip("/") for p in allowed_paths]
+        if current_path not in normalized_allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You must change your temporary password before accessing this resource.",
@@ -66,8 +69,9 @@ def get_current_user(
     # Hierarchical Security Check:
     # If the user is an assistant/staff, verify that their parent studio/photographer account is also active
     # AND that the parent studio is on the 'studio' plan tier.
-    if user.parent_id is not None:
-        parent_user = db.query(User).filter(User.id == user.parent_id).first()
+    parent_id = getattr(user, "parent_id", None) or getattr(user, "parent_owner_id", None)
+    if parent_id is not None:
+        parent_user = db.query(User).filter(User.id == parent_id).first()
         if parent_user is None or not parent_user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

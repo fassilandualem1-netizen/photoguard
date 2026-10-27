@@ -4,28 +4,35 @@ import logging
 import traceback
 import mimetypes
 from datetime import datetime, timezone, timedelta
+from contextlib import asynccontextmanager
 
 mimetypes.init()
 mimetypes.add_type("text/css", ".css", True)
 mimetypes.add_type("application/javascript", ".js", True)
 mimetypes.add_type("image/svg+xml", ".svg", True)
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, status, Request, UploadFile, File, HTTPException
+
+from fastapi import FastAPI, Depends, status, Request, Response, UploadFile, File, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+
 from app.core.database import engine, Base, get_db, SessionLocal
 from app.core.security import get_password_hash, verify_password
 from app.core.dependencies import get_current_user
+
+# Import all models so Base.metadata.create_all registers every table
 from app.models.user import User, UserRole
 from app.models.album import Album, MediaItem
 from app.models.payment import PaymentReceipt
 from app.models.error_log import SystemErrorLog
+from app.models.audit import AuditLog
+
 from app.schemas.auth import UserResponse, PasswordChangeRequest
 from app.api.auth import router as auth_router
 from app.api.albums import router as albums_router
@@ -42,30 +49,25 @@ from app.core.s3_cleanup import delete_file_from_s3
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("photoguard.core")
 
-
-
 DEFAULT_ADMIN_EMAIL = "fassilandualem1@gmail.com"
 SAFE_ADMIN_FALLBACK_PASSWORD = "Admin@123!"
 
-def seed_root_admin():
 
+def seed_root_admin():
     """
     Bulletproof Root Admin Seeder with Multi-Tier Fallbacks.
-    - Reads ADMIN_EMAIL and ADMIN_PASSWORD from os.environ.
-    - If ADMIN_PASSWORD is None, empty, whitespace, longer than 70 chars (bcrypt max 72),
-      or raises any hashing/encoding error, it safely discards it and falls back to 'Admin@123!'.
-    - Never crashes during startup; catches all hashing/database exceptions with rollbacks.
-    - Guarantees role=UserRole.ADMIN, is_active=True, is_verified=True, needs_password_change=False.
     """
     raw_admin_email = os.environ.get("ADMIN_EMAIL", "").strip().lower()
     admin_email = raw_admin_email if raw_admin_email else DEFAULT_ADMIN_EMAIL
 
     raw_admin_pw = os.environ.get("ADMIN_PASSWORD", "")
-    
-    # Audit & sanitize password length for bcrypt safety (bcrypt limit is 72 bytes)
+
     if not raw_admin_pw or len(raw_admin_pw) > 70:
         if raw_admin_pw and len(raw_admin_pw) > 70:
-            logger.warning(f"[PhotoGuard Seeder Warning] Configured ADMIN_PASSWORD exceeds 70 characters ({len(raw_admin_pw)} chars). Discarding to prevent bcrypt failure and using bulletproof fallback.")
+            logger.warning(
+                f"[PhotoGuard Seeder Warning] Configured ADMIN_PASSWORD exceeds 70 characters ({len(raw_admin_pw)} chars). "
+                "Using bulletproof fallback."
+            )
         effective_password = SAFE_ADMIN_FALLBACK_PASSWORD
         used_fallback = True
     else:
@@ -74,7 +76,6 @@ def seed_root_admin():
 
     logger.info(f"[PhotoGuard Seeder] Initiating root admin synchronization for: '{admin_email}' (fallback_used={used_fallback})")
 
-    # Generate hash safely with fallback recovery
     try:
         new_hash = get_password_hash(effective_password)
     except Exception as hash_err:
@@ -85,7 +86,6 @@ def seed_root_admin():
 
     db = SessionLocal()
     try:
-        # Determine all target admin emails to ensure user access
         target_emails = []
         if raw_admin_email:
             target_emails.append(raw_admin_email)
@@ -131,7 +131,7 @@ def seed_root_admin():
                 db.commit()
                 db.refresh(user)
                 synced_users.append({"email": email_item, "action": "created"})
-            
+
             if not primary_user and (email_item == admin_email or email_item == "fassilandualem1@gmail.com"):
                 primary_user = user
 
@@ -164,16 +164,10 @@ def seed_root_admin():
     finally:
         db.close()
 
+
 def purge_expired_albums():
     """
     Active Auto-Expiration Worker.
-    Scans the database for albums where expires_at <= now_utc.
-    For all expired albums:
-      1. Gathers all associated media items.
-      2. Calculates total original_size.
-      3. Destroys BOTH item.url AND item.thumbnail_url from Cloudinary/S3/Disk.
-      4. Decrements photographer owner.storage_used (ensuring >= 0).
-      5. Deletes the album row from PostgreSQL (cascades to media_items).
     """
     db = SessionLocal()
     try:
@@ -195,7 +189,6 @@ def purge_expired_albums():
             media_items = album.media_items or []
             album_bytes = sum(getattr(item, "original_size", 0) or 0 for item in media_items)
 
-            # Reclaim owner storage quota
             album_creator = db.query(User).filter(User.id == album.photographer_id).first()
             if album_creator:
                 owner = db.query(User).filter(User.id == album_creator.effective_owner_id).first() or album_creator
@@ -203,7 +196,6 @@ def purge_expired_albums():
                     owner.storage_used = max(0, (owner.storage_used or 0) - album_bytes)
                     logger.info(f"[Auto-Expire Worker] Reclaimed {album_bytes} bytes for owner {owner.email}. New storage_used: {owner.storage_used}")
 
-            # Airtight physical file destruction for both high-res and thumbnails
             cloud_deletion_success = True
             for item in media_items:
                 urls_to_delete = set()
@@ -238,18 +230,6 @@ def purge_expired_albums():
 def purge_download_triggered_assets():
     """
     Download-Triggered Auto-Purge Worker.
-    Scans the database and aggressively purges original high-res assets from Cloudinary/S3
-    while strictly preserving thumbnails/previews indefinitely so album UI never breaks.
-
-    Purge Rule 1 (Selection Albums):
-      Albums where photographer_downloaded_at is older than 2 days -> Purge high-res originals.
-    Purge Rule 2 (Delivery Albums):
-      Albums where allow_download == True AND client_downloaded_at is older than 1 day -> Purge high-res originals.
-
-    Thumbnail Preservation:
-      - Deletes the high-res file from Cloudinary/S3 only if item.url != item.thumbnail_url.
-      - Re-points item.url to item.thumbnail_url so all gallery UIs continue to render seamlessly.
-      - storage_used is NOT decremented (lifetime bandwidth quota preserved).
     """
     db = SessionLocal()
     try:
@@ -257,13 +237,11 @@ def purge_download_triggered_assets():
         two_days_ago = now_utc - timedelta(days=2)
         one_day_ago = now_utc - timedelta(days=1)
 
-        # 1. Selection Albums: photographer_downloaded_at <= 2 days ago
         selection_albums = db.query(Album).filter(
             Album.photographer_downloaded_at.isnot(None),
             Album.photographer_downloaded_at <= two_days_ago
         ).all()
 
-        # 2. Delivery Albums: allow_download is True AND client_downloaded_at <= 1 day ago
         delivery_albums = db.query(Album).filter(
             Album.allow_download == True,
             Album.client_downloaded_at.isnot(None),
@@ -285,7 +263,6 @@ def purge_download_triggered_assets():
             album_modified = False
 
             for item in media_items:
-                # If high-res URL is empty or already replaced with thumbnail, already purged
                 if not item.url:
                     continue
                 if item.thumbnail_url and item.url == item.thumbnail_url:
@@ -294,8 +271,6 @@ def purge_download_triggered_assets():
                 high_res_url = item.url
                 thumb_url = item.thumbnail_url or item.url
 
-                # Target ONLY the original high-res asset in the cloud provider
-                # API-03: Storage / Deletion Correctness (respect boolean false returns)
                 deleted = False
                 try:
                     if "res.cloudinary.com" in high_res_url:
@@ -311,10 +286,7 @@ def purge_download_triggered_assets():
                 except Exception as del_err:
                     logger.warning(f"[Auto-Purge Warning] Cloud deletion error for item {item.id} ({high_res_url}): {del_err}")
 
-                # DB-04: Only replace the URL if it was successfully deleted
                 if deleted:
-                    # THUMBNAIL PRESERVATION:
-                    # Update item.url to thumbnail_url so client and admin dashboards render without missing images
                     item.url = thumb_url
                     album_modified = True
                     purged_count += 1
@@ -331,13 +303,12 @@ def purge_download_triggered_assets():
     finally:
         db.close()
 
+
 async def run_auto_purge_loop():
     """
     Background worker loop executed inside FastAPI lifespan.
-    Runs every 12 hours to trigger the download-triggered auto-purge logic.
     """
     logger.info("[Auto-Purge Worker] Background auto-purge task started (12-hour cycle).")
-    # Small initial delay on startup so database initialization completes smoothly
     await asyncio.sleep(5)
     while True:
         try:
@@ -357,16 +328,15 @@ async def run_auto_purge_loop():
             logger.error(f"[Auto-Purge Worker Error] Unexpected error in auto-purge loop: {exc}")
 
         try:
-            await asyncio.sleep(12 * 3600)  # 12 hours
+            await asyncio.sleep(12 * 3600)
         except asyncio.CancelledError:
             logger.info("[Auto-Purge Worker] Sleep interrupted by shutdown.")
             break
 
+
 async def auto_register_telegram_webhook():
     """
     Auto-registers Telegram Webhook on application startup.
-    Ensures that Telegram Bot API directs /start and notifications
-    strictly to this active backend, overriding any defunct or legacy endpoints.
     """
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
@@ -374,8 +344,8 @@ async def auto_register_telegram_webhook():
         return
 
     base_url = (
-        os.environ.get("APP_URL") or 
-        os.environ.get("RENDER_EXTERNAL_URL") or 
+        os.environ.get("APP_URL") or
+        os.environ.get("RENDER_EXTERNAL_URL") or
         "https://photoguard.onrender.com"
     ).rstrip("/")
     target_webhook_url = f"{base_url}/api/telegram/webhook"
@@ -401,31 +371,22 @@ async def auto_register_telegram_webhook():
     except Exception as exc:
         logger.warning(f"[Telegram Lifecycle] Non-fatal notice during Telegram webhook sync: {exc}")
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Application startup and shutdown lifespan management.
-    Runs DDL schema creation, column auto-migrations, and seeds root admin safely.
-    Catches all exceptions so Uvicorn startup never aborts with status 1.
     """
     logger.info("[PhotoGuard Lifecycle] Application booting up...")
     try:
-        # 1. Ensure all tables defined by SQLAlchemy Base exist
+        # 1. Ensure all tables defined by SQLAlchemy Base exist in Supabase/PostgreSQL
         try:
-            # Base.metadata.create_all(bind=engine) # DB-06 enforced
-            logger.info("[PhotoGuard Lifecycle] Base.metadata.create_all completed.")
+            Base.metadata.create_all(bind=engine)
+            logger.info("[PhotoGuard Lifecycle] Base.metadata.create_all completed successfully.")
         except Exception as table_err:
-            logger.warning(f"[PhotoGuard Lifecycle] Base.metadata.create_all warning: {table_err}")
-        
-        
-        # 3. Seed Root Admin safely
-        try:
-            seed_result = seed_root_admin()
-            logger.info(f"[PhotoGuard Lifecycle] Seed result: {seed_result}")
-        except Exception as seed_err:
-            logger.warning(f"[PhotoGuard Lifecycle] seed_root_admin warning: {seed_err}")
+            logger.error(f"[PhotoGuard Lifecycle] Base.metadata.create_all error: {table_err}")
 
-        # 4. Seed Default Plan Configurations safely
+        # 2. Seed Default Plan Configurations safely
         try:
             with SessionLocal() as db_session:
                 from app.services.plan_service import get_all_plan_configs
@@ -433,22 +394,30 @@ async def lifespan(app: FastAPI):
             logger.info("[PhotoGuard Lifecycle] Dynamic Plan Configurations verified and seeded.")
         except Exception as plan_err:
             logger.warning(f"[PhotoGuard Lifecycle] Plan configurations seed warning: {plan_err}")
+
+        # 3. Seed Root Admin safely
+        try:
+            seed_result = seed_root_admin()
+            logger.info(f"[PhotoGuard Lifecycle] Seed result: {seed_result}")
+        except Exception as seed_err:
+            logger.warning(f"[PhotoGuard Lifecycle] seed_root_admin warning: {seed_err}")
+
     except Exception as exc:
         logger.critical(f"[PhotoGuard Lifecycle Error] Non-fatal startup sequence error: {exc}\n{traceback.format_exc()}")
-    
-    # 5. Start intelligent Download-Triggered Auto-Purge background loop and Telegram webhook sync
+
+    # 4. Start background tasks AFTER tables are created
     auto_purge_task = asyncio.create_task(run_auto_purge_loop())
     asyncio.create_task(auto_register_telegram_webhook())
 
     yield
 
-    # Clean shutdown of auto-purge loop
     auto_purge_task.cancel()
     try:
         await auto_purge_task
     except asyncio.CancelledError:
         pass
     logger.info("[PhotoGuard Lifecycle] Application shutting down.")
+
 
 app = FastAPI(
     title="PhotoGuard API",
@@ -459,10 +428,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Secured CORS configuration for cross-origin communication
 origins = [
     "http://localhost:3000",
     "https://photoguard.com",
+    "https://photoguard.onrender.com",
     os.environ.get("FRONTEND_URL", "https://photoguard.com")
 ]
 
@@ -474,12 +443,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "img-src 'self' https: data: blob:; "
+            "style-src 'self' 'unsafe-inline'; "
+            "script-src 'self'; "
+            "connect-src 'self' https://api.cloudinary.com; "
+            "font-src 'self' data:; "
+            "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; "
+            "form-action 'self'"
+        )
+        if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """
-    Guarantees that FastAPI validation errors return a clean human-readable string in 'detail',
-    completely preventing React Error #31 (object rendered as child) on the frontend.
-    """
     errors = exc.errors()
     messages = []
     for err in errors:
@@ -494,20 +483,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content={"detail": clean_msg, "errors": errors},
     )
 
+
 @app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
-    """
-    SRE Interceptor for Database Errors:
-    Catches all database disconnects, query failures, and constraint errors,
-    records detailed traceback into SystemErrorLog, and returns a clean 500 JSON
-    to prevent client-side crashes across React and Kotlin.
-    """
     tb = traceback.format_exc()
     error_msg = str(exc)
     endpoint = f"{request.method} {request.url.path}"
     logger.error(f"[Database Error Intercepted] {endpoint}: {error_msg}\n{tb}")
 
-    # Safely persist error to database via a dedicated session
     try:
         with SessionLocal() as db_err:
             log_entry = SystemErrorLog(
@@ -527,14 +510,9 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
         content={"detail": "System encountered an error. Logged for admin review."}
     )
 
+
 @app.exception_handler(Exception)
 async def global_generic_exception_handler(request: Request, exc: Exception):
-    """
-    SRE Universal Crash Interceptor:
-    Intercepts unhandled runtime exceptions, persists the error into SystemErrorLog,
-    and returns a clean 500 JSON response so Kotlin and React never experience white-screens.
-    Bypasses standard HTTPExceptions (400, 401, 403, 404) and RequestValidationErrors.
-    """
     if isinstance(exc, HTTPException):
         return await http_exception_handler(request, exc)
     if isinstance(exc, RequestValidationError):
@@ -545,7 +523,6 @@ async def global_generic_exception_handler(request: Request, exc: Exception):
     endpoint = f"{request.method} {request.url.path}"
     logger.error(f"[Unhandled Runtime Crash Intercepted] {endpoint}: {error_msg}\n{tb}")
 
-    # Safely persist error to database
     try:
         with SessionLocal() as db_err:
             log_entry = SystemErrorLog(
@@ -565,6 +542,7 @@ async def global_generic_exception_handler(request: Request, exc: Exception):
         content={"detail": "System encountered an error. Logged for admin review."}
     )
 
+
 # Register Core API Routers
 app.include_router(auth_router)
 app.include_router(albums_router)
@@ -578,37 +556,37 @@ app.include_router(photographers_router)
 app.include_router(photographers_router, prefix="/api/v1/photographer")
 app.include_router(photographers_router, prefix="/api/photographers")
 
-# Direct alias for studio logo upload
+
 @app.post("/api/v1/users/upload-logo", tags=["User Profile"])
-async def upload_logo_v1_alias(
+def upload_logo_v1_alias(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     from app.api.auth import upload_studio_logo
-    return await upload_studio_logo(file=file, db=db, current_user=current_user)
+    return upload_studio_logo(file=file, db=db, current_user=current_user)
 
-# Direct alias for user password change
+
 @app.put("/api/v1/users/change-password", response_model=UserResponse, tags=["User Profile"])
 @app.post("/api/v1/users/change-password", response_model=UserResponse, tags=["User Profile"])
 def change_password_users_alias(
     payload: PasswordChangeRequest,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     from app.api.auth import change_password
-    return change_password(payload=payload, db=db, current_user=current_user)
+    return change_password(payload=payload, response=response, db=db, current_user=current_user)
 
-# Direct root webhook alias for Telegram Bot API
+
 @app.post("/webhook", tags=["Telegram Integration"])
 async def root_telegram_webhook(request: Request, db: Session = Depends(get_db)):
     from app.api.telegram import telegram_webhook
     return await telegram_webhook(request=request, db=db)
 
-# Static files directory resolution (built React app in dist/ or frontend/dist/)
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Multi-path discovery for built frontend dist
 candidate_dist_dirs = [
     os.path.join(BASE_DIR, "dist"),
     os.path.join(os.getcwd(), "dist"),
@@ -628,45 +606,39 @@ for candidate in candidate_dist_dirs:
         DIST_DIR = candidate
         break
 
+
 def get_index_file_path() -> str | None:
-    """Dynamically resolves index.html in case dist was compiled after process startup."""
     for candidate in candidate_dist_dirs:
         idx = os.path.join(candidate, "index.html")
         if os.path.isfile(idx):
             return idx
     return None
 
-# Mount /assets if assets directory exists
+
 if os.path.exists(DIST_DIR):
     assets_path = os.path.join(DIST_DIR, "assets")
     if os.path.exists(assets_path):
         app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
 
-# Ensure and mount local uploads directory for fallback storage
 UPLOADS_DIR = os.path.join(os.getcwd(), "uploads")
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR, check_dir=False), name="uploads")
 
+
 @app.get("/uploads/{filename:path}", tags=["Media Storage & CDN"])
 async def serve_uploaded_media(filename: str):
-    """
-    Direct handler to ensure fallback uploaded files in uploads/ are always served
-    with proper MIME types, bypassing any SPA catch-all collisions.
-    """
     clean_name = os.path.basename(filename)
     file_path = os.path.join(UPLOADS_DIR, clean_name)
     if os.path.isfile(file_path):
         return FileResponse(file_path)
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": f"File '{clean_name}' not found."})
 
+
 @app.post("/api/v1/admin/purge-expired", tags=["Admin Control"])
 def manual_purge_expired_albums_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Emergency/On-Demand Admin Endpoint to trigger airtight auto-expiration cleanup.
-    """
     if str(getattr(current_user, "role", "")).lower() != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required.")
     purge_expired_albums()
@@ -675,10 +647,6 @@ def manual_purge_expired_albums_endpoint(
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 def health_check(db: Session = Depends(get_db)):
-    """
-    Production health check verifying API operational status
-    and active database connectivity.
-    """
     try:
         db.execute(text("SELECT 1"))
         return {
@@ -700,12 +668,9 @@ def health_check(db: Session = Depends(get_db)):
             }
         )
 
+
 @app.get("/", status_code=status.HTTP_200_OK)
 def root():
-    """
-    Root endpoint: serves the production React SPA frontend if built,
-    otherwise falls back to API status.
-    """
     index_file = get_index_file_path()
     if index_file and os.path.isfile(index_file):
         return FileResponse(index_file)
@@ -718,17 +683,12 @@ def root():
         "message": "PhotoGuard Elite Anti-Piracy Photo Selection SaaS Backend is Live."
     }
 
+
 @app.get("/{catchall:path}")
 async def catch_all_spa(catchall: str):
-    """
-    Catch-all route: Serves static files if they exist, or returns index.html
-    for React Router client-side routing (e.g., /login, /dashboard).
-    Excludes all /api/v1/* routes and system endpoints.
-    """
     if catchall.startswith("api/") or catchall in ["health", "docs", "redoc", "openapi.json"]:
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
-    
-    # Check if this points to an uploaded media item
+
     if catchall.startswith("uploads/"):
         upload_subpath = catchall.replace("uploads/", "", 1)
         upload_clean = os.path.basename(upload_subpath)
@@ -736,8 +696,7 @@ async def catch_all_spa(catchall: str):
         if os.path.isfile(file_in_uploads):
             return FileResponse(file_in_uploads)
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Uploaded file not found"})
-    
-    # Check if a static file exists in any candidate dist directory
+
     for candidate in candidate_dist_dirs:
         file_path = os.path.join(candidate, catchall)
         if os.path.isfile(file_path):
@@ -749,37 +708,15 @@ async def catch_all_spa(catchall: str):
             elif catchall.endswith(".svg"):
                 media_type = "image/svg+xml"
             return FileResponse(file_path, media_type=media_type)
-    
-    # Return index.html for all SPA routes like /login
+
     index_file = get_index_file_path()
     if index_file and os.path.isfile(index_file):
         return FileResponse(index_file)
-    
+
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
+
 
 if __name__ == "__main__":
     import uvicorn
     server_port = int(os.environ.get("PORT", 8000))
     uvicorn.run("app.main:app", host="0.0.0.0", port=server_port, reload=False)
-
-from starlette.middleware.base import BaseHTTPMiddleware
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "img-src 'self' https: data: blob:; "
-            "style-src 'self' 'unsafe-inline'; "
-            "script-src 'self'; "
-            "connect-src 'self' https://api.cloudinary.com; "
-            "font-src 'self' data:; "
-            "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; "
-            "form-action 'self'"
-        )
-        if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        return response
-
-app.add_middleware(SecurityHeadersMiddleware)
